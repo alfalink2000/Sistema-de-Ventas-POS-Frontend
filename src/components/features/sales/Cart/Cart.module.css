@@ -1,0 +1,243 @@
+/* components/features/sales/Cart/Cart.module.css - ESTADO VACÍO PROFESIONAL */
+.emptyCart {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  padding: 60px 40px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Efecto de fondo sutil */
+.emptyCart::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: -200% 0;
+  }
+  50% {
+    background-position: 200% 0;
+  }
+}
+
+/* Ilustración del carrito */
+.emptyIllustration {
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.cartIconWrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.cartIcon {
+  font-size: 4rem;
+  color: #cbd5e1;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 24px;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
+  }
+}
+
+.packageIcon {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #3b82f6;
+  color: white;
+  padding: 8px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  animation: pulse 2s ease-in-out infinite;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+  }
+}
+
+/* Contenido de texto */
+.emptyContent {
+  max-width: 320px;
+}
+
+.emptyTitle {
+  margin: 0 0 16px 0;
+  color: #1f2937;
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.emptyText {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+/* Indicador de acción */
+.emptyHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+  padding: 12px 20px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hintIcon {
+  font-size: 1rem;
+  color: #3b82f6;
+  animation: bounceRight 2s ease-in-out infinite;
+}
+
+@keyframes bounceRight {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+/* Efectos de hover para interactividad */
+.emptyCart:hover .cartIcon {
+  animation: float 1.5s ease-in-out infinite, rotate 4s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.emptyCart:hover {
+  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+.emptyCart:hover .packageIcon {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .emptyCart {
+    padding: 40px 24px;
+    min-height: 350px;
+  }
+
+  .cartIcon {
+    font-size: 3rem;
+    padding: 20px;
+  }
+
+  .emptyTitle {
+    font-size: 1.3rem;
+  }
+
+  .emptyText {
+    font-size: 0.95rem;
+  }
+
+  .emptyContent {
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 480px) {
+  .emptyCart {
+    padding: 32px 20px;
+    min-height: 300px;
+    border-radius: 12px;
+  }
+
+  .cartIcon {
+    font-size: 2.5rem;
+    padding: 16px;
+  }
+
+  .packageIcon {
+    padding: 6px;
+    font-size: 1rem;
+  }
+
+  .emptyTitle {
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+  }
+
+  .emptyText {
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+
+  .emptyHint {
+    font-size: 0.85rem;
+    padding: 10px 16px;
+  }
+}

@@ -1,0 +1,389 @@
+/* components/auth/LoginForm/LoginForm.module.css */
+.loginForm {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  gap: 0;
+  position: relative;
+  bottom: 15px;
+}
+
+.formHeader {
+  text-align: center;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.formHeader p {
+  color: var(--color-gray-600);
+  font-size: 0.75rem;
+  margin: 0;
+  font-weight: 400;
+}
+
+.formContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  /* gap: 12px; */
+  min-height: 0;
+}
+
+.formGroup {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* Inputs */
+.formGroup :global(.inputContainer) {
+  position: relative;
+}
+
+.formGroup :global(.inputContainer .label) {
+  color: var(--color-gray-700);
+  font-weight: 500;
+  font-size: 0.75rem;
+  margin-bottom: 3px;
+  display: block;
+}
+
+.formGroup :global(.inputContainer .input) {
+  width: 100%;
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-300);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--color-gray-900);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  transition: all 0.2s ease;
+  height: 36px;
+}
+
+.formGroup :global(.inputContainer .input:hover) {
+  border-color: var(--color-gray-400);
+  background: var(--color-gray-100);
+}
+
+.formGroup :global(.inputContainer .input:focus) {
+  outline: none;
+  border-color: var(--color-primary);
+  background: white;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.formGroup :global(.inputContainer .input::placeholder) {
+  color: var(--color-gray-500);
+  font-size: 0.75rem;
+}
+
+.formGroup :global(.inputContainer .input:disabled) {
+  background: var(--color-gray-200);
+  color: var(--color-gray-500);
+  cursor: not-allowed;
+}
+
+/* Error */
+.errorContainer {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.errorMessage {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--color-danger);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  margin: 0;
+  font-weight: 500;
+  width: 100%;
+}
+
+.errorIcon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Botón */
+.formActions {
+  margin: 8px 0 0 0;
+  flex-shrink: 0;
+}
+
+.submitButton {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-dark) 100%
+  );
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+}
+
+.submitButton:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-dark) 0%,
+    #1e40af 100%
+  );
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.4);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3);
+}
+
+.submitButton:disabled {
+  background: var(--color-gray-400);
+  color: var(--color-gray-600);
+  transform: none;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Estados del botón cuando está en loading */
+.submitButtonLoading {
+  background: var(--color-gray-400) !important;
+  color: var(--color-gray-600) !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.submitButtonLoading:hover {
+  background: var(--color-gray-400) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Contenido del botón */
+.normalContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.loadingContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Spinner de carga */
+.loadingSpinner {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+.spinnerCircle {
+  opacity: 0.25;
+  stroke-dasharray: 80px, 200px;
+  stroke-dashoffset: 0;
+  animation: spinnerAnimation 1.4s linear infinite;
+}
+
+@keyframes spinnerAnimation {
+  0% {
+    stroke-dasharray: 1px, 200px;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 100px, 200px;
+    stroke-dashoffset: -15px;
+  }
+  100% {
+    stroke-dasharray: 100px, 200px;
+    stroke-dashoffset: -125px;
+  }
+}
+
+/* Contenedor de contraseña con ojito */
+.passwordContainer {
+  position: relative;
+  width: 100%;
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 8px;
+  top: 67%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: var(--color-gray-500);
+}
+
+.passwordToggle:hover:not(:disabled) {
+  background: var(--color-gray-200);
+  color: var(--color-primary);
+}
+
+.passwordToggle:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.passwordToggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.eyeIcon {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+/* Ajustar el input de contraseña para que no se solape con el ojito */
+.passwordContainer :global(.inputContainer .input) {
+  padding-right: 40px !important;
+}
+
+/* Iconos */
+.buttonIcon {
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+
+.shieldIcon {
+  width: 12px;
+  height: 12px;
+  color: currentColor;
+}
+
+/* Enlaces de ayuda */
+.helperLinks {
+  text-align: center;
+  margin: 6px 0 0 0;
+  flex-shrink: 0;
+}
+
+.forgotPassword {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: underline;
+  text-underline-offset: 1px;
+  padding: 2px 4px;
+}
+
+.forgotPassword:hover:not(:disabled) {
+  color: var(--color-primary-dark);
+  text-decoration: none;
+}
+
+.forgotPassword:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Footer */
+.formFooter {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-gray-200);
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.helpText {
+  font-size: 0.625rem;
+  color: var(--color-gray-500);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-weight: 500;
+}
+
+/* Estados de focus para accesibilidad */
+.submitButton:focus-visible,
+.forgotPassword:focus-visible,
+.passwordToggle:focus-visible {
+  outline: 1px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .formHeader p {
+    font-size: 0.7rem;
+  }
+
+  .formGroup :global(.inputContainer .input) {
+    height: 34px;
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+
+  .submitButton {
+    min-height: 34px;
+    font-size: 0.75rem;
+  }
+
+  .helperLinks {
+    margin: 4px 0 0 0;
+  }
+
+  .passwordToggle {
+    right: 6px;
+    padding: 3px;
+  }
+
+  .eyeIcon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .passwordContainer :global(.inputContainer .input) {
+    padding-right: 35px !important;
+  }
+
+  .loadingSpinner {
+    width: 16px;
+    height: 16px;
+  }
+
+  .normalContent,
+  .loadingContent {
+    gap: 6px;
+  }
+}

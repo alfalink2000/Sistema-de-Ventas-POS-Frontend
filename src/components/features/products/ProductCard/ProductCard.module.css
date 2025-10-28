@@ -1,0 +1,269 @@
+/* components/features/products/ProductCard/ProductCard.module.css */
+.productCard {
+  background: white;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: all 0.2s ease;
+  border: 1px solid var(--color-gray-200);
+  position: relative;
+}
+
+.productCard:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.imageContainer {
+  position: relative;
+  height: 160px;
+  background: var(--color-gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.productImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.placeholderImage {
+  font-size: 48px;
+  color: var(--color-gray-400);
+}
+
+/* Botones de acción */
+.actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.productCard:hover .actions {
+  opacity: 1;
+}
+
+.editButton,
+.deleteButton {
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.editButton {
+  color: var(--color-primary);
+}
+
+.editButton:hover {
+  background: var(--color-primary);
+  color: white;
+  transform: scale(1.1);
+}
+
+.deleteButton {
+  color: var(--color-danger);
+}
+
+.deleteButton:hover {
+  background: var(--color-danger);
+  color: white;
+  transform: scale(1.1);
+}
+
+.outOfStock {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--color-danger);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.productInfo {
+  padding: 16px;
+}
+
+.productName {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.productDescription {
+  color: var(--color-gray-600);
+  font-size: var(--font-size-sm);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.productMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: var(--font-size-xs);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category {
+  background: var(--color-primary);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+  font-weight: 500;
+}
+
+.stock {
+  color: var(--color-gray-500);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stock.healthy {
+  color: var(--color-success);
+}
+
+.stock.low-stock {
+  color: var(--color-warning);
+}
+
+.stock.out-of-stock {
+  color: var(--color-danger);
+}
+
+.stockAlert {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.productFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.priceSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+}
+
+.price {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.costPrice {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-500);
+  background: var(--color-gray-100);
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+}
+
+/* Variables CSS (si no las tienes definidas) */
+:root {
+  /* Colors */
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-900: #111827;
+
+  --color-primary: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* Border radius */
+  --border-radius-sm: 4px;
+  --border-radius-lg: 8px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+  /* Font sizes */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+}
+/* Agregar al ProductCard.module.css existente */
+
+/* Botón de edición en modo solo lectura */
+.editButton.viewOnly {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.editButton.viewOnly:hover {
+  background: #e2e8f0 !important;
+  transform: none !important;
+}
+
+.viewIcon {
+  font-size: 0.875rem;
+}
+
+/* Botón de eliminar deshabilitado */
+.deleteButton.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.deleteButton.disabled:hover {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  transform: none !important;
+}
+
+/* Indicador de permisos */
+.permissionIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.shieldIcon {
+  font-size: 0.75rem;
+  color: #f59e0b;
+}

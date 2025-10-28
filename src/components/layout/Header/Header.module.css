@@ -1,0 +1,463 @@
+/* components/layout/Header/Header.module.css - VERSIÓN CORREGIDA */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 32px;
+  height: 83px;
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+  border-bottom: none;
+  box-shadow: 0 2px 20px rgba(37, 99, 235, 0.2);
+  color: white;
+  position: relative;
+  min-width: 0; /* ✅ IMPORTANTE: Permite que los hijos se ajusten */
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0; /* ✅ Evita que se encoja demasiado */
+}
+
+.menuButtonContainer {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.menuButton {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 10px;
+  color: white;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  flex-shrink: 0;
+}
+
+.menuButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: rotate(90deg);
+}
+
+.menuIcon {
+  font-size: 18px;
+}
+
+.menuButtonPlaceholder {
+  width: 44px;
+  height: 44px;
+  opacity: 0;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* ✅ Permite que el texto se ajuste */
+  flex-shrink: 1;
+}
+
+.appName {
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.welcomeText {
+  font-size: 12px;
+  opacity: 0.9;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px; /* ✅ Reducido el gap */
+  min-width: 0; /* ✅ IMPORTANTE: Permite que los hijos se ajusten */
+  flex-shrink: 1; /* ✅ Permite que se encoja si es necesario */
+}
+
+/* ✅ INDICADOR DE GANANCIAS - COMPACTADO */
+.earningsIndicator {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* ✅ Gap reducido */
+  padding: 10px 14px; /* ✅ Padding reducido */
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 10px; /* ✅ Border radius reducido */
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  cursor: default;
+  max-width: 220px; /* ✅ Ancho máximo controlado */
+  min-width: 0; /* ✅ Permite que se ajuste */
+  flex-shrink: 1; /* ✅ Permite que se encoja */
+  overflow: hidden; /* ✅ Evita desbordamiento */
+}
+
+.earningsIndicator:hover {
+  background: rgba(34, 197, 94, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
+}
+
+.earningsIcon {
+  width: 36px; /* ✅ Tamaño reducido */
+  height: 36px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0; /* ✅ No se encoge el icono */
+}
+
+.trendingIcon {
+  font-size: 16px; /* ✅ Tamaño reducido */
+  color: white;
+}
+
+.earningsInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* ✅ IMPORTANTE: Permite que el texto se ajuste */
+  flex: 1; /* ✅ Ocupa el espacio disponible */
+}
+
+.earningsLabel {
+  font-size: 10px; /* ✅ Tamaño reducido */
+  opacity: 0.9;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.earningsAmount {
+  font-weight: 700;
+  font-size: 14px; /* ✅ Tamaño reducido */
+  color: #22c55e;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.earningsDetails {
+  display: flex;
+  gap: 6px; /* ✅ Gap reducido */
+  font-size: 9px; /* ✅ Tamaño reducido */
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.salesCount,
+.totalSales {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px; /* ✅ Padding reducido */
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+/* ✅ INDICADOR SIN SESIÓN - COMPACTADO */
+.noSessionIndicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  cursor: default;
+  max-width: 200px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+.noSessionIndicator:hover {
+  background: rgba(148, 163, 184, 0.2);
+  transform: translateY(-1px);
+}
+
+.noSessionIcon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #64748b, #475569);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dollarIcon {
+  font-size: 16px;
+  color: white;
+}
+
+.noSessionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.noSessionLabel {
+  font-size: 10px;
+  opacity: 0.9;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.noSessionText {
+  font-size: 11px;
+  opacity: 0.8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Información del usuario - COMPACTADO */
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  flex-shrink: 0; /* ✅ No se encoge el user info */
+}
+
+.userInfo:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.userAvatar {
+  width: 32px; /* ✅ Tamaño reducido */
+  height: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.userIcon {
+  font-size: 14px; /* ✅ Tamaño reducido */
+  color: white;
+}
+
+.userDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.userName {
+  font-weight: 600;
+  font-size: 13px; /* ✅ Tamaño reducido */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px; /* ✅ Ancho máximo controlado */
+}
+
+.userRole {
+  font-size: 10px; /* ✅ Tamaño reducido */
+  opacity: 0.8;
+  text-transform: capitalize;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* Botón de salir - COMPACTADO */
+.logoutButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  flex-shrink: 0; /* ✅ No se encoge el botón */
+  white-space: nowrap;
+}
+
+.logoutButton:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.logoutIcon {
+  font-size: 14px;
+}
+
+/* RESPONSIVE MEJORADO */
+@media (max-width: 1200px) {
+  .header {
+    padding: 0 24px;
+  }
+
+  .earningsIndicator {
+    max-width: 200px;
+  }
+
+  .earningsDetails {
+    display: none; /* ✅ Ocultar detalles en pantallas medianas */
+  }
+}
+
+@media (max-width: 1024px) {
+  .header {
+    padding: 0 20px;
+  }
+
+  .earningsIndicator,
+  .noSessionIndicator {
+    max-width: 180px;
+  }
+
+  .userName,
+  .userRole {
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 900px) {
+  .earningsAmount {
+    font-size: 13px;
+  }
+
+  .earningsLabel,
+  .noSessionLabel {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 16px;
+    height: 70px;
+  }
+
+  .welcomeText {
+    display: none;
+  }
+
+  .earningsIndicator,
+  .noSessionIndicator {
+    max-width: 160px;
+    padding: 8px 10px;
+  }
+
+  .earningsAmount {
+    font-size: 12px;
+  }
+
+  .earningsIcon,
+  .noSessionIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .trendingIcon,
+  .dollarIcon {
+    font-size: 14px;
+  }
+
+  .userDetails {
+    display: none;
+  }
+
+  .logoutButton span {
+    display: none;
+  }
+
+  .logoutButton {
+    padding: 8px;
+  }
+
+  .headerRight {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .earningsIndicator,
+  .noSessionIndicator {
+    display: none; /* ✅ Ocultar completamente en móviles pequeños */
+  }
+
+  .headerLeft {
+    gap: 12px;
+  }
+
+  .appName {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 12px;
+  }
+
+  .headerRight {
+    gap: 8px;
+  }
+
+  .userInfo {
+    padding: 6px 8px;
+  }
+}
+
+/* ESTADOS DE FOCUS PARA ACCESIBILIDAD */
+.menuButton:focus-visible,
+.userInfo:focus-visible,
+.logoutButton:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}

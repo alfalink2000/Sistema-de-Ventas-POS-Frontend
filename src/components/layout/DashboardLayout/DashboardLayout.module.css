@@ -1,0 +1,91 @@
+/* components/layout/DashboardLayout/DashboardLayout.module.css */
+.dashboard {
+  display: flex;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: 280px;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.mainContent.sidebarClosed {
+  margin-left: 0;
+}
+
+.content {
+  flex: 1;
+  padding: 0;
+  overflow-y: auto;
+  background-color: #f8fafc;
+  max-height: calc(100vh - 83px);
+  /* ✅ PADDING DINÁMICO BASADO EN EL ESTADO DEL SIDEBAR */
+  padding-left: 32px;
+  padding-right: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ✅ CUANDO EL SIDEBAR ESTÁ CERRADO, MÁS PADDING IZQUIERDO */
+.mainContent.sidebarClosed .content {
+  padding-left: 32px; /* Mismo padding para consistencia */
+}
+
+/* ✅ CUANDO EL SIDEBAR ESTÁ ABIERTO, MENOS PADDING IZQUIERDO */
+.mainContent:not(.sidebarClosed) .content {
+  padding-left: 32px; /* Puedes ajustar este valor según necesites */
+}
+
+/* ✅ SCROLL PERSONALIZADO */
+.content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .content {
+    padding: 0 16px !important; /* ✅ Padding fijo en móviles */
+  }
+
+  .mainContent {
+    margin-left: 0;
+  }
+
+  .mainContent.sidebarClosed .content,
+  .mainContent:not(.sidebarClosed) .content {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .content {
+    padding: 0 12px !important; /* ✅ Menos padding en móviles pequeños */
+  }
+
+  .mainContent.sidebarClosed .content,
+  .mainContent:not(.sidebarClosed) .content {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}

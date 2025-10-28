@@ -1,0 +1,66 @@
+/* components/features/caja/SesionInfo/SesionInfo.module.css */
+.sesionInfo {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.sesionInfo.open {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border: 2px solid #10b981;
+}
+
+.sesionInfo.closed {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 2px solid #f59e0b;
+}
+
+.status {
+  font-size: 2rem;
+}
+
+.info {
+  flex: 1;
+}
+
+.info h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.info p {
+  margin: 4px 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.actionButton {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.open .actionButton {
+  background-color: #ef4444;
+  color: white;
+}
+
+.open .actionButton:hover {
+  background-color: #dc2626;
+}
+
+.closed .actionButton {
+  background-color: #10b981;
+  color: white;
+}
+
+.closed .actionButton:hover {
+  background-color: #059669;
+}

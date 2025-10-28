@@ -1,0 +1,21 @@
+.searchForm {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.searchInputContainer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.searchInputContainer input {
+  margin-top: 15px;
+  height: 40px;
+}
+
+.searchButtons {
+  display: flex;
+  gap: 8px;
+}
