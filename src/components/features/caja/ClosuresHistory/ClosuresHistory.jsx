@@ -17,7 +17,7 @@ import {
   FiAlertCircle,
 } from "react-icons/fi";
 import { loadClosures } from "../../../../actions/closuresActions";
-import { useOfflineCierres } from "../../../../hooks/useOfflineCierres";
+import { useOfflineCierres } from "../../../../hook/useOfflineCierres";
 import styles from "./ClosuresHistory.module.css";
 
 const ClosuresHistory = () => {
