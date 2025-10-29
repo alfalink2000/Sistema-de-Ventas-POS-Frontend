@@ -1,8 +1,9 @@
-// actions/authActions.js
+// actions/authActions.js - VERSIÓN MEJORADA
 import { types } from "../types/types";
 import Swal from "sweetalert2";
 import { fetchSinToken } from "../helpers/fetch";
 import { loadProducts } from "./productsActions";
+import { loadCategories } from "./categoriesActions"; // ✅ IMPORT CORREGIDO
 import UserOfflineService from "../services/UserOfflineService";
 import SyncService from "../services/SyncService";
 
@@ -18,22 +19,26 @@ export const checkingFinish = () => ({
   type: types.authCheckingFinish,
 });
 
-// ✅ ACTION PARA LOGIN CON BACKEND REAL
+// ✅ ACTION MEJORADO PARA LOGIN
 export const startLogin = (username, password) => {
   return async (dispatch) => {
     dispatch(startLoading());
 
     try {
-      console.log("🔐 Intentando login...");
+      console.log("🔐 INICIANDO LOGIN para:", username);
+      console.log("🌐 Estado de conexión:", navigator.onLine);
 
-      // Primero intentar con el servidor
+      // 1. PRIMERO INTENTAR CON SERVIDOR SI HAY CONEXIÓN
       if (navigator.onLine) {
         try {
+          console.log("🔄 Intentando login ONLINE...");
           const response = await fetchSinToken(
             "auth/login",
             { username, password },
             "POST"
           );
+
+          console.log("📥 Respuesta del servidor:", response);
 
           if (response.ok) {
             const { token, usuario } = response;
@@ -67,15 +72,30 @@ export const startLogin = (username, password) => {
             });
 
             return; // Éxito - salir
+          } else {
+            // ✅ MANEJAR ERROR DEL SERVIDOR
+            console.error("❌ Error del servidor:", response);
+            throw new Error(response.msg || "Credenciales incorrectas");
           }
         } catch (onlineError) {
-          console.log("❌ Error en login online:", onlineError);
-          // Continuar con intento offline
+          console.error("💥 Error en login online:", onlineError);
+
+          // ✅ VERIFICAR SI ES ERROR DE RED O DEL SERVIDOR
+          if (
+            onlineError.message.includes("Failed to fetch") ||
+            onlineError.message.includes("Network")
+          ) {
+            console.log("🌐 Error de red - continuando con modo offline");
+            // Continuar con intento offline
+          } else {
+            // Es un error de credenciales u otro - relanzar el error
+            throw onlineError;
+          }
         }
       }
 
-      // ✅ INTENTAR LOGIN OFFLINE
-      console.log("🌐 Intentando login offline...");
+      // 2. MODO OFFLINE (si no hay conexión o falló por red)
+      console.log("📴 Intentando login OFFLINE...");
       const offlineResult = await UserOfflineService.verifyOfflineCredentials(
         username,
         password
@@ -120,13 +140,30 @@ export const startLogin = (username, password) => {
         throw new Error(offlineResult.error || "Credenciales incorrectas");
       }
     } catch (error) {
-      console.error("❌ Error en login:", error);
+      console.error("❌ Error final en login:", error);
+
+      // ✅ MENSAJES DE ERROR MÁS ESPECÍFICOS
+      let errorMessage = error.message;
+      let errorTitle = "Error de acceso";
+
+      if (
+        error.message.includes("Failed to fetch") ||
+        error.message.includes("Network")
+      ) {
+        errorTitle = "Error de conexión";
+        errorMessage =
+          "No se pudo conectar al servidor. Verifica tu conexión a internet.";
+      } else if (error.message.includes("offline")) {
+        errorTitle = "Modo Offline";
+        errorMessage =
+          "Usuario no disponible sin conexión. Conecta a internet para primer acceso.";
+      }
 
       await Swal.fire({
         icon: "error",
-        title: "Error de acceso",
-        text: error.message || "Credenciales incorrectas",
-        confirmButtonText: "Intentar nuevamente",
+        title: errorTitle,
+        text: errorMessage,
+        confirmButtonText: "Entendido",
       });
 
       dispatch({
@@ -138,6 +175,8 @@ export const startLogin = (username, password) => {
     }
   };
 };
+
+// ... (el resto de tus actions se mantienen igual)
 // ✅ NUEVO ACTION PARA SINCRONIZAR USUARIOS
 export const syncOfflineUsers = () => {
   return async (dispatch) => {
@@ -209,16 +248,23 @@ export const startChecking = () => {
       const userData = JSON.parse(user);
 
       // Verificar si el token sigue siendo válido
-      const tokenExpiration = JSON.parse(atob(token.split(".")[1])).exp;
-      const isTokenValid = tokenExpiration * 1000 > Date.now();
+      try {
+        const tokenExpiration = JSON.parse(atob(token.split(".")[1])).exp;
+        const isTokenValid = tokenExpiration * 1000 > Date.now();
 
-      if (isTokenValid) {
-        dispatch({
-          type: types.authLogin,
-          payload: userData,
-        });
-      } else {
-        // Token expirado
+        if (isTokenValid) {
+          dispatch({
+            type: types.authLogin,
+            payload: userData,
+          });
+        } else {
+          // Token expirado
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          dispatch(checkingFinish());
+        }
+      } catch (tokenError) {
+        console.error("Error verificando token:", tokenError);
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         dispatch(checkingFinish());

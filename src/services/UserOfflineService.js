@@ -1,4 +1,4 @@
-// src/services/UserOfflineService.js
+// src/services/UserOfflineService.js - ACTUALIZADO PARA TU MODELO
 import IndexedDBService from "./IndexedDBService";
 
 class UserOfflineService {
@@ -6,24 +6,34 @@ class UserOfflineService {
     this.storeName = "offline_users";
   }
 
-  // Guardar usuario para autenticación offline
+  // Guardar usuario para autenticación offline - CORREGIDO
   async saveUserForOffline(user, token) {
     try {
       if (!IndexedDBService.db) {
         await IndexedDBService.init();
       }
 
+      // ✅ ESTRUCTURA CORRECTA según tu modelo de base de datos
       const offlineUser = {
-        id: user.id,
+        id: user.id, // UUID de PostgreSQL
         username: user.username,
         email: user.email,
         nombre: user.nombre,
-        rol: user.rol,
-        token: token,
-        activo: user.activo,
+        rol: user.rol, // 'admin', 'vendedor', 'cajero'
+        activo: user.activo !== undefined ? user.activo : true,
+        password_hash: user.password_hash || "offline", // No tenemos el hash real
+        ultimo_login: user.ultimo_login || new Date().toISOString(),
+        token: token, // Token JWT para autenticación
         savedAt: new Date().toISOString(),
         lastLogin: new Date().toISOString(),
       };
+
+      console.log("💾 Guardando usuario para offline:", {
+        id: offlineUser.id,
+        username: offlineUser.username,
+        rol: offlineUser.rol,
+        activo: offlineUser.activo,
+      });
 
       // Verificar si ya existe
       const existingUsers = await IndexedDBService.getAll(this.storeName);
@@ -31,14 +41,12 @@ class UserOfflineService {
 
       if (existingUser) {
         await IndexedDBService.put(this.storeName, offlineUser);
+        console.log("✅ Usuario actualizado en IndexedDB");
       } else {
         await IndexedDBService.add(this.storeName, offlineUser);
+        console.log("✅ Nuevo usuario guardado en IndexedDB");
       }
 
-      console.log(
-        "✅ Usuario guardado para autenticación offline:",
-        user.username
-      );
       return true;
     } catch (error) {
       console.error("❌ Error guardando usuario offline:", error);
@@ -46,7 +54,7 @@ class UserOfflineService {
     }
   }
 
-  // Obtener usuario offline por username
+  // Obtener usuario offline por username - CORREGIDO
   async getOfflineUserByUsername(username) {
     try {
       if (!IndexedDBService.db) {
@@ -55,8 +63,21 @@ class UserOfflineService {
 
       const users = await IndexedDBService.getAll(this.storeName);
       const user = users.find(
-        (u) => u.username === username && u.activo === true
+        (u) => u.username === username && u.activo === true // Solo usuarios activos
       );
+
+      if (user) {
+        console.log("✅ Usuario encontrado en IndexedDB:", user.username);
+      } else {
+        console.log("❌ Usuario NO encontrado en IndexedDB:", username);
+        console.log(
+          "📋 Usuarios disponibles:",
+          users.map((u) => ({
+            username: u.username,
+            activo: u.activo,
+          }))
+        );
+      }
 
       return user || null;
     } catch (error) {
@@ -65,37 +86,50 @@ class UserOfflineService {
     }
   }
 
-  // Obtener usuario offline por ID
-  async getOfflineUserById(userId) {
-    try {
-      if (!IndexedDBService.db) {
-        await IndexedDBService.init();
-      }
-
-      const users = await IndexedDBService.getAll(this.storeName);
-      const user = users.find((u) => u.id === userId && u.activo === true);
-
-      return user || null;
-    } catch (error) {
-      console.error("❌ Error obteniendo usuario offline por ID:", error);
-      return null;
-    }
-  }
-
-  // Verificar credenciales offline
+  // Verificar credenciales offline - MEJORADO
   async verifyOfflineCredentials(username, password) {
     try {
+      console.log("🔍 Verificando credenciales offline para:", username);
+
       const user = await this.getOfflineUserByUsername(username);
 
       if (!user) {
-        return { success: false, error: "Usuario no encontrado" };
+        return {
+          success: false,
+          error: "Usuario no encontrado. Necesita conexión para primer acceso.",
+        };
       }
 
-      // En un sistema real, aquí deberías tener el hash de la contraseña
-      // Por ahora, asumimos que el token es suficiente para autenticación offline
-      // Esto es una simplificación - en producción necesitarías una solución más segura
+      // ✅ VERIFICAR TOKEN JWT (en lugar de contraseña)
+      if (!user.token) {
+        return {
+          success: false,
+          error: "Token no disponible. Conecta a internet para renovar sesión.",
+        };
+      }
 
-      console.log("✅ Credenciales offline verificadas para:", username);
+      // Verificar que el token no esté expirado
+      try {
+        const tokenPayload = JSON.parse(atob(user.token.split(".")[1]));
+        const isTokenValid = tokenPayload.exp * 1000 > Date.now();
+
+        if (!isTokenValid) {
+          console.log("⚠️ Token expirado para usuario:", username);
+          return {
+            success: false,
+            error: "Sesión expirada. Conecta a internet para renovar.",
+          };
+        }
+      } catch (tokenError) {
+        console.error("Error verificando token:", tokenError);
+        return {
+          success: false,
+          error: "Error verificando sesión. Conecta a internet.",
+        };
+      }
+
+      console.log("✅ Credenciales offline válidas para:", username);
+
       return {
         success: true,
         user: {
@@ -105,12 +139,78 @@ class UserOfflineService {
           nombre: user.nombre,
           rol: user.rol,
           activo: user.activo,
+          ultimo_login: user.ultimo_login,
         },
         token: user.token,
       };
     } catch (error) {
       console.error("❌ Error verificando credenciales offline:", error);
-      return { success: false, error: "Error de verificación" };
+      return { success: false, error: "Error de verificación offline" };
+    }
+  }
+
+  // Sincronizar usuarios desde el servidor - ACTUALIZADO
+  async syncUsersFromServer() {
+    try {
+      if (!navigator.onLine) {
+        console.log(
+          "📴 No hay conexión - omitiendo sincronización de usuarios"
+        );
+        return { success: false, error: "Sin conexión" };
+      }
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        return { success: false, error: "No hay token disponible" };
+      }
+
+      console.log("🔄 Sincronizando usuarios desde servidor...");
+
+      const response = await fetch(`${process.env.VITE_API_URL}/users`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "x-token": token,
+        },
+      });
+
+      console.log("📥 Respuesta de usuarios:", response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.ok && data.users) {
+          console.log(
+            `📥 Recibidos ${data.users.length} usuarios del servidor`
+          );
+
+          // Guardar todos los usuarios en IndexedDB
+          let savedCount = 0;
+          for (const user of data.users) {
+            const saved = await this.saveUserForOffline(
+              user,
+              "offline-sync-token"
+            );
+            if (saved) savedCount++;
+          }
+
+          console.log(`✅ ${savedCount} usuarios sincronizados offline`);
+          return { success: true, count: savedCount };
+        } else {
+          console.error("❌ Respuesta inválida del servidor:", data);
+          return { success: false, error: "Respuesta inválida del servidor" };
+        }
+      } else {
+        const errorText = await response.text();
+        console.error("❌ Error del servidor:", response.status, errorText);
+        return {
+          success: false,
+          error: `Error ${response.status}: ${errorText}`,
+        };
+      }
+    } catch (error) {
+      console.error("❌ Error sincronizando usuarios:", error);
+      return { success: false, error: error.message };
     }
   }
 
@@ -129,40 +229,19 @@ class UserOfflineService {
     }
   }
 
-  // Sincronizar usuarios desde el servidor
-  async syncUsersFromServer() {
+  // Verificar si hay usuarios disponibles offline
+  async hasOfflineUsers() {
     try {
-      if (!navigator.onLine) {
-        console.log(
-          "📴 No hay conexión - omitiendo sincronización de usuarios"
-        );
-        return { success: false, error: "Sin conexión" };
-      }
-
-      const response = await fetch("/api/users", {
-        headers: {
-          "x-token": localStorage.getItem("token") || "",
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-
-        if (data.ok && data.users) {
-          // Guardar todos los usuarios en IndexedDB
-          for (const user of data.users) {
-            await this.saveUserForOffline(user, "offline-token");
-          }
-
-          console.log(`✅ ${data.users.length} usuarios sincronizados offline`);
-          return { success: true, count: data.users.length };
-        }
-      }
-
-      return { success: false, error: "Error del servidor" };
+      const users = await this.getAllOfflineUsers();
+      const hasUsers = users.length > 0;
+      console.log(
+        "📊 Usuarios offline disponibles:",
+        hasUsers ? users.length : 0
+      );
+      return hasUsers;
     } catch (error) {
-      console.error("❌ Error sincronizando usuarios:", error);
-      return { success: false, error: error.message };
+      console.error("❌ Error verificando usuarios offline:", error);
+      return false;
     }
   }
 
@@ -178,16 +257,6 @@ class UserOfflineService {
       return true;
     } catch (error) {
       console.error("❌ Error limpiando usuarios offline:", error);
-      return false;
-    }
-  }
-
-  // Verificar si hay usuarios disponibles offline
-  async hasOfflineUsers() {
-    try {
-      const users = await this.getAllOfflineUsers();
-      return users.length > 0;
-    } catch (error) {
       return false;
     }
   }
