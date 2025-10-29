@@ -11,6 +11,9 @@ import {
   FiUserCheck,
   FiUserX,
   FiShield,
+  FiWifi,
+  FiWifiOff,
+  FiRefreshCw,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import UserModal from "../../components/features/users/UserModal";
@@ -27,19 +30,47 @@ const Users = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [retryCount, setRetryCount] = useState(0);
 
   const dispatch = useDispatch();
-  const { users, loading } = useSelector((state) => state.users);
+  const { users, loading, error } = useSelector((state) => state.users);
   const { user: currentUser } = useSelector((state) => state.auth);
+
+  // ✅ DETECTAR ESTADO DE CONEXIÓN
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Recargar datos cuando se recupera la conexión
+      if (retryCount > 0) {
+        dispatch(loadUsers());
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [dispatch, retryCount]);
 
   useEffect(() => {
     dispatch(loadUsers());
   }, [dispatch]);
 
+  // ✅ MANEJAR REINTENTO DE CARGA
+  const handleRetry = () => {
+    setRetryCount((prev) => prev + 1);
+    dispatch(loadUsers());
+  };
+
   // ✅ FUNCIÓN PARA SOLICITAR CONTRASEÑA DE ADMIN
   const requestAdminPassword = async (action = "realizar esta acción") => {
     if (currentUser.rol === "admin") {
-      return true; // Los admins no necesitan validación adicional
+      return true;
     }
 
     const { value: password } = await Swal.fire({
@@ -69,12 +100,22 @@ const Users = () => {
   };
 
   const handleCreateUser = async () => {
-    // ✅ SOLO ADMINS PUEDEN CREAR USUARIOS
+    // ✅ VERIFICAR CONEXIÓN PARA CREAR USUARIOS
+    if (!isOnline) {
+      await Swal.fire({
+        icon: "error",
+        title: "Sin conexión",
+        text: "No puedes crear usuarios en modo offline. Conéctate a internet e intenta nuevamente.",
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
     if (currentUser.rol !== "admin") {
       const adminPassword = await requestAdminPassword(
         "crear un nuevo usuario"
       );
-      if (!adminPassword) return; // Usuario canceló
+      if (!adminPassword) return;
     }
 
     setEditingUser(null);
@@ -82,7 +123,17 @@ const Users = () => {
   };
 
   const handleEditUser = async (user) => {
-    // ✅ SOLO ADMINS PUEDEN EDITAR USUARIOS (excepto auto-edición)
+    // ✅ VERIFICAR CONEXIÓN PARA EDITAR USUARIOS
+    if (!isOnline) {
+      await Swal.fire({
+        icon: "error",
+        title: "Sin conexión",
+        text: "No puedes editar usuarios en modo offline. Conéctate a internet e intenta nuevamente.",
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
     if (currentUser.rol !== "admin" && user.id !== currentUser.id) {
       const adminPassword = await requestAdminPassword(
         `editar al usuario ${user.nombre}`
@@ -95,7 +146,17 @@ const Users = () => {
   };
 
   const handleDeleteUser = async (user) => {
-    // No permitir eliminarse a sí mismo
+    // ✅ VERIFICAR CONEXIÓN PARA ELIMINAR USUARIOS
+    if (!isOnline) {
+      await Swal.fire({
+        icon: "error",
+        title: "Sin conexión",
+        text: "No puedes eliminar usuarios en modo offline. Conéctate a internet e intenta nuevamente.",
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
     if (user.id === currentUser.id) {
       await Swal.fire({
         icon: "error",
@@ -106,7 +167,6 @@ const Users = () => {
       return;
     }
 
-    // ✅ SOLO ADMINS PUEDEN ELIMINAR USUARIOS
     if (currentUser.rol !== "admin") {
       const adminPassword = await requestAdminPassword(
         `eliminar al usuario ${user.nombre}`
@@ -134,7 +194,6 @@ const Users = () => {
     try {
       let result;
 
-      // ✅ INCLUIR CONTRASEÑA DE ADMIN SI FUE SOLICITADA
       if (currentUser.rol !== "admin") {
         const adminPassword = await requestAdminPassword(
           editingUser ? "actualizar este usuario" : "crear un nuevo usuario"
@@ -152,7 +211,7 @@ const Users = () => {
       if (result?.success) {
         setShowUserModal(false);
         setEditingUser(null);
-        dispatch(loadUsers()); // Recargar lista
+        dispatch(loadUsers());
       }
     } catch (error) {
       console.error("Error guardando usuario:", error);
@@ -173,14 +232,52 @@ const Users = () => {
 
   const activeUsers = users.filter((u) => u.activo).length;
   const inactiveUsers = users.filter((u) => !u.activo).length;
-
-  // ✅ CALCULAR ESTADÍSTICAS ADICIONALES
   const adminUsers = users.filter((u) => u.rol === "admin").length;
   const vendedorUsers = users.filter((u) => u.rol === "vendedor").length;
 
+  // ✅ COMPONENTE DE ESTADO OFFLINE
+  const renderOfflineState = () => (
+    <div className={styles.offlineState}>
+      <div className={styles.offlineContent}>
+        <FiWifiOff className={styles.offlineIcon} />
+        <h3>Modo Sin Conexión</h3>
+        <p>No puedes cargar o gestionar usuarios sin conexión a internet</p>
+        <div className={styles.offlineActions}>
+          <button
+            className={styles.retryButton}
+            onClick={handleRetry}
+            disabled={!isOnline}
+          >
+            <FiRefreshCw className={styles.retryIcon} />
+            Reintentar Conexión
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ✅ COMPONENTE DE ERROR DE CARGA
+  const renderErrorState = () => (
+    <div className={styles.errorState}>
+      <div className={styles.errorContent}>
+        <FiWifiOff className={styles.errorIcon} />
+        <h3>Error de Conexión</h3>
+        <p>
+          No se pudieron cargar los usuarios. Verifica tu conexión a internet.
+        </p>
+        <div className={styles.errorActions}>
+          <button className={styles.retryButton} onClick={handleRetry}>
+            <FiRefreshCw className={styles.retryIcon} />
+            Reintentar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={styles.usersPage}>
-      {/* Header */}
+      {/* Header con estado de conexión */}
       <div className={styles.pageHeader}>
         <div className={styles.headerContent}>
           <div className={styles.headerIcon}>
@@ -189,6 +286,26 @@ const Users = () => {
           <div>
             <h1>Gestión de Usuarios</h1>
             <p>Administra los usuarios del sistema POS</p>
+
+            {/* ✅ INDICADOR DE ESTADO DE CONEXIÓN */}
+            <div
+              className={`${styles.connectionStatus} ${
+                isOnline ? styles.online : styles.offline
+              }`}
+            >
+              {isOnline ? (
+                <>
+                  <FiWifi className={styles.connectionIcon} />
+                  <span>Conectado - {users.length} usuarios cargados</span>
+                </>
+              ) : (
+                <>
+                  <FiWifiOff className={styles.connectionIcon} />
+                  <span>Sin conexión - Modo offline</span>
+                </>
+              )}
+            </div>
+
             {currentUser.rol !== "admin" && (
               <div className={styles.adminWarning}>
                 <FiShield className={styles.warningIcon} />
@@ -220,189 +337,203 @@ const Users = () => {
         </div>
       </div>
 
-      {/* Barra de acciones y filtros */}
-      <div className={styles.actionsBar}>
-        <div className={styles.searchSection}>
-          <div className={styles.searchInput}>
-            <FiSearch className={styles.searchIcon} />
-            <input
-              type="text"
-              placeholder="Buscar usuarios..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={styles.searchField}
-            />
+      {/* ✅ MOSTRAR ESTADO OFFLINO O ERROR */}
+      {!isOnline && renderOfflineState()}
+      {isOnline && error && renderErrorState()}
+
+      {/* Barra de acciones y filtros - DESHABILITADA EN OFFLINE */}
+      {isOnline && !error && (
+        <>
+          <div className={styles.actionsBar}>
+            <div className={styles.searchSection}>
+              <div className={styles.searchInput}>
+                <FiSearch className={styles.searchIcon} />
+                <input
+                  type="text"
+                  placeholder="Buscar usuarios..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={styles.searchField}
+                />
+              </div>
+
+              <div className={styles.filterGroup}>
+                <FiFilter className={styles.filterIcon} />
+                <select
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                  className={styles.roleSelect}
+                >
+                  <option value="all">Todos los roles</option>
+                  <option value="admin">Administrador</option>
+                  <option value="vendedor">Vendedor</option>
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.actionButtons}>
+              <button
+                className={styles.addButton}
+                onClick={handleCreateUser}
+                title={
+                  currentUser.rol !== "admin"
+                    ? "Requiere autorización de administrador"
+                    : "Crear nuevo usuario"
+                }
+              >
+                <FiPlus className={styles.addIcon} />
+                Nuevo Usuario
+                {currentUser.rol !== "admin" && (
+                  <FiShield className={styles.shieldIcon} />
+                )}
+              </button>
+            </div>
           </div>
 
-          <div className={styles.filterGroup}>
-            <FiFilter className={styles.filterIcon} />
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className={styles.roleSelect}
-            >
-              <option value="all">Todos los roles</option>
-              <option value="admin">Administrador</option>
-              <option value="vendedor">Vendedor</option>
-            </select>
-          </div>
-        </div>
-
-        <div className={styles.actionButtons}>
-          <button
-            className={styles.addButton}
-            onClick={handleCreateUser}
-            title={
-              currentUser.rol !== "admin"
-                ? "Requiere autorización de administrador"
-                : "Crear nuevo usuario"
-            }
-          >
-            <FiPlus className={styles.addIcon} />
-            Nuevo Usuario
-            {currentUser.rol !== "admin" && (
-              <FiShield className={styles.shieldIcon} />
+          {/* Tabla de usuarios */}
+          <div className={styles.usersTable}>
+            {loading ? (
+              <div className={styles.loading}>
+                <div className={styles.spinner}></div>
+                <p>Cargando usuarios...</p>
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className={styles.noUsers}>
+                <FiUsers className={styles.noUsersIcon} />
+                <h3>No se encontraron usuarios</h3>
+                <p>
+                  {searchTerm || filterRole !== "all"
+                    ? "Intenta ajustar los filtros de búsqueda"
+                    : "Comienza agregando el primer usuario al sistema"}
+                </p>
+                <button
+                  className={styles.addFirstUser}
+                  onClick={handleCreateUser}
+                  title={
+                    currentUser.rol !== "admin"
+                      ? "Requiere autorización de administrador"
+                      : "Crear primer usuario"
+                  }
+                >
+                  <FiPlus className={styles.addIcon} />
+                  Agregar Primer Usuario
+                  {currentUser.rol !== "admin" && (
+                    <FiShield className={styles.shieldIcon} />
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className={styles.tableContainer}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Nombre</th>
+                      <th>Email</th>
+                      <th>Rol</th>
+                      <th>Estado</th>
+                      <th>Último Login</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id}>
+                        <td className={styles.usernameCell}>
+                          <span className={styles.username}>
+                            {user.username}
+                          </span>
+                          {user.id === currentUser.id && (
+                            <span className={styles.currentUserBadge}>
+                              (Tú)
+                            </span>
+                          )}
+                        </td>
+                        <td>{user.nombre}</td>
+                        <td>{user.email}</td>
+                        <td>
+                          <span
+                            className={`${styles.roleBadge} ${
+                              styles[user.rol]
+                            }`}
+                          >
+                            {user.rol}
+                            {user.rol === "admin" && (
+                              <FiShield className={styles.roleIcon} />
+                            )}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`${styles.statusBadge} ${
+                              user.activo ? styles.active : styles.inactive
+                            }`}
+                          >
+                            {user.activo ? (
+                              <>
+                                <FiUserCheck className={styles.statusIcon} />
+                                Activo
+                              </>
+                            ) : (
+                              <>
+                                <FiUserX className={styles.statusIcon} />
+                                Inactivo
+                              </>
+                            )}
+                          </span>
+                        </td>
+                        <td>
+                          {user.ultimo_login
+                            ? new Date(user.ultimo_login).toLocaleDateString()
+                            : "Nunca"}
+                        </td>
+                        <td>
+                          <div className={styles.actionButtons}>
+                            <button
+                              className={styles.editBtn}
+                              onClick={() => handleEditUser(user)}
+                              title={
+                                currentUser.rol !== "admin" &&
+                                user.id !== currentUser.id
+                                  ? "Requiere autorización de administrador"
+                                  : "Editar usuario"
+                              }
+                            >
+                              <FiEdit />
+                              {currentUser.rol !== "admin" &&
+                                user.id !== currentUser.id && (
+                                  <FiShield className={styles.actionShield} />
+                                )}
+                            </button>
+                            <button
+                              className={styles.deleteBtn}
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={user.id === currentUser.id}
+                              title={
+                                user.id === currentUser.id
+                                  ? "No puedes eliminarte a ti mismo"
+                                  : currentUser.rol !== "admin"
+                                  ? "Requiere autorización de administrador"
+                                  : "Eliminar usuario"
+                              }
+                            >
+                              <FiTrash2 />
+                              {currentUser.rol !== "admin" &&
+                                user.id !== currentUser.id && (
+                                  <FiShield className={styles.actionShield} />
+                                )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </button>
-        </div>
-      </div>
-
-      {/* Tabla de usuarios */}
-      <div className={styles.usersTable}>
-        {loading ? (
-          <div className={styles.loading}>
-            <div className={styles.spinner}></div>
-            <p>Cargando usuarios...</p>
           </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className={styles.noUsers}>
-            <FiUsers className={styles.noUsersIcon} />
-            <h3>No se encontraron usuarios</h3>
-            <p>
-              {searchTerm || filterRole !== "all"
-                ? "Intenta ajustar los filtros de búsqueda"
-                : "Comienza agregando el primer usuario al sistema"}
-            </p>
-            <button
-              className={styles.addFirstUser}
-              onClick={handleCreateUser}
-              title={
-                currentUser.rol !== "admin"
-                  ? "Requiere autorización de administrador"
-                  : "Crear primer usuario"
-              }
-            >
-              <FiPlus className={styles.addIcon} />
-              Agregar Primer Usuario
-              {currentUser.rol !== "admin" && (
-                <FiShield className={styles.shieldIcon} />
-              )}
-            </button>
-          </div>
-        ) : (
-          <div className={styles.tableContainer}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Usuario</th>
-                  <th>Nombre</th>
-                  <th>Email</th>
-                  <th>Rol</th>
-                  <th>Estado</th>
-                  <th>Último Login</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className={styles.usernameCell}>
-                      <span className={styles.username}>{user.username}</span>
-                      {user.id === currentUser.id && (
-                        <span className={styles.currentUserBadge}>(Tú)</span>
-                      )}
-                    </td>
-                    <td>{user.nombre}</td>
-                    <td>{user.email}</td>
-                    <td>
-                      <span
-                        className={`${styles.roleBadge} ${styles[user.rol]}`}
-                      >
-                        {user.rol}
-                        {user.rol === "admin" && (
-                          <FiShield className={styles.roleIcon} />
-                        )}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`${styles.statusBadge} ${
-                          user.activo ? styles.active : styles.inactive
-                        }`}
-                      >
-                        {user.activo ? (
-                          <>
-                            <FiUserCheck className={styles.statusIcon} />
-                            Activo
-                          </>
-                        ) : (
-                          <>
-                            <FiUserX className={styles.statusIcon} />
-                            Inactivo
-                          </>
-                        )}
-                      </span>
-                    </td>
-                    <td>
-                      {user.ultimo_login
-                        ? new Date(user.ultimo_login).toLocaleDateString()
-                        : "Nunca"}
-                    </td>
-                    <td>
-                      <div className={styles.actionButtons}>
-                        <button
-                          className={styles.editBtn}
-                          onClick={() => handleEditUser(user)}
-                          title={
-                            currentUser.rol !== "admin" &&
-                            user.id !== currentUser.id
-                              ? "Requiere autorización de administrador"
-                              : "Editar usuario"
-                          }
-                        >
-                          <FiEdit />
-                          {currentUser.rol !== "admin" &&
-                            user.id !== currentUser.id && (
-                              <FiShield className={styles.actionShield} />
-                            )}
-                        </button>
-                        <button
-                          className={styles.deleteBtn}
-                          onClick={() => handleDeleteUser(user)}
-                          disabled={user.id === currentUser.id}
-                          title={
-                            user.id === currentUser.id
-                              ? "No puedes eliminarte a ti mismo"
-                              : currentUser.rol !== "admin"
-                              ? "Requiere autorización de administrador"
-                              : "Eliminar usuario"
-                          }
-                        >
-                          <FiTrash2 />
-                          {currentUser.rol !== "admin" &&
-                            user.id !== currentUser.id && (
-                              <FiShield className={styles.actionShield} />
-                            )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Modal de usuario */}
       <UserModal

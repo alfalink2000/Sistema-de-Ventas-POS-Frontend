@@ -525,3 +525,137 @@
   cursor: not-allowed;
   transform: none !important;
 }
+/* ✅ ESTILOS PARA MODO OFFLINE Y ERROR */
+.connectionStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 8px;
+  max-width: fit-content;
+}
+
+.connectionStatus.online {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.connectionStatus.offline {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.connectionIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.offlineState,
+.errorState {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 40px 20px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.offlineContent,
+.errorContent {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.offlineIcon,
+.errorIcon {
+  width: 64px;
+  height: 64px;
+  color: #f59e0b;
+  margin-bottom: 16px;
+}
+
+.errorIcon {
+  color: #dc2626;
+}
+
+.offlineState h3,
+.errorState h3 {
+  color: #1e293b;
+  margin-bottom: 8px;
+  font-size: 1.5rem;
+}
+
+.offlineState p,
+.errorState p {
+  color: #64748b;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.offlineActions,
+.errorActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.retryButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retryButton:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.retryButton:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.retryIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ✅ RESPONSIVE */
+@media (max-width: 768px) {
+  .connectionStatus {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+  }
+
+  .offlineState,
+  .errorState {
+    padding: 30px 15px;
+    margin: 15px 0;
+  }
+
+  .offlineIcon,
+  .errorIcon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .offlineState h3,
+  .errorState h3 {
+    font-size: 1.25rem;
+  }
+}
