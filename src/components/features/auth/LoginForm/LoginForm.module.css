@@ -387,3 +387,17 @@
     gap: 6px;
   }
 }
+/* En LoginForm.module.css - agregar estas clases */
+
+.offlineStatus {
+  margin: 20px 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* O si prefieres integrarlo dentro del formulario */
+.formFooter {
+  margin-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 20px;
+}

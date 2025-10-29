@@ -25,77 +25,103 @@ export const startLogin = (username, password) => {
 
     try {
       console.log("🔐 Intentando login...");
-      const response = await fetchSinToken(
-        "auth/login",
-        { username, password },
-        "POST"
+
+      // Primero intentar con el servidor
+      if (navigator.onLine) {
+        try {
+          const response = await fetchSinToken(
+            "auth/login",
+            { username, password },
+            "POST"
+          );
+
+          if (response.ok) {
+            const { token, usuario } = response;
+
+            // ✅ GUARDAR PARA USO OFFLINE
+            await UserOfflineService.saveUserForOffline(usuario, token);
+
+            localStorage.setItem("token", token);
+            localStorage.setItem("user", JSON.stringify(usuario));
+
+            console.log("✅ Login online exitoso, sincronizando datos...");
+
+            // Sincronizar datos maestros
+            await SyncService.syncMasterData();
+
+            // Cargar datos en Redux
+            await dispatch(loadProducts());
+            await dispatch(loadCategories());
+
+            await Swal.fire({
+              icon: "success",
+              title: "¡Bienvenido!",
+              text: `Hola ${usuario.nombre}`,
+              timer: 2000,
+              showConfirmButton: false,
+            });
+
+            dispatch({
+              type: types.authLogin,
+              payload: usuario,
+            });
+
+            return; // Éxito - salir
+          }
+        } catch (onlineError) {
+          console.log("❌ Error en login online:", onlineError);
+          // Continuar con intento offline
+        }
+      }
+
+      // ✅ INTENTAR LOGIN OFFLINE
+      console.log("🌐 Intentando login offline...");
+      const offlineResult = await UserOfflineService.verifyOfflineCredentials(
+        username,
+        password
       );
 
-      if (response.ok) {
-        const { token, usuario } = response;
-
-        // ✅ GUARDAR PARA USO OFFLINE (NUEVO)
-        await AuthOfflineService.saveUserForOffline(usuario, token);
+      if (offlineResult.success) {
+        const { user, token } = offlineResult;
 
         localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(usuario));
+        localStorage.setItem("user", JSON.stringify(user));
 
-        console.log("✅ Login exitoso, cargando productos...");
-        await dispatch(loadProducts());
+        // Cargar datos desde cache offline
+        const offlineData = await SyncService.loadMasterDataFromCache();
 
-        await Swal.fire({
-          icon: "success",
-          title: "¡Bienvenido!",
-          text: `Hola ${usuario.nombre}`,
-          timer: 2000,
-          showConfirmButton: false,
-        });
+        if (offlineData.productos && offlineData.productos.length > 0) {
+          dispatch({
+            type: types.productsLoad,
+            payload: offlineData.productos,
+          });
+        }
+
+        if (offlineData.categorias && offlineData.categorias.length > 0) {
+          dispatch({
+            type: types.categoriesLoad,
+            payload: offlineData.categorias,
+          });
+        }
 
         dispatch({
           type: types.authLogin,
-          payload: usuario,
+          payload: user,
+        });
+
+        await Swal.fire({
+          icon: "warning",
+          title: "Modo Offline",
+          text: `Hola ${user.nombre}. Trabajando sin conexión.`,
+          timer: 3000,
+          showConfirmButton: false,
         });
       } else {
-        throw new Error(response.error || "Error en el login");
+        throw new Error(offlineResult.error || "Credenciales incorrectas");
       }
     } catch (error) {
       console.error("❌ Error en login:", error);
 
-      // ✅ NUEVO: INTENTAR LOGIN OFFLINE SI HAY ERROR DE RED
-      if (
-        error.message.includes("Network") ||
-        error.message.includes("Failed to fetch")
-      ) {
-        console.log("🌐 Error de red - Verificando sesión offline...");
-
-        const offlineUser = await AuthOfflineService.getOfflineUser();
-        if (offlineUser) {
-          console.log("✅ Sesión offline válida - Iniciando sin conexión...");
-
-          // Cargar productos desde cache offline
-          const offlineData = await SyncService.loadMasterDataFromCache();
-          if (offlineData.productos.length > 0) {
-            dispatch(loadProducts(offlineData.productos));
-          }
-
-          dispatch({
-            type: types.authLogin,
-            payload: offlineUser.user,
-          });
-
-          await Swal.fire({
-            icon: "warning",
-            title: "Modo Offline",
-            text: `Hola ${offlineUser.user.nombre}. Trabajando sin conexión.`,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-
-          return; // ¡IMPORTANTE! Salir sin error
-        }
-      }
-
-      // Si llegamos aquí, es un error real (no solo falta de conexión)
       await Swal.fire({
         icon: "error",
         title: "Error de acceso",
@@ -109,6 +135,28 @@ export const startLogin = (username, password) => {
       });
     } finally {
       dispatch(finishLoading());
+    }
+  };
+};
+// ✅ NUEVO ACTION PARA SINCRONIZAR USUARIOS
+export const syncOfflineUsers = () => {
+  return async (dispatch) => {
+    try {
+      const result = await UserOfflineService.syncUsersFromServer();
+
+      if (result.success) {
+        dispatch({
+          type: types.authSyncComplete,
+          payload: { usersSynced: result.count },
+        });
+
+        return { success: true, count: result.count };
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error("Error sincronizando usuarios:", error);
+      return { success: false, error: error.message };
     }
   };
 };
