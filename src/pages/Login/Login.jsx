@@ -1,8 +1,25 @@
 // pages/Login/Login.jsx
+import { useState, useEffect } from "react";
 import LoginForm from "../../components/features/auth/LoginForm/LoginForm";
+import OfflineDataStatus from "../../components/offline/OfflineDataStatus/OfflineDataStatus";
 import styles from "./Login.module.css";
 
 const Login = () => {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   return (
     <div className={styles.loginContainer}>
       <div className={styles.loginBackground}>
@@ -10,6 +27,7 @@ const Login = () => {
       </div>
 
       <div className={styles.loginCard}>
+        {/* ✅ HEADER CON ESTADO OFFLINE */}
         <div className={styles.loginHeader}>
           <div className={styles.logo}>
             <div className={styles.reactIcon}>
@@ -22,7 +40,14 @@ const Login = () => {
               <p>Sistema de Punto de Venta</p>
             </div>
           </div>
+
+          {/* ✅ OFFLINE STATUS EN HEADER */}
+          <div className={styles.headerStatus}>
+            <OfflineDataStatus />
+          </div>
         </div>
+
+        {/* FORMULARIO SIN OFFLINE STATUS */}
         <LoginForm />
       </div>
     </div>

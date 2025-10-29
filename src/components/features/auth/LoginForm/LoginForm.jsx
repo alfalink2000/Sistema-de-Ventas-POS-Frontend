@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { startLogin } from "../../../../actions/authActions";
-import OfflineDataStatus from "../../../offline/OfflineDataStatus/OfflineDataStatus";
 import Input from "../../../ui/Input/Input";
 import styles from "./LoginForm.module.css";
 
@@ -104,109 +103,102 @@ const LoginForm = () => {
   );
 
   return (
-    <>
-      <div className={styles.offlineStatus}>
-        <OfflineDataStatus />
+    <form onSubmit={handleSubmit} className={styles.loginForm}>
+      <div className={styles.formHeader}>
+        <p>Ingresa tus credenciales para acceder al sistema</p>
       </div>
-      <form onSubmit={handleSubmit} className={styles.loginForm}>
-        <div className={styles.formHeader}>
-          <p>Ingresa tus credenciales para acceder al sistema</p>
+
+      <div className={styles.formContent}>
+        <div className={styles.formGroup}>
+          <Input
+            label="Usuario"
+            name="username"
+            type="text"
+            value={formData.username}
+            onChange={handleChange}
+            required
+            autoFocus
+            placeholder="Ingresa tu usuario"
+            autoComplete="username"
+            disabled={localLoading}
+          />
         </div>
 
-        <div className={styles.formContent}>
-          <div className={styles.formGroup}>
+        <div className={styles.formGroup}>
+          <div className={styles.passwordContainer}>
             <Input
-              label="Usuario"
-              name="username"
-              type="text"
-              value={formData.username}
+              label="Contraseña"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={formData.password}
               onChange={handleChange}
               required
-              autoFocus
-              placeholder="Ingresa tu usuario"
-              autoComplete="username"
+              placeholder="Ingresa tu contraseña"
+              autoComplete="current-password"
               disabled={localLoading}
             />
-          </div>
-
-          <div className={styles.formGroup}>
-            <div className={styles.passwordContainer}>
-              <Input
-                label="Contraseña"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                value={formData.password}
-                onChange={handleChange}
-                required
-                placeholder="Ingresa tu contraseña"
-                autoComplete="current-password"
-                disabled={localLoading}
-              />
-              <button
-                type="button"
-                className={styles.passwordToggle}
-                onClick={toggleShowPassword}
-                tabIndex={-1}
-                disabled={localLoading}
-              >
-                {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div className={styles.errorContainer}>
-              <div className={styles.errorMessage}>
-                <span className={styles.errorIcon}>⚠️</span>
-                {error}
-              </div>
-            </div>
-          )}
-
-          <div className={styles.formActions}>
-            <button
-              type="submit"
-              disabled={
-                localLoading || !formData.username || !formData.password
-              }
-              className={`${styles.submitButton} ${
-                localLoading ? styles.submitButtonLoading : ""
-              }`}
-            >
-              {localLoading ? (
-                <div className={styles.loadingContent}>
-                  <LoadingSpinner />
-                  <span>Procesando...</span>
-                </div>
-              ) : (
-                <div className={styles.normalContent}>
-                  <LockIcon />
-                  <span>Acceder al Sistema</span>
-                </div>
-              )}
-            </button>
-          </div>
-
-          <div className={styles.helperLinks}>
             <button
               type="button"
-              onClick={handleForgotPassword}
-              className={styles.forgotPassword}
+              className={styles.passwordToggle}
+              onClick={toggleShowPassword}
+              tabIndex={-1}
               disabled={localLoading}
             >
-              ¿Olvidaste tu contraseña?
+              {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
             </button>
           </div>
         </div>
 
-        <div className={styles.formFooter}>
-          <p className={styles.helpText}>
-            <ShieldIcon />
-            Sistema seguro • v1.0
-          </p>
+        {error && (
+          <div className={styles.errorContainer}>
+            <div className={styles.errorMessage}>
+              <span className={styles.errorIcon}>⚠️</span>
+              {error}
+            </div>
+          </div>
+        )}
+
+        <div className={styles.formActions}>
+          <button
+            type="submit"
+            disabled={localLoading || !formData.username || !formData.password}
+            className={`${styles.submitButton} ${
+              localLoading ? styles.submitButtonLoading : ""
+            }`}
+          >
+            {localLoading ? (
+              <div className={styles.loadingContent}>
+                <LoadingSpinner />
+                <span>Procesando...</span>
+              </div>
+            ) : (
+              <div className={styles.normalContent}>
+                <LockIcon />
+                <span>Acceder al Sistema</span>
+              </div>
+            )}
+          </button>
         </div>
-      </form>
-    </>
+
+        <div className={styles.helperLinks}>
+          <button
+            type="button"
+            onClick={handleForgotPassword}
+            className={styles.forgotPassword}
+            disabled={localLoading}
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.formFooter}>
+        <p className={styles.helpText}>
+          <ShieldIcon />
+          Sistema seguro • v1.0
+        </p>
+      </div>
+    </form>
   );
 };
 
