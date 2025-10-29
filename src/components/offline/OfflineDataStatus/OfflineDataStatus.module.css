@@ -1,16 +1,16 @@
-/* src/components/features/offline/OfflineDataStatus/OfflineDataStatus.module.css */
-
 .container {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 0;
   margin: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(10px);
+  box-shadow: none;
+  backdrop-filter: none;
+  width: 100%;
+  max-width: 1200px;
 }
 
-/* Estados de conexión - TEMA BLANCO */
+/* Estados de conexión - OPTIMIZADO PARA HEADER */
 .statusOnline {
   display: flex;
   align-items: center;
@@ -18,6 +18,7 @@
   color: #059669;
   font-weight: 600;
   font-size: 0.85rem;
+  justify-content: center;
 }
 
 .statusOffline {
@@ -27,7 +28,8 @@
   color: #dc2626;
   font-weight: 600;
   font-size: 0.85rem;
-  margin-bottom: 12px;
+  justify-content: center;
+  margin-bottom: 0;
 }
 
 .onlineIcon {
@@ -54,36 +56,39 @@
   }
 }
 
-/* Estado de datos */
+/* Estado de datos - COMPACTO PARA HEADER */
 .dataStatus {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .dataItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: #475569;
-  font-size: 0.8rem;
-  padding: 4px 0;
+  font-size: 0.75rem;
+  padding: 2px 0;
 }
 
 .dataIcon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   color: #64748b;
 }
 
 /* Última actualización */
 .lastUpdate {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: #94a3b8;
   font-style: italic;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #f1f5f9;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 /* Botón de sincronización */
@@ -95,13 +100,13 @@
   color: white;
   border: none;
   border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 0.75rem;
+  padding: 6px 10px;
+  font-size: 0.7rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-top: 8px;
-  width: 100%;
+  margin-top: 0;
+  width: auto;
   justify-content: center;
 }
 
@@ -131,50 +136,50 @@
   }
 }
 
-/* Estados de advertencia - TEMA BLANCO */
+/* Estados de advertencia - COMPACTO */
 .dataWarning {
   background: #fef3c7;
   border: 1px solid #f59e0b;
   border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 8px;
+  padding: 6px 8px;
+  margin-top: 4px;
 }
 
 .dataWarningContent {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: #92400e;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
 }
 
 .warningIcon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   color: #d97706;
   flex-shrink: 0;
 }
 
-/* Estados de éxito - TEMA BLANCO */
+/* Estados de éxito - COMPACTO */
 .dataSuccess {
   background: #d1fae5;
   border: 1px solid #10b981;
   border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 8px;
+  padding: 6px 8px;
+  margin-top: 4px;
 }
 
 .dataSuccessContent {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: #065f46;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
 }
 
 .successIcon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   color: #059669;
   flex-shrink: 0;
 }
@@ -182,35 +187,35 @@
 /* Responsive */
 @media (max-width: 768px) {
   .container {
-    padding: 12px;
+    padding: 6px 0;
   }
 
   .statusOnline,
   .statusOffline {
-    font-size: 0.8rem;
-  }
-
-  .dataItem {
     font-size: 0.75rem;
   }
 
-  .syncButton {
-    padding: 6px 10px;
+  .dataStatus {
+    gap: 12px;
+  }
+
+  .dataItem {
     font-size: 0.7rem;
+  }
+
+  .syncButton {
+    padding: 4px 8px;
+    font-size: 0.65rem;
   }
 }
 
 @media (max-width: 480px) {
-  .container {
-    border-radius: 8px;
-    padding: 10px;
-  }
-
   .dataStatus {
+    flex-direction: column;
     gap: 4px;
   }
 
   .dataItem {
-    padding: 2px 0;
+    padding: 1px 0;
   }
 }

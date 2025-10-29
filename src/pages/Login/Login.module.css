@@ -1,22 +1,28 @@
-/* pages/Login/Login.module.css - VERSIÓN MEJORADA */
+/* pages/Login/Login.module.css */
 .loginContainer {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
   padding: 20px;
-  position: relative;
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow: auto;
 }
 
+/* Fondo con patrón sutil */
 .loginBackground {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 0;
+  overflow: hidden;
 }
 
 .backgroundPattern {
@@ -25,41 +31,50 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: radial-gradient(
-      circle at 25% 25%,
-      rgba(255, 255, 255, 0.1) 0%,
+  background: radial-gradient(
+      circle at 20% 80%,
+      rgba(37, 99, 235, 0.05) 0%,
       transparent 50%
     ),
     radial-gradient(
-      circle at 75% 75%,
-      rgba(255, 255, 255, 0.1) 0%,
+      circle at 80% 20%,
+      rgba(37, 99, 235, 0.03) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 40% 40%,
+      rgba(37, 99, 235, 0.04) 0%,
       transparent 50%
     );
 }
 
 .loginCard {
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 16px;
+  padding: 24px;
   width: 100%;
-  max-width: 440px;
-  z-index: 1;
+  max-width: 380px;
+  height: 500px;
+  max-height: 500px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
-/* ✅ HEADER MEJORADO CON GRADIENTE */
 .loginHeader {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  padding: 24px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  text-align: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .logo {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 12px;
 }
@@ -67,70 +82,48 @@
 .reactIcon {
   width: 48px;
   height: 48px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
+  color: var(--color-primary);
+  filter: drop-shadow(0 2px 8px rgba(37, 99, 235, 0.3));
 }
 
 .reactIcon svg {
-  width: 28px;
-  height: 28px;
-  color: white;
+  width: 100%;
+  height: 100%;
 }
 
 .logoText h1 {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-dark) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
-  color: white;
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .logoText p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.875rem;
-}
-
-/* ✅ HEADER STATUS - TEMA BLANCO MEJORADO */
-.headerStatus {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  padding: 12px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  color: var(--color-gray-600);
+  margin: 4px 0 0 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .loginContainer {
-    padding: 16px;
-  }
-
   .loginCard {
-    max-width: 100%;
-  }
-
-  .loginHeader {
     padding: 20px;
-  }
-
-  .logo {
-    gap: 10px;
+    max-width: 340px;
+    height: 480px;
   }
 
   .reactIcon {
-    width: 40px;
-    height: 40px;
-  }
-
-  .reactIcon svg {
-    width: 24px;
-    height: 24px;
+    width: 44px;
+    height: 44px;
   }
 
   .logoText h1 {
@@ -139,12 +132,68 @@
 }
 
 @media (max-width: 480px) {
-  .loginHeader {
+  .loginContainer {
     padding: 16px;
-    gap: 12px;
   }
 
-  .headerStatus {
-    padding: 10px 12px;
+  .loginCard {
+    padding: 18px;
+    max-width: 320px;
+    height: 460px;
+    border-radius: 12px;
   }
+
+  .reactIcon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .logoText h1 {
+    font-size: 1.125rem;
+  }
+
+  .logoText p {
+    font-size: 0.75rem;
+  }
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .reactIcon {
+    animation: none;
+  }
+}
+
+body {
+  overflow: auto;
+}
+
+.loginContainer * {
+  box-sizing: border-box;
+}
+/* HEADER FIJO PARA OFFLINE STATUS */
+.offlineHeader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* padding: 8px 20px; */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.loginContainer {
+  position: relative;
+  padding-top: 80px; /* Espacio para el header fijo */
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

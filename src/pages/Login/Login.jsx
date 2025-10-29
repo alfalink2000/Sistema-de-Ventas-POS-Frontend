@@ -22,12 +22,17 @@ const Login = () => {
 
   return (
     <div className={styles.loginContainer}>
+      {/* ✅ HEADER FIJO CON OFFLINE STATUS */}
+      <div className={styles.offlineHeader}>
+        <OfflineDataStatus />
+      </div>
+
       <div className={styles.loginBackground}>
         <div className={styles.backgroundPattern}></div>
       </div>
 
       <div className={styles.loginCard}>
-        {/* ✅ HEADER CON ESTADO OFFLINE */}
+        {/* HEADER ORIGINAL SIN OFFLINE STATUS */}
         <div className={styles.loginHeader}>
           <div className={styles.logo}>
             <div className={styles.reactIcon}>
@@ -40,14 +45,9 @@ const Login = () => {
               <p>Sistema de Punto de Venta</p>
             </div>
           </div>
-
-          {/* ✅ OFFLINE STATUS EN HEADER */}
-          <div className={styles.headerStatus}>
-            <OfflineDataStatus />
-          </div>
         </div>
 
-        {/* FORMULARIO SIN OFFLINE STATUS */}
+        {/* FORMULARIO SIN CAMBIOS */}
         <LoginForm />
       </div>
     </div>
