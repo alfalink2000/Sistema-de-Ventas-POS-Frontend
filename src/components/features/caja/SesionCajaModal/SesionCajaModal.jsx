@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { openSesionCaja } from "../../../../actions/sesionesCajaActions";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
+import { FiWifi, FiWifiOff } from "react-icons/fi";
 import styles from "./SesionCajaModal.module.css";
 
 const SesionCajaModal = ({ isOpen, onClose }) => {
@@ -12,20 +13,24 @@ const SesionCajaModal = ({ isOpen, onClose }) => {
 
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const isOnline = navigator.onLine;
 
   const handleAbrirSesion = async () => {
     if (!saldoInicial || saldoInicial < 0) return;
 
     setProcessing(true);
     try {
-      await dispatch(
+      const result = await dispatch(
         openSesionCaja({
           vendedor_id: user.id,
           saldo_inicial: parseFloat(saldoInicial),
         })
       );
-      onClose();
-      setSaldoInicial("");
+
+      if (result.success) {
+        onClose();
+        setSaldoInicial("");
+      }
     } finally {
       setProcessing(false);
     }
@@ -39,6 +44,25 @@ const SesionCajaModal = ({ isOpen, onClose }) => {
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Abrir Sesión de Caja">
       <div className={styles.modalContent}>
+        {/* Indicador de estado de conexión */}
+        <div
+          className={`${styles.connectionStatus} ${
+            isOnline ? styles.online : styles.offline
+          }`}
+        >
+          {isOnline ? (
+            <>
+              <FiWifi className={styles.connectionIcon} />
+              <span>Conectado - Los datos se guardarán en el servidor</span>
+            </>
+          ) : (
+            <>
+              <FiWifiOff className={styles.connectionIcon} />
+              <span>Sin conexión - Los datos se guardarán localmente</span>
+            </>
+          )}
+        </div>
+
         <div className={styles.formGroup}>
           <label className={styles.label}>Saldo Inicial en Caja</label>
           <input
@@ -55,6 +79,16 @@ const SesionCajaModal = ({ isOpen, onClose }) => {
           </small>
         </div>
 
+        {!isOnline && (
+          <div className={styles.offlineWarning}>
+            <strong>⚠️ Modo Offline</strong>
+            <p>
+              La sesión se abrirá localmente y se sincronizará cuando recuperes
+              la conexión a internet.
+            </p>
+          </div>
+        )}
+
         <div className={styles.actions}>
           <Button
             variant="secondary"
@@ -69,7 +103,7 @@ const SesionCajaModal = ({ isOpen, onClose }) => {
             disabled={!saldoInicial || processing}
             loading={processing}
           >
-            Abrir Sesión
+            {isOnline ? "Abrir Sesión" : "Abrir Sesión (Local)"}
           </Button>
         </div>
       </div>

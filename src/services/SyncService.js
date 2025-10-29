@@ -67,13 +67,16 @@ class SyncService {
     this.notifyListeners("sync_start");
 
     try {
-      // 1. Sincronizar ventas pendientes
+      // 1. Sincronizar sesiones pendientes
+      await this.syncPendingSessions();
+
+      // 2. Sincronizar ventas pendientes
       await this.syncPendingSales();
 
-      // 2. Sincronizar cierres pendientes
+      // 3. Sincronizar cierres pendientes
       await this.syncPendingClosures();
 
-      // 3. Sincronizar datos maestros
+      // 4. Sincronizar datos maestros
       await this.syncMasterData();
 
       console.log("✅ Sincronización completada exitosamente");
@@ -83,6 +86,56 @@ class SyncService {
       this.notifyListeners("sync_error", error);
     } finally {
       this.isSyncing = false;
+    }
+  }
+
+  // ✅ NUEVO: Sincronizar sesiones pendientes
+  async syncPendingSessions() {
+    try {
+      const pendingSessions = await IndexedDBService.getAll(
+        "sesiones_caja_offline",
+        "sincronizado",
+        false
+      );
+
+      console.log(
+        `📦 Sincronizando ${pendingSessions.length} sesiones pendientes...`
+      );
+
+      for (const session of pendingSessions) {
+        try {
+          const { id_local, ...sessionData } = session;
+
+          const response = await fetchConToken(
+            "sesiones-caja/abrir",
+            sessionData,
+            "POST"
+          );
+
+          if (response.ok && response.sesion) {
+            // Marcar como sincronizado y guardar ID del servidor
+            await IndexedDBService.put("sesiones_caja_offline", {
+              ...session,
+              sincronizado: true,
+              id_servidor: response.sesion.id,
+              fecha_sincronizacion: new Date().toISOString(),
+            });
+
+            console.log(
+              `✅ Sesión ${id_local} sincronizada como ${response.sesion.id}`
+            );
+          } else {
+            throw new Error(response.error || "Error del servidor");
+          }
+        } catch (error) {
+          console.error(
+            `❌ Error sincronizando sesión ${session.id_local}:`,
+            error
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error en syncPendingSessions:", error);
     }
   }
 
@@ -139,37 +192,85 @@ class SyncService {
   async syncPendingClosures() {
     try {
       const pendingClosures = await IndexedDBService.getAll(
-        "cierres_pendientes"
+        "cierres_pendientes",
+        "sincronizado",
+        false
+      );
+
+      console.log(
+        `📦 Sincronizando ${pendingClosures.length} cierres pendientes...`
       );
 
       for (const closure of pendingClosures) {
-        if (!closure.sincronizado) {
-          try {
-            const { id_local, ...closureData } = closure;
+        try {
+          const { id_local, ...closureData } = closure;
 
-            const response = await fetchConToken(
-              "cierres",
-              closureData,
-              "POST"
+          const response = await fetchConToken("cierres", closureData, "POST");
+
+          if (response.ok && response.cierre) {
+            await IndexedDBService.put("cierres_pendientes", {
+              ...closure,
+              sincronizado: true,
+              id_servidor: response.cierre.id,
+              fecha_sincronizacion: new Date().toISOString(),
+            });
+
+            console.log(
+              `✅ Cierre ${id_local} sincronizado como ${response.cierre.id}`
             );
 
-            if (response.ok) {
-              await IndexedDBService.put("cierres_pendientes", {
-                ...closure,
-                sincronizado: true,
-                fecha_sincronizacion: new Date().toISOString(),
-              });
+            // Si hay una sesión local asociada, cerrarla también
+            if (closure.sesion_caja_id_local) {
+              await this.closePendingSession(
+                closure.sesion_caja_id_local,
+                response.cierre.id
+              );
             }
-          } catch (error) {
-            console.error(
-              `Error sincronizando cierre ${closure.id_local}:`,
-              error
-            );
           }
+        } catch (error) {
+          console.error(
+            `❌ Error sincronizando cierre ${closure.id_local}:`,
+            error
+          );
         }
       }
     } catch (error) {
-      console.error("Error en syncPendingClosures:", error);
+      console.error("❌ Error en syncPendingClosures:", error);
+    }
+  }
+
+  // ✅ NUEVO: Cerrar sesión pendiente después de sincronizar cierre
+  async closePendingSession(sesionIdLocal, cierreIdServidor) {
+    try {
+      const session = await IndexedDBService.get(
+        "sesiones_caja_offline",
+        sesionIdLocal
+      );
+      if (session && !session.sincronizado) {
+        const closeData = {
+          sesion_id: session.id_servidor || sesionIdLocal,
+          saldo_final: session.saldo_final,
+          observaciones: session.observaciones,
+        };
+
+        const response = await fetchConToken(
+          `sesiones-caja/${session.id_servidor || sesionIdLocal}/cerrar`,
+          closeData,
+          "PUT"
+        );
+
+        if (response.ok) {
+          await IndexedDBService.put("sesiones_caja_offline", {
+            ...session,
+            estado: "cerrada",
+            fecha_cierre: new Date().toISOString(),
+            sincronizado: true,
+          });
+          console.log(`✅ Sesión ${sesionIdLocal} cerrada en servidor`);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error cerrando sesión ${sesionIdLocal}:`, error);
     }
   }
 
@@ -183,14 +284,14 @@ class SyncService {
         await Promise.all([
           fetchConToken("productos"),
           fetchConToken("categorias"),
-          fetchConToken("cierres?limite=1000&pagina=1"), // ✅ AGREGADO: Obtener cierres
+          fetchConToken("cierres?limite=1000&pagina=1"),
         ]);
 
       if (productosResponse.ok && categoriasResponse.ok && cierresResponse.ok) {
         // Guardar en IndexedDB
         await this.saveMasterData("productos", productosResponse.productos);
         await this.saveMasterData("categorias", categoriasResponse.categorias);
-        await this.saveMasterData("cierres", cierresResponse.cierres); // ✅ AGREGADO
+        await this.saveMasterData("cierres", cierresResponse.cierres);
 
         // Actualizar cache
         await IndexedDBService.put("cache_maestros", {
@@ -198,7 +299,7 @@ class SyncService {
           datos: {
             productos: productosResponse.productos,
             categorias: categoriasResponse.categorias,
-            cierres: cierresResponse.cierres, // ✅ AGREGADO
+            cierres: cierresResponse.cierres,
           },
           ultima_actualizacion: new Date().toISOString(),
         });
@@ -236,14 +337,14 @@ class SyncService {
         : {
             productos: [],
             categorias: [],
-            cierres: [], // ✅ AGREGADO
+            cierres: [],
           };
     } catch (error) {
       console.error("Error cargando datos del cache:", error);
       return {
         productos: [],
         categorias: [],
-        cierres: [], // ✅ AGREGADO
+        cierres: [],
       };
     }
   }
@@ -255,6 +356,11 @@ class SyncService {
 
   // Obtener estado de sincronización
   async getSyncStatus() {
+    const pendingSessions = await IndexedDBService.getAll(
+      "sesiones_caja_offline",
+      "sincronizado",
+      false
+    );
     const pendingSales = await IndexedDBService.getAll(
       "ventas_pendientes",
       "sincronizado",
@@ -269,6 +375,7 @@ class SyncService {
     return {
       isOnline: this.checkConnection(),
       isSyncing: this.isSyncing,
+      pendingSessions: pendingSessions.length,
       pendingSales: pendingSales.length,
       pendingClosures: pendingClosures.length,
       lastSync: await this.getLastSync(),
@@ -282,6 +389,16 @@ class SyncService {
     } catch (error) {
       return null;
     }
+  }
+
+  // ✅ NUEVO: Verificar si hay datos pendientes de sincronización
+  async hasPendingData() {
+    const status = await this.getSyncStatus();
+    return (
+      status.pendingSessions > 0 ||
+      status.pendingSales > 0 ||
+      status.pendingClosures > 0
+    );
   }
 }
 

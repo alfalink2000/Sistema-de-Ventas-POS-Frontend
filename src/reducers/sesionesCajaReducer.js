@@ -36,31 +36,44 @@ export const sesionesCajaReducer = (state = initialState, action) => {
       return {
         ...state,
         sesionAbierta: action.payload.existe ? action.payload.sesion : null,
-        error: null,
+        error: action.payload.error || null,
       };
 
     case types.sesionesCajaAddNew:
+      const nuevaSesion = action.payload;
+      const sesionesActualizadas = [nuevaSesion, ...state.sesiones];
+
       return {
         ...state,
-        sesiones: [action.payload, ...state.sesiones],
-        sesionAbierta: action.payload,
+        sesiones: sesionesActualizadas,
+        sesionAbierta:
+          nuevaSesion.estado === "abierta" ? nuevaSesion : state.sesionAbierta,
       };
 
     case types.sesionesCajaUpdate:
+      const sesionActualizada = action.payload;
+      const sesionesConUpdate = state.sesiones.map((sesion) =>
+        sesion.id === sesionActualizada.id ||
+        sesion.id_local === sesionActualizada.id_local
+          ? { ...sesion, ...sesionActualizada }
+          : sesion
+      );
+
       return {
         ...state,
-        sesiones: state.sesiones.map((sesion) =>
-          sesion.id === action.payload.id
-            ? { ...sesion, ...action.payload }
-            : sesion
-        ),
+        sesiones: sesionesConUpdate,
         sesionAbierta:
-          state.sesionAbierta?.id === action.payload.id
+          state.sesionAbierta &&
+          (state.sesionAbierta.id === sesionActualizada.id ||
+            state.sesionAbierta.id_local === sesionActualizada.id_local) &&
+          sesionActualizada.estado === "cerrada"
             ? null
             : state.sesionAbierta,
         activeSesion:
-          state.activeSesion?.id === action.payload.id
-            ? { ...state.activeSesion, ...action.payload }
+          state.activeSesion &&
+          (state.activeSesion.id === sesionActualizada.id ||
+            state.activeSesion.id_local === sesionActualizada.id_local)
+            ? { ...state.activeSesion, ...sesionActualizada }
             : state.activeSesion,
       };
 

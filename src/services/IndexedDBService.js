@@ -2,7 +2,7 @@
 class IndexedDBService {
   constructor() {
     this.dbName = "KioskoPOSDB";
-    this.version = 5; // ⬅️ INCREMENTADO a 5 para agregar cierres
+    this.version = 6; // ⬅️ INCREMENTADO a 6 para sesiones offline
     this.db = null;
   }
 
@@ -59,6 +59,9 @@ class IndexedDBService {
       ventasStore.createIndex("sesion_caja_id", "sesion_caja_id", {
         unique: false,
       });
+      ventasStore.createIndex("sesion_caja_id_local", "sesion_caja_id_local", {
+        unique: false,
+      });
       console.log("✅ Object store 'ventas_pendientes' creado");
     }
 
@@ -74,16 +77,26 @@ class IndexedDBService {
       console.log("✅ Object store 'detalles_venta_pendientes' creado");
     }
 
-    // Sesiones de caja offline
+    // ✅ MEJORADO: Sesiones de caja offline con más índices
     if (!db.objectStoreNames.contains("sesiones_caja_offline")) {
       const sesionesStore = db.createObjectStore("sesiones_caja_offline", {
         keyPath: "id_local",
+        autoIncrement: true,
       });
       sesionesStore.createIndex("estado", "estado", { unique: false });
-      console.log("✅ Object store 'sesiones_caja_offline' creado");
+      sesionesStore.createIndex("vendedor_id", "vendedor_id", {
+        unique: false,
+      });
+      sesionesStore.createIndex("sincronizado", "sincronizado", {
+        unique: false,
+      });
+      sesionesStore.createIndex("fecha_apertura", "fecha_apertura", {
+        unique: false,
+      });
+      console.log("✅ Object store 'sesiones_caja_offline' creado/mejorado");
     }
 
-    // Cierres pendientes
+    // ✅ MEJORADO: Cierres pendientes con más índices
     if (!db.objectStoreNames.contains("cierres_pendientes")) {
       const cierresStore = db.createObjectStore("cierres_pendientes", {
         keyPath: "id_local",
@@ -92,7 +105,13 @@ class IndexedDBService {
       cierresStore.createIndex("sesion_caja_id_local", "sesion_caja_id_local", {
         unique: false,
       });
-      console.log("✅ Object store 'cierres_pendientes' creado");
+      cierresStore.createIndex("sincronizado", "sincronizado", {
+        unique: false,
+      });
+      cierresStore.createIndex("fecha_cierre", "fecha_cierre", {
+        unique: false,
+      });
+      console.log("✅ Object store 'cierres_pendientes' creado/mejorado");
     }
 
     // Configuración y cache
@@ -112,7 +131,7 @@ class IndexedDBService {
       console.log("✅ Object store 'cache_maestros' creado");
     }
 
-    // ✅ NUEVO: Usuarios para autenticación offline
+    // Usuarios para autenticación offline
     if (!db.objectStoreNames.contains("offline_users")) {
       const usersStore = db.createObjectStore("offline_users", {
         keyPath: "savedAt",
@@ -121,7 +140,7 @@ class IndexedDBService {
       console.log("✅ Object store 'offline_users' creado");
     }
 
-    // ✅ AGREGADO: Cierres de caja para reportes offline
+    // Cierres de caja para reportes offline
     if (!db.objectStoreNames.contains("cierres")) {
       const cierresStore = db.createObjectStore("cierres", {
         keyPath: "id",
