@@ -772,3 +772,198 @@
     align-self: flex-start;
   }
 }
+/* Agrega estos estilos al archivo ClosuresHistory.module.css existente */
+
+/* ESTADOS OFFLINE */
+.offlineStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+.offlineHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #92400e;
+}
+
+.offlineIcon {
+  color: #d97706;
+}
+
+.offlineInfo {
+  font-size: 0.85rem;
+  color: #92400e;
+}
+
+.offlineInfo small {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.offlineBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
+/* BOTÓN ACTUALIZAR */
+.refreshBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.refreshBtn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ESTADO DE ERROR */
+.errorState {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 15px 0;
+  text-align: center;
+}
+
+.errorIcon {
+  font-size: 2.5rem;
+  color: #dc2626;
+  margin-bottom: 10px;
+}
+
+.errorState h3 {
+  color: #dc2626;
+  margin-bottom: 8px;
+}
+
+.errorState p {
+  color: #7f1d1d;
+  margin-bottom: 15px;
+}
+
+.retryButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin: 0 auto;
+}
+
+.retryButton:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.retryIcon {
+  font-size: 1rem;
+}
+
+/* INDICADORES OFFLINE EN TABLA */
+.localDataIndicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 10px;
+}
+
+.offlineExportIcon {
+  margin-left: 6px;
+  color: #f59e0b;
+}
+
+.offlineHelp {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.offlinePagination {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.offlineFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 10px 15px;
+  margin-top: 15px;
+  font-size: 0.85rem;
+  color: #92400e;
+}
+
+.offlineFooterIcon {
+  color: #d97706;
+}
+
+/* BOTÓN EXPORTAR DESHABILITADO */
+.exportButton:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.exportButton:disabled:hover {
+  background: #cbd5e1;
+  transform: none;
+}

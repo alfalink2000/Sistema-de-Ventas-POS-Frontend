@@ -1,8 +1,8 @@
-// src/services/IndexedDBService.js - VERSIÓN COMPLETA CORREGIDA
+// src/services/IndexedDBService.js
 class IndexedDBService {
   constructor() {
     this.dbName = "KioskoPOSDB";
-    this.version = 4; // ⬅️ INCREMENTADO a 4 para agregar offline_users
+    this.version = 5; // ⬅️ INCREMENTADO a 5 para agregar cierres
     this.db = null;
   }
 
@@ -119,6 +119,21 @@ class IndexedDBService {
       });
       usersStore.createIndex("user_id", "user.id", { unique: false });
       console.log("✅ Object store 'offline_users' creado");
+    }
+
+    // ✅ AGREGADO: Cierres de caja para reportes offline
+    if (!db.objectStoreNames.contains("cierres")) {
+      const cierresStore = db.createObjectStore("cierres", {
+        keyPath: "id",
+      });
+      cierresStore.createIndex("fecha_cierre", "fecha_cierre", {
+        unique: false,
+      });
+      cierresStore.createIndex("usuario_id", "usuario_id", { unique: false });
+      cierresStore.createIndex("sesion_caja_id", "sesion_caja_id", {
+        unique: false,
+      });
+      console.log("✅ Object store 'cierres' creado");
     }
 
     console.log(

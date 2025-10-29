@@ -1,4 +1,4 @@
-// components/features/caja/ClosuresHistory/ClosuresHistory.jsx - VERSIÓN CON ORDEN
+// src/components/features/caja/ClosuresHistory/ClosuresHistory.jsx
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -11,8 +11,13 @@ import {
   FiSearch,
   FiFilter,
   FiDownload,
+  FiWifi,
+  FiWifiOff,
+  FiRefreshCw,
+  FiAlertCircle,
 } from "react-icons/fi";
 import { loadClosures } from "../../../../actions/closuresActions";
+import { useOfflineCierres } from "../../../../hooks/useOfflineCierres";
 import styles from "./ClosuresHistory.module.css";
 
 const ClosuresHistory = () => {
@@ -22,14 +27,64 @@ const ClosuresHistory = () => {
   const [filterYear, setFilterYear] = useState("");
   const [filterDay, setFilterDay] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [localLoading, setLocalLoading] = useState(false);
   const itemsPerPage = 10;
 
   const dispatch = useDispatch();
-  const { closures, loading } = useSelector((state) => state.closures);
+  const { closures: reduxCierres, loading: reduxLoading } = useSelector(
+    (state) => state.closures
+  );
+
+  // ✅ USAR HOOK OFFLINE
+  const {
+    cierres: offlineCierres,
+    loading: offlineLoading,
+    error: offlineError,
+    lastUpdate,
+    refreshCierres,
+  } = useOfflineCierres();
 
   useEffect(() => {
-    dispatch(loadClosures(100));
-  }, [dispatch]);
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log("🌐 Conexión restaurada - Recargando cierres...");
+      dispatch(loadClosures(100));
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log("📴 Modo offline - Usando cierres locales");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Cargar cierres cuando hay conexión
+    if (isOnline) {
+      dispatch(loadClosures(100));
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [dispatch, isOnline]);
+
+  // Determinar qué datos usar
+  const closures = isOnline ? reduxCierres : offlineCierres;
+  const loading = isOnline ? reduxLoading : offlineLoading || localLoading;
+  const error = isOnline ? null : offlineError;
+
+  const handleRetry = async () => {
+    if (isOnline) {
+      dispatch(loadClosures(100));
+    } else {
+      setLocalLoading(true);
+      await refreshCierres();
+      setLocalLoading(false);
+    }
+  };
 
   // ✅ OBTENER AÑOS ÚNICOS DE LOS CIERRES
   const getUniqueYears = () => {
@@ -94,7 +149,7 @@ const ClosuresHistory = () => {
 
       return matchesSearch && matchesMonth && matchesYear && matchesDay;
     })
-    // ✅ ORDENAR POR FECHA (MÁS RECIENTE PRIMERO) - POR SI ACASO
+    // ✅ ORDENAR POR FECHA (MÁS RECIENTE PRIMERO)
     .sort((a, b) => new Date(b.fecha_cierre) - new Date(a.fecha_cierre));
 
   const totalPages = Math.ceil(filteredClosures.length / itemsPerPage);
@@ -145,6 +200,13 @@ const ClosuresHistory = () => {
   };
 
   const exportToCSV = () => {
+    if (!isOnline) {
+      alert(
+        "No puedes exportar en modo offline. Conéctate a internet e intenta nuevamente."
+      );
+      return;
+    }
+
     const headers = [
       "ID",
       "Fecha Cierre",
@@ -185,11 +247,52 @@ const ClosuresHistory = () => {
     URL.revokeObjectURL(url);
   };
 
+  // ✅ COMPONENTE DE ESTADO OFFLINE
+  const renderOfflineStatus = () => (
+    <div className={styles.offlineStatus}>
+      <div className={styles.offlineHeader}>
+        <FiWifiOff className={styles.offlineIcon} />
+        <span>Modo Sin Conexión</span>
+      </div>
+      <div className={styles.offlineInfo}>
+        <p>Mostrando {offlineCierres.length} cierres almacenados localmente</p>
+        {lastUpdate && (
+          <small>
+            Última actualización: {lastUpdate.toLocaleString("es-MX")}
+          </small>
+        )}
+      </div>
+    </div>
+  );
+
+  // ✅ COMPONENTE DE ERROR
+  const renderErrorState = () => (
+    <div className={styles.errorState}>
+      <FiAlertCircle className={styles.errorIcon} />
+      <h3>Error al cargar cierres</h3>
+      <p>{error || "No se pudieron cargar los cierres de caja"}</p>
+      <button
+        className={styles.retryButton}
+        onClick={handleRetry}
+        disabled={loading}
+      >
+        <FiRefreshCw
+          className={`${styles.retryIcon} ${loading ? styles.spinning : ""}`}
+        />
+        {loading ? "Reintentando..." : "Reintentar"}
+      </button>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
         <div className={styles.spinner}></div>
-        <p>Cargando historial de cierres...</p>
+        <p>
+          {isOnline
+            ? "Cargando historial de cierres..."
+            : "Cargando cierres locales..."}
+        </p>
       </div>
     );
   }
@@ -202,8 +305,19 @@ const ClosuresHistory = () => {
           <h2>
             <FiCalendar className={styles.headerIcon} />
             Historial de Cierres de Caja
+            {!isOnline && (
+              <span className={styles.offlineBadge}>
+                <FiWifiOff />
+                Offline
+              </span>
+            )}
           </h2>
-          <p>{filteredClosures.length} registros encontrados</p>
+          <p>
+            {isOnline
+              ? `${filteredClosures.length} registros encontrados`
+              : `${filteredClosures.length} registros locales`}
+          </p>
+          {!isOnline && renderOfflineStatus()}
         </div>
 
         <div className={styles.controls}>
@@ -275,14 +389,35 @@ const ClosuresHistory = () => {
                 Limpiar
               </button>
             )}
+
+            {/* ✅ BOTÓN ACTUALIZAR */}
+            <button
+              className={styles.refreshBtn}
+              onClick={handleRetry}
+              disabled={loading}
+              title="Actualizar datos"
+            >
+              <FiRefreshCw className={loading ? styles.spinning : ""} />
+            </button>
           </div>
 
-          <button className={styles.exportButton} onClick={exportToCSV}>
+          <button
+            className={styles.exportButton}
+            onClick={exportToCSV}
+            disabled={!isOnline}
+            title={
+              !isOnline ? "Requiere conexión a internet" : "Exportar a CSV"
+            }
+          >
             <FiDownload className={styles.exportIcon} />
             Exportar CSV
+            {!isOnline && <FiWifiOff className={styles.offlineExportIcon} />}
           </button>
         </div>
       </div>
+
+      {/* ✅ MOSTRAR ERROR SI HAY */}
+      {error && renderErrorState()}
 
       {/* Tabla de cierres */}
       <div className={styles.tableContainer}>
@@ -307,7 +442,11 @@ const ClosuresHistory = () => {
                   <td colSpan="9" className={styles.noData}>
                     <div className={styles.noDataContent}>
                       <FiCalendar className={styles.noDataIcon} />
-                      <p>No se encontraron cierres de caja</p>
+                      <p>
+                        {isOnline
+                          ? "No se encontraron cierres de caja"
+                          : "No hay cierres almacenados localmente"}
+                      </p>
                       {(filterMonth ||
                         filterYear ||
                         filterDay ||
@@ -318,6 +457,11 @@ const ClosuresHistory = () => {
                         >
                           Limpiar filtros para ver todos los registros
                         </button>
+                      )}
+                      {!isOnline && (
+                        <p className={styles.offlineHelp}>
+                          Conéctate a internet para cargar datos del servidor
+                        </p>
                       )}
                     </div>
                   </td>
@@ -491,6 +635,16 @@ const ClosuresHistory = () => {
                                 <p>{closure.observaciones}</p>
                               </div>
                             )}
+
+                            {/* ✅ INDICADOR DE DATO LOCAL */}
+                            {!isOnline && (
+                              <div className={styles.localDataIndicator}>
+                                <FiWifiOff />
+                                <span>
+                                  Dato cargado desde almacenamiento local
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -516,6 +670,9 @@ const ClosuresHistory = () => {
 
           <div className={styles.pageInfo}>
             Página {currentPage} de {totalPages}
+            {!isOnline && (
+              <span className={styles.offlinePagination}> • Local</span>
+            )}
           </div>
 
           <button
@@ -527,6 +684,18 @@ const ClosuresHistory = () => {
           >
             Siguiente
           </button>
+        </div>
+      )}
+
+      {/* ✅ INFORMACIÓN DE PIE OFFLINE */}
+      {!isOnline && filteredClosures.length > 0 && (
+        <div className={styles.offlineFooter}>
+          <FiWifiOff className={styles.offlineFooterIcon} />
+          <span>
+            Modo offline • {filteredClosures.length} cierres locales • Última
+            actualización:{" "}
+            {lastUpdate ? lastUpdate.toLocaleString("es-MX") : "Nunca"}
+          </span>
         </div>
       )}
     </div>

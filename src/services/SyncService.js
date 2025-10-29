@@ -173,33 +173,37 @@ class SyncService {
     }
   }
 
-  // Sincronizar datos maestros (productos, categorías)
+  // Sincronizar datos maestros (productos, categorías, cierres)
   async syncMasterData() {
     try {
       console.log("🔄 Sincronizando datos maestros...");
 
       // Obtener datos actualizados del servidor
-      const [productosResponse, categoriasResponse] = await Promise.all([
-        fetchConToken("productos"),
-        fetchConToken("categorias"),
-      ]);
+      const [productosResponse, categoriasResponse, cierresResponse] =
+        await Promise.all([
+          fetchConToken("productos"),
+          fetchConToken("categorias"),
+          fetchConToken("cierres?limite=1000&pagina=1"), // ✅ AGREGADO: Obtener cierres
+        ]);
 
-      if (productosResponse.ok && categoriasResponse.ok) {
+      if (productosResponse.ok && categoriasResponse.ok && cierresResponse.ok) {
         // Guardar en IndexedDB
         await this.saveMasterData("productos", productosResponse.productos);
         await this.saveMasterData("categorias", categoriasResponse.categorias);
+        await this.saveMasterData("cierres", cierresResponse.cierres); // ✅ AGREGADO
 
         // Actualizar cache
         await IndexedDBService.put("cache_maestros", {
-          tipo: "productos_categorias",
+          tipo: "productos_categorias_cierres",
           datos: {
             productos: productosResponse.productos,
             categorias: categoriasResponse.categorias,
+            cierres: cierresResponse.cierres, // ✅ AGREGADO
           },
           ultima_actualizacion: new Date().toISOString(),
         });
 
-        console.log("✅ Datos maestros actualizados");
+        console.log("✅ Datos maestros actualizados (incluyendo cierres)");
       }
     } catch (error) {
       console.error("❌ Error sincronizando datos maestros:", error);
@@ -225,12 +229,22 @@ class SyncService {
     try {
       const cache = await IndexedDBService.get(
         "cache_maestros",
-        "productos_categorias"
+        "productos_categorias_cierres"
       );
-      return cache ? cache.datos : { productos: [], categorias: [] };
+      return cache
+        ? cache.datos
+        : {
+            productos: [],
+            categorias: [],
+            cierres: [], // ✅ AGREGADO
+          };
     } catch (error) {
       console.error("Error cargando datos del cache:", error);
-      return { productos: [], categorias: [] };
+      return {
+        productos: [],
+        categorias: [],
+        cierres: [], // ✅ AGREGADO
+      };
     }
   }
 
