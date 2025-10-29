@@ -1,4 +1,4 @@
-// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - COMPLETO Y CORREGIDO
+// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - IMPORTS CORREGIDOS
 import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { closeSesionCaja } from "../../../../actions/sesionesCajaActions";
@@ -13,9 +13,10 @@ import Button from "../../../ui/Button/Button";
 import {
   FiWifi,
   FiWifiOff,
-  FiCalculator,
   FiDollarSign,
   FiClock,
+  FiShoppingCart,
+  FiBarChart2,
 } from "react-icons/fi";
 import styles from "./CierreCajaModal.module.css";
 
@@ -267,6 +268,62 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     calcularTotalesCompletos();
   };
 
+  // ✅ NUEVO: FUNCIÓN DE DIAGNÓSTICO DETALLADO
+  const handleDiagnosticar = async () => {
+    if (!sesion) return;
+
+    const sesionId = sesion.id_local || sesion.id;
+    console.log("🔍 Ejecutando diagnóstico detallado para sesión:", sesionId);
+
+    const diagnostico = await OfflineClosureService.diagnosticarProblema(
+      sesionId
+    );
+    console.log("📊 Resultado diagnóstico:", diagnostico);
+
+    // Mostrar resultado en alerta detallada
+    const ventasEnSesion = diagnostico.ventasSesion || [];
+
+    await Swal.fire({
+      title: "🔍 Diagnóstico Offline",
+      html: `
+        <div style="text-align: left; font-size: 14px;">
+          <h4>📋 Sesión:</h4>
+          <pre>${JSON.stringify(diagnostico.sesion, null, 2)}</pre>
+          
+          <h4>📊 Resumen:</h4>
+          <ul>
+            <li>Total ventas en DB: ${
+              diagnostico.resumen?.totalVentas || 0
+            }</li>
+            <li>Ventas en esta sesión: <strong>${
+              diagnostico.resumen?.ventasEnSesion || 0
+            }</strong></li>
+            <li>Total detalles en DB: ${
+              diagnostico.resumen?.totalDetalles || 0
+            }</li>
+          </ul>
+          
+          <h4>🎯 Ventas de esta sesión (${ventasEnSesion.length}):</h4>
+          ${
+            ventasEnSesion.length > 0
+              ? `<pre>${JSON.stringify(ventasEnSesion, null, 2)}</pre>`
+              : '<p style="color: red;">❌ NO SE ENCONTRARON VENTAS PARA ESTA SESIÓN</p>'
+          }
+          
+          <h4>📦 Todas las ventas (${
+            diagnostico.todasVentas?.length || 0
+          }):</h4>
+          <details>
+            <summary>Ver todas las ventas</summary>
+            <pre>${JSON.stringify(diagnostico.todasVentas, null, 2)}</pre>
+          </details>
+        </div>
+      `,
+      width: 1000,
+      confirmButtonText: "Entendido",
+    });
+  };
+
   if (!sesion) {
     return (
       <Modal
@@ -344,7 +401,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         {/* Resumen de Ventas */}
         <div className={styles.salesSummary}>
           <h4>
-            <FiCalculator className={styles.sectionIcon} />
+            <FiShoppingCart className={styles.sectionIcon} />
             Resumen de Ventas
             {!isOnline && <span className={styles.offlineBadge}>Local</span>}
           </h4>
@@ -395,7 +452,10 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
                 {/* Cálculos de Caja */}
                 <div className={styles.cashCalculations}>
-                  <h5>🧮 Cálculos de Caja</h5>
+                  <h5>
+                    <FiBarChart2 className={styles.sectionIcon} />
+                    Cálculos de Caja
+                  </h5>
                   <div className={styles.calculationGrid}>
                     <div className={styles.calcItem}>
                       <span>Saldo Inicial:</span>
@@ -492,6 +552,20 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
         {/* Acciones */}
         <div className={styles.actions}>
+          <Button
+            variant="outline"
+            onClick={handleDiagnosticar}
+            disabled={processing}
+            style={{
+              marginRight: "auto",
+              backgroundColor: "#f0f9ff",
+              borderColor: "#0ea5e9",
+              color: "#0369a1",
+            }}
+          >
+            🔍 Diagnosticar
+          </Button>
+
           <Button
             variant="secondary"
             onClick={handleCloseModal}
