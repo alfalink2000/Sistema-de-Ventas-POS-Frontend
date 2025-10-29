@@ -1,4 +1,4 @@
-// src/actions/salesActions.js - CORREGIDO
+// src/actions/salesActions.js - VERSIÓN COMPLETAMENTE CORREGIDA
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import IndexedDBService from "../services/IndexedDBService";
@@ -17,18 +17,46 @@ export const createSale = (saleData) => {
 
       const isOnline = navigator.onLine;
 
+      // ✅ OBTENER SESIÓN ACTIVA DEL STATE
+      const { sesionesCaja, auth } = getState();
+      const { sesionAbierta } = sesionesCaja;
+      const { user } = auth;
+
+      console.log("📋 Sesión activa encontrada:", sesionAbierta);
+
+      if (!sesionAbierta) {
+        throw new Error(
+          "No hay una sesión de caja activa. Abre una sesión primero."
+        );
+      }
+
       // Generar ID local único
       const id_local = `local_${Date.now()}_${Math.random()
         .toString(36)
         .substr(2, 9)}`;
 
+      // ✅ DATOS COMPLETOS CON REFERENCIA A SESIÓN
       const saleWithLocalId = {
         ...saleData,
         id_local,
         sincronizado: false,
         es_local: true,
         fecha_creacion: new Date().toISOString(),
+        // ✅ REFERENCIA CRÍTICA A LA SESIÓN
+        sesion_caja_id: sesionAbierta.id, // ID del servidor (si existe)
+        sesion_caja_id_local: sesionAbierta.id_local || sesionAbierta.id, // ID local
+        vendedor_id: user.id,
+        vendedor_nombre: user.nombre || user.username,
+        estado: "completada",
+        fecha_venta: new Date().toISOString(),
       };
+
+      console.log("💾 Datos de venta a guardar:", {
+        sesion_caja_id: saleWithLocalId.sesion_caja_id,
+        sesion_caja_id_local: saleWithLocalId.sesion_caja_id_local,
+        total: saleWithLocalId.total,
+        productos: saleWithLocalId.productos?.length,
+      });
 
       if (isOnline) {
         // Intentar enviar directamente al servidor
@@ -63,30 +91,45 @@ export const createSale = (saleData) => {
         }
       }
 
-      // Guardar localmente (tanto si falló el envío como si está offline)
+      // ✅ GUARDAR VENTA OFFLINE CON REFERENCIA A SESIÓN
+      console.log("💾 Guardando venta offline en IndexedDB...");
       await IndexedDBService.add("ventas_pendientes", saleWithLocalId);
 
-      // Guardar detalles de venta
+      // ✅ GUARDAR DETALLES DE VENTA
       if (saleData.productos && saleData.productos.length > 0) {
+        console.log(
+          `📦 Guardando ${saleData.productos.length} detalles de venta...`
+        );
+
         for (const producto of saleData.productos) {
-          await IndexedDBService.add("detalles_venta_pendientes", {
+          const detalleVenta = {
             venta_id_local: id_local,
             producto_id: producto.producto_id,
             cantidad: producto.cantidad,
             precio_unitario: producto.precio_unitario,
             subtotal: producto.subtotal,
             sincronizado: false,
-          });
+            fecha_creacion: new Date().toISOString(),
+          };
+
+          await IndexedDBService.add("detalles_venta_pendientes", detalleVenta);
+          console.log(
+            `✅ Detalle guardado: ${producto.producto_id} x ${producto.cantidad}`
+          );
         }
       }
 
-      console.log("💾 Venta guardada localmente:", id_local);
+      console.log("💾 Venta guardada localmente:", {
+        id_local,
+        sesion: saleWithLocalId.sesion_caja_id_local,
+        total: saleWithLocalId.total,
+      });
 
       // Mostrar confirmación al usuario
       await Swal.fire({
         icon: "success",
         title: "Venta Guardada (Offline)",
-        text: `La venta se guardó localmente y se sincronizará cuando haya conexión. ID: ${id_local}`,
+        text: `La venta se guardó localmente y se sincronizará cuando haya conexión. Total: $${saleData.total}`,
         timer: 3000,
         showConfirmButton: false,
       });
@@ -110,6 +153,7 @@ export const createSale = (saleData) => {
   };
 };
 
+// ... el resto de las acciones se mantienen igual ...
 export const loadSales = (limite = 50, pagina = 1) => {
   return async (dispatch) => {
     console.log(`🔄 [SALES] Iniciando carga de ventas...`);
