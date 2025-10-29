@@ -8,11 +8,27 @@ export const usePWAInstall = () => {
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
+      console.log("🔄 PWA: beforeinstallprompt event fired");
       setDeferredPrompt(e);
       setIsInstallable(true);
     };
 
+    // Verificar si ya está instalado
+    const checkIfInstalled = () => {
+      if (window.matchMedia("(display-mode: standalone)").matches) {
+        console.log("✅ PWA: Ya está instalado");
+        setIsInstallable(false);
+      }
+    };
+
     window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => {
+      console.log("🎉 PWA: Aplicación instalada");
+      setDeferredPrompt(null);
+      setIsInstallable(false);
+    });
+
+    checkIfInstalled();
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
@@ -20,16 +36,33 @@ export const usePWAInstall = () => {
   }, []);
 
   const installApp = async () => {
-    if (!deferredPrompt) return false;
+    if (!deferredPrompt) {
+      console.log("❌ PWA: No hay prompt de instalación disponible");
+      return false;
+    }
 
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    try {
+      console.log("📱 PWA: Solicitando instalación...");
+      deferredPrompt.prompt();
 
-    setDeferredPrompt(null);
-    setIsInstallable(false);
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`📱 PWA: Usuario ${outcome} la instalación`);
 
-    return outcome === "accepted";
+      if (outcome === "accepted") {
+        setDeferredPrompt(null);
+        setIsInstallable(false);
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ PWA: Error durante la instalación:", error);
+    }
+
+    return false;
   };
 
-  return { isInstallable, installApp };
+  return {
+    isInstallable,
+    installApp,
+    deferredPrompt,
+  };
 };

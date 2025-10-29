@@ -1,6 +1,6 @@
 // src/components/ui/PWAInstallPrompt/PWAInstallPrompt.jsx
 import { useState, useEffect } from "react";
-import { usePWAInstall } from "../../../hooks/usePWAInstall";
+import { usePWAInstall } from "../../../hook/usePWAInstall";
 import { FiDownload, FiX } from "react-icons/fi";
 import styles from "./PWAInstallPrompt.module.css";
 

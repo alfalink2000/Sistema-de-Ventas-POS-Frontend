@@ -2,11 +2,11 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link
-      rel="icon"
-      type="image/x-icon"
-      href="/src/assets/icons/icon-96x96.png"
-    />
+
+    <!-- Favicon - CORREGIDO: usar ruta desde public/ -->
+    <link rel="icon" type="image/x-icon" href="/icons/icon-75x75.icon" />
+    <link rel="icon" type="image/png" href="/icons/icon-96x96.png" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- Meta tags PWA -->
@@ -21,6 +21,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="KioskoPOS" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+
+    <!-- Manifest - IMPORTANTE: agregar esta línea -->
+    <link rel="manifest" href="/manifest.json" />
 
     <title>Kiosko POS - Sistema de Ventas</title>
   </head>
