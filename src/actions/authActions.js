@@ -3,7 +3,7 @@ import { types } from "../types/types";
 import Swal from "sweetalert2";
 import { fetchSinToken } from "../helpers/fetch";
 import { loadProducts } from "./productsActions";
-import AuthOfflineService from "../services/AuthOfflineService";
+import UserOfflineService from "../services/UserOfflineService";
 import SyncService from "../services/SyncService";
 
 export const startLoading = () => ({
