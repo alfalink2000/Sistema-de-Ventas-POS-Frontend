@@ -1,4 +1,4 @@
-// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - CORREGIDO
+// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - ACTUALIZADO
 import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { closeSesionCaja } from "../../../../actions/sesionesCajaActions";
@@ -8,6 +8,7 @@ import {
 } from "../../../../actions/closuresActions";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
+import { FiWifi, FiWifiOff } from "react-icons/fi";
 import styles from "./CierreCajaModal.module.css";
 
 const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
@@ -20,6 +21,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const isOnline = navigator.onLine;
 
   // ✅ CALCULAR TOTALES AL ABRIR EL MODAL
   const calcularTotalesCompletos = useCallback(async () => {
@@ -76,7 +78,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     } else {
       setDiferencia(0);
     }
-  }, [saldoFinalReal, totales]); // ✅ SE EJECUTA SOLO CUANDO CAMBIAN ESTOS VALORES
+  }, [saldoFinalReal, totales]);
 
   const handleCerrarSesion = async () => {
     const saldoFinalNumero = parseFloat(saldoFinalReal);
@@ -101,7 +103,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         ganancia_bruta: totales?.ganancia_bruta || 0,
         saldo_final_teorico: totales?.saldo_final_teorico || 0,
         saldo_final_real: saldoFinalNumero,
-        diferencia: diferencia, // ✅ USAR LA DIFERENCIA CALCULADA
+        diferencia: diferencia,
         observaciones: observaciones.trim() || null,
       };
 
@@ -112,6 +114,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         throw new Error(cierreCreado?.error || "Error al crear cierre de caja");
       }
 
+      // ✅ CERRAR LA SESIÓN
       await dispatch(
         closeSesionCaja(sesion.id, {
           saldo_final: saldoFinalNumero,
@@ -121,6 +124,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
       console.log("✅ Sesión y cierre completados exitosamente");
 
+      // ✅ CORREGIDO: Cerrar modal después de completar
       onClose();
       setSaldoFinalReal("");
       setObservaciones("");
@@ -151,6 +155,25 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       size="large"
     >
       <div className={styles.modalContent}>
+        {/* Indicador de estado de conexión */}
+        <div
+          className={`${styles.connectionStatus} ${
+            isOnline ? styles.online : styles.offline
+          }`}
+        >
+          {isOnline ? (
+            <>
+              <FiWifi className={styles.connectionIcon} />
+              <span>Conectado - Los datos se guardarán en el servidor</span>
+            </>
+          ) : (
+            <>
+              <FiWifiOff className={styles.connectionIcon} />
+              <span>Sin conexión - Los datos se guardarán localmente</span>
+            </>
+          )}
+        </div>
+
         {/* Información de la Sesión */}
         <div className={styles.sessionInfo}>
           <h4>📋 Información de la Sesión</h4>
@@ -165,6 +188,12 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
                 ${sesion.saldo_inicial?.toFixed(2)}
               </span>
             </div>
+            {sesion.id_local && !sesion.sincronizado && (
+              <div className={styles.infoItem}>
+                <span>Estado:</span>
+                <span className={styles.localBadge}>Sesión Local</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -172,7 +201,11 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         {calculating ? (
           <div className={styles.calculating}>
             <div className={styles.spinner}></div>
-            <p>Calculando totales de ventas...</p>
+            <p>
+              {isOnline
+                ? "Calculando totales de ventas..."
+                : "Calculando totales localmente..."}
+            </p>
           </div>
         ) : (
           totales && (
@@ -246,7 +279,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           />
         </div>
 
-        {/* Diferencia Automática - CORREGIDO */}
+        {/* Diferencia Automática */}
         <div className={styles.differenceSection}>
           <div
             className={`${styles.difference} ${
@@ -282,6 +315,16 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             className={styles.textarea}
           />
         </div>
+
+        {!isOnline && (
+          <div className={styles.offlineWarning}>
+            <strong>⚠️ Modo Offline</strong>
+            <p>
+              El cierre se guardará localmente y se sincronizará cuando
+              recuperes la conexión.
+            </p>
+          </div>
+        )}
 
         {/* Acciones */}
         <div className={styles.actions}>

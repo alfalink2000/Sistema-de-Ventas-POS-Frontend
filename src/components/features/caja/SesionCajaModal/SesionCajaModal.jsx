@@ -27,10 +27,15 @@ const SesionCajaModal = ({ isOpen, onClose }) => {
         })
       );
 
-      if (result.success) {
+      // ✅ CORREGIDO: Cerrar modal independientemente del resultado
+      // El SweetAlert ya se muestra en la acción, solo cerramos el modal
+      if (result !== false) {
+        // Si no es false (error), cerramos
         onClose();
         setSaldoInicial("");
       }
+    } catch (error) {
+      console.error("Error abriendo sesión:", error);
     } finally {
       setProcessing(false);
     }
