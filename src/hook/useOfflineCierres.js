@@ -1,4 +1,3 @@
-// src/hooks/useOfflineCierres.js - VERSIÓN FINAL COMPLETA
 import { useState, useEffect } from "react";
 import IndexedDBService from "../services/IndexedDBService";
 import SyncService from "../services/SyncService";

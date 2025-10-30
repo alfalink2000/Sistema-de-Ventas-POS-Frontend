@@ -1,4 +1,3 @@
-// actions/closuresActions.js - VERSIÓN COMPATIBLE CON TUS TYPES + OFFLINE
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
@@ -212,7 +211,7 @@ export const loadTodayClosure = () => {
   };
 };
 
-// ✅ ACTUALIZADO: CALCULAR TOTALES COMPLETOS CON OFFLINE
+// ✅ CORREGIDO: CALCULAR TOTALES COMPLETOS CON OFFLINE
 export const calculateClosureTotals = (sesionCajaId) => {
   return async (dispatch, getState) => {
     try {
@@ -301,7 +300,7 @@ export const calculateClosureTotals = (sesionCajaId) => {
   };
 };
 
-// ✅ ACTUALIZADO: CREAR CIERRE con soporte offline
+// ✅ CORREGIDO: CREAR CIERRE con soporte offline
 export const createClosure = (closureData) => {
   return async (dispatch, getState) => {
     try {
@@ -325,14 +324,23 @@ export const createClosure = (closureData) => {
       if (isOnline) {
         // Si hay conexión, crear en servidor
 
-        // Calcular diferencia si no se proporciona
+        // ✅ CORREGIDO: Calcular diferencia automáticamente según el backend
         const datosCompletos = {
-          ...closureData,
+          sesion_caja_id: closureData.sesion_caja_id,
+          total_ventas: closureData.total_ventas || 0,
+          total_efectivo: closureData.total_efectivo || 0,
+          total_tarjeta: closureData.total_tarjeta || 0,
+          total_transferencia: closureData.total_transferencia || 0,
+          ganancia_bruta: closureData.ganancia_bruta || 0,
+          saldo_final_teorico: closureData.saldo_final_teorico || 0,
+          saldo_final_real: parseFloat(closureData.saldo_final_real),
           diferencia:
             closureData.diferencia !== undefined
-              ? closureData.diferencia
-              : closureData.saldo_final_real -
-                (closureData.saldo_final_teorico || 0),
+              ? parseFloat(closureData.diferencia)
+              : parseFloat(closureData.saldo_final_real) -
+                parseFloat(closureData.saldo_final_teorico || 0),
+          observaciones: closureData.observaciones || "",
+          vendedor_id: closureData.vendedor_id,
         };
 
         const response = await fetchConToken("cierres", datosCompletos, "POST");

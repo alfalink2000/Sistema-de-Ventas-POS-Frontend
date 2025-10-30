@@ -1,4 +1,3 @@
-// src/services/SyncService.js - VERSIÓN COMPLETA CORREGIDA
 import IndexedDBService from "./IndexedDBService";
 import { fetchConToken } from "../helpers/fetch";
 
@@ -38,6 +37,7 @@ class SyncService {
     }
   }
 
+  // ✅ CORREGIDO: Sincronización de sesiones pendientes
   async syncPendingSessions() {
     try {
       const pendingSessions = await IndexedDBService.safeGetAll(
@@ -114,6 +114,7 @@ class SyncService {
       throw error;
     }
   }
+
   // ✅ VERIFICAR SI LA SESIÓN YA EXISTE EN SERVIDOR
   async verificarSesionExistente(sessionLocal) {
     try {
@@ -390,87 +391,7 @@ class SyncService {
     }
   }
 
-  async syncPendingSessions() {
-    try {
-      const pendingSessions = await IndexedDBService.safeGetAll(
-        "sesiones_caja_offline",
-        "sincronizado",
-        false
-      );
-
-      console.log(
-        `📦 Sincronizando ${pendingSessions.length} sesiones pendientes...`
-      );
-
-      const results = {
-        total: pendingSessions.length,
-        success: 0,
-        failed: 0,
-        conflicts: 0,
-      };
-
-      for (const session of pendingSessions) {
-        try {
-          const { id_local, ...sessionData } = session;
-
-          const existingSession = await this.checkExistingSession(sessionData);
-
-          if (existingSession) {
-            const resolvedSession =
-              await this.conflictResolver.resolveSessionConflict(
-                session,
-                existingSession
-              );
-            results.conflicts++;
-
-            await IndexedDBService.put("sesiones_caja_offline", {
-              ...session,
-              ...resolvedSession,
-              sincronizado: true,
-              fecha_sincronizacion: new Date().toISOString(),
-            });
-          } else {
-            const response = await fetchConToken(
-              "sesiones-caja/abrir",
-              sessionData,
-              "POST"
-            );
-
-            if (response.ok && response.sesion) {
-              await IndexedDBService.put("sesiones_caja_offline", {
-                ...session,
-                sincronizado: true,
-                id_servidor: response.sesion.id,
-                fecha_sincronizacion: new Date().toISOString(),
-              });
-              results.success++;
-            } else {
-              throw new Error(response.error || "Error del servidor");
-            }
-          }
-        } catch (error) {
-          console.error(
-            `❌ Error sincronizando sesión ${session.id_local}:`,
-            error
-          );
-          results.failed++;
-
-          if (this.isTemporaryError(error)) {
-            await this.queueForRetry("session", session);
-          }
-        }
-      }
-
-      console.log(
-        `📊 Resultado sesiones: ${results.success} éxito, ${results.failed} fallos, ${results.conflicts} conflictos`
-      );
-      return results;
-    } catch (error) {
-      console.error("❌ Error en syncPendingSessions:", error);
-      throw error;
-    }
-  }
-
+  // ✅ CORREGIDO: Sincronización de ventas pendientes
   async syncPendingSales() {
     try {
       const pendingSales = await IndexedDBService.safeGetAll(
@@ -511,7 +432,19 @@ class SyncService {
 
           const { id_local, ...saleData } = sale;
 
-          const response = await fetchConToken("ventas", saleData, "POST");
+          // ✅ CORREGIDO: Enviar datos en el formato que espera el backend
+          const ventaData = {
+            productos: saleData.productos || [],
+            total: saleData.total,
+            vendedor_id: saleData.vendedor_id,
+            sesion_caja_id: saleData.sesion_caja_id,
+            metodo_pago: saleData.metodo_pago,
+            efectivo_recibido: saleData.efectivo_recibido,
+            cambio: saleData.cambio,
+            estado: saleData.estado || "completada",
+          };
+
+          const response = await fetchConToken("ventas", ventaData, "POST");
 
           if (response.ok && response.venta) {
             await IndexedDBService.put("ventas_pendientes", {
@@ -581,6 +514,7 @@ class SyncService {
     }
   }
 
+  // ✅ CORREGIDO: Sincronización de cierres pendientes
   async syncPendingClosures() {
     try {
       const pendingClosures = await IndexedDBService.safeGetAll(
@@ -603,7 +537,22 @@ class SyncService {
         try {
           const { id_local, ...closureData } = closure;
 
-          const response = await fetchConToken("cierres", closureData, "POST");
+          // ✅ CORREGIDO: Enviar datos en el formato que espera el backend
+          const cierreData = {
+            sesion_caja_id: closureData.sesion_caja_id,
+            total_ventas: closureData.total_ventas,
+            total_efectivo: closureData.total_efectivo,
+            total_tarjeta: closureData.total_tarjeta,
+            total_transferencia: closureData.total_transferencia,
+            ganancia_bruta: closureData.ganancia_bruta,
+            saldo_final_teorico: closureData.saldo_final_teorico,
+            saldo_final_real: closureData.saldo_final_real,
+            diferencia: closureData.diferencia,
+            observaciones: closureData.observaciones,
+            vendedor_id: closureData.vendedor_id,
+          };
+
+          const response = await fetchConToken("cierres", cierreData, "POST");
 
           if (response.ok && response.cierre) {
             await IndexedDBService.put("cierres_pendientes", {
@@ -659,13 +608,12 @@ class SyncService {
 
       if (session && !session.sincronizado) {
         const closeData = {
-          sesion_id: session.id_servidor || sesionIdLocal,
           saldo_final: session.saldo_final,
           observaciones: session.observaciones,
         };
 
         const response = await fetchConToken(
-          `sesiones-caja/${session.id_servidor || sesionIdLocal}/cerrar`,
+          `sesiones-caja/cerrar/${session.id_servidor || sesionIdLocal}`,
           closeData,
           "PUT"
         );
