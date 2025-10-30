@@ -1,7 +1,10 @@
-// components/features/caja/SesionInfo/SesionInfo.jsx
+// components/features/caja/SesionInfo/SesionInfo.jsx - ACTUALIZADO
 import { FiWifi, FiWifiOff, FiRefreshCw } from "react-icons/fi";
 import { useDispatch } from "react-redux";
-import { syncPendingSessions } from "../../../../actions/sesionesCajaActions";
+import {
+  syncPendingSessions,
+  loadOpenSesion,
+} from "../../../../actions/sesionesCajaActions";
 import styles from "./SesionInfo.module.css";
 
 const SesionInfo = ({ sesionAbierta, onAbrirSesion, onCerrarSesion }) => {
@@ -12,17 +15,19 @@ const SesionInfo = ({ sesionAbierta, onAbrirSesion, onCerrarSesion }) => {
 
   const handleSync = async () => {
     await dispatch(syncPendingSessions());
+    // Recargar sesión después de sincronizar
+    if (sesionAbierta?.vendedor_id) {
+      setTimeout(() => {
+        dispatch(loadOpenSesion(sesionAbierta.vendedor_id));
+      }, 1000);
+    }
   };
 
-  console.log("🔍 [SESIONINFO] Estado actual:", {
-    sesionAbierta,
-    tieneSesion: !!sesionAbierta,
-    id: sesionAbierta?.id,
-    id_local: sesionAbierta?.id_local,
-    estado: sesionAbierta?.estado,
-    vendedor: sesionAbierta?.vendedor_nombre,
-    esLocal: isLocalSession,
-  });
+  const handleRefresh = () => {
+    if (sesionAbierta?.vendedor_id) {
+      dispatch(loadOpenSesion(sesionAbierta.vendedor_id));
+    }
+  };
 
   if (!sesionAbierta) {
     return (
@@ -57,6 +62,13 @@ const SesionInfo = ({ sesionAbierta, onAbrirSesion, onCerrarSesion }) => {
         <h3>
           Sesión Activa #{sesionAbierta.id || sesionAbierta.id_local}
           {isLocalSession && <span className={styles.localBadge}>Local</span>}
+          <button
+            className={styles.refreshButton}
+            onClick={handleRefresh}
+            title="Actualizar estado"
+          >
+            <FiRefreshCw />
+          </button>
         </h3>
         <p>
           Abierta el: {new Date(sesionAbierta.fecha_apertura).toLocaleString()}

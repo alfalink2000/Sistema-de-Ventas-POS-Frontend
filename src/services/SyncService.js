@@ -38,6 +38,120 @@ class SyncService {
     }
   }
 
+  async syncPendingSessions() {
+    try {
+      const pendingSessions = await IndexedDBService.safeGetAll(
+        "sesiones_caja_offline",
+        "sincronizado",
+        false
+      );
+
+      console.log(
+        `📦 Sincronizando ${pendingSessions.length} sesiones pendientes...`
+      );
+
+      const results = {
+        total: pendingSessions.length,
+        success: 0,
+        failed: 0,
+        conflicts: 0,
+      };
+
+      for (const session of pendingSessions) {
+        try {
+          // ✅ SOLO SINCRONIZAR SESIONES CERRADAS
+          if (session.estado === "cerrada") {
+            console.log(`🔄 Sincronizando sesión cerrada: ${session.id_local}`);
+
+            // Buscar cierre asociado
+            const cierreAsociado = await IndexedDBService.safeGetAll(
+              "cierres_pendientes",
+              "sesion_caja_id_local",
+              session.id_local
+            );
+
+            if (cierreAsociado.length > 0) {
+              const cierre = cierreAsociado[0];
+              const { id_local, ...cierreData } = cierre;
+
+              const response = await fetchConToken(
+                "cierres",
+                cierreData,
+                "POST"
+              );
+
+              if (response.ok && response.cierre) {
+                // Marcar cierre como sincronizado
+                await IndexedDBService.put("cierres_pendientes", {
+                  ...cierre,
+                  sincronizado: true,
+                  id_servidor: response.cierre.id,
+                  fecha_sincronizacion: new Date().toISOString(),
+                });
+
+                // Cerrar sesión en servidor
+                const closeResponse = await fetchConToken(
+                  `sesiones-caja/cerrar/${
+                    session.id_servidor || session.id_local
+                  }`,
+                  {
+                    saldo_final: session.saldo_final,
+                    observaciones: session.observaciones,
+                  },
+                  "PUT"
+                );
+
+                if (closeResponse.ok) {
+                  // Eliminar sesión del almacenamiento local
+                  await IndexedDBService.delete(
+                    "sesiones_caja_offline",
+                    session.id_local
+                  );
+                  results.success++;
+                  console.log(
+                    `✅ Sesión cerrada sincronizada: ${session.id_local}`
+                  );
+                }
+              }
+            }
+          } else if (session.estado === "abierta") {
+            // ✅ SINCRONIZAR SESIONES ABIERTAS
+            const { id_local, ...sessionData } = session;
+            const response = await fetchConToken(
+              "sesiones-caja/abrir",
+              sessionData,
+              "POST"
+            );
+
+            if (response.ok && response.sesion) {
+              await IndexedDBService.put("sesiones_caja_offline", {
+                ...session,
+                sincronizado: true,
+                id_servidor: response.sesion.id,
+                fecha_sincronizacion: new Date().toISOString(),
+              });
+              results.success++;
+            }
+          }
+        } catch (error) {
+          console.error(
+            `❌ Error sincronizando sesión ${session.id_local}:`,
+            error
+          );
+          results.failed++;
+        }
+      }
+
+      console.log(
+        `📊 Resultado sesiones: ${results.success} éxito, ${results.failed} fallos`
+      );
+      return results;
+    } catch (error) {
+      console.error("❌ Error en syncPendingSessions:", error);
+      throw error;
+    }
+  }
+
   setupEventListeners() {
     window.addEventListener("online", async () => {
       this.isOnline = true;

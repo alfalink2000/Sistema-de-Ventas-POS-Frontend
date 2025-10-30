@@ -1,7 +1,10 @@
-// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - IMPORTS CORREGIDOS
+// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - ACTUALIZADO
 import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { closeSesionCaja } from "../../../../actions/sesionesCajaActions";
+import {
+  closeSesionCaja,
+  loadOpenSesion,
+} from "../../../../actions/sesionesCajaActions";
 import {
   createClosure,
   calculateClosureTotals,
@@ -34,7 +37,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
 
-  // ✅ CALCULAR TOTALES (ONLINE Y OFFLINE) - COMPLETAMENTE CORREGIDO
+  // ✅ CALCULAR TOTALES
   const calcularTotalesCompletos = useCallback(async () => {
     if (!sesion) return;
 
@@ -45,28 +48,20 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       let totals;
       const sesionId = sesion.id || sesion.id_local;
 
-      console.log(`🔄 Calculando totales para sesión: ${sesionId}`, {
-        isOnline,
-        sesion,
-      });
+      console.log(`🔄 Calculando totales para sesión: ${sesionId}`);
 
       if (isOnline && sesion.id) {
-        // ✅ MODO ONLINE: usar la acción de Redux
         try {
           totals = await dispatch(calculateClosureTotals(sesion.id));
-          console.log("📊 Totales online obtenidos:", totals);
         } catch (onlineError) {
           console.warn(
             "⚠️ Error en cálculo online, intentando offline:",
             onlineError
           );
-          // Fallback a cálculo offline si falla online
           totals = await OfflineClosureService.calculateClosureTotals(sesionId);
         }
       } else {
-        // ✅ MODO OFFLINE: usar el servicio offline
         totals = await OfflineClosureService.calculateClosureTotals(sesionId);
-        console.log("📊 Totales offline calculados:", totals);
       }
 
       const saldoInicial = sesion.saldo_inicial || 0;
@@ -80,19 +75,15 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
       setTotales(totalesCompletos);
 
-      // ✅ SETEAR SUGERENCIA SOLO SI NO HAY VALOR PREVIO
       if (!saldoFinalReal) {
         setSaldoFinalReal(saldoFinalTeorico.toFixed(2));
       }
-
-      console.log("✅ Totales establecidos:", totalesCompletos);
     } catch (error) {
       console.error("❌ Error calculando totales:", error);
       setErrorCalculo(
         "No se pudieron calcular los totales. Verifica las ventas."
       );
 
-      // Establecer totales por defecto
       setTotales({
         total_ventas: 0,
         total_efectivo: 0,
@@ -108,15 +99,12 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     }
   }, [sesion, dispatch, saldoFinalReal, isOnline]);
 
-  // ✅ EFECTO PARA CALCULAR AL ABRIR EL MODAL
   useEffect(() => {
     if (isOpen && sesion) {
-      console.log("🎯 Modal abierto, calculando totales...");
       calcularTotalesCompletos();
     }
   }, [isOpen, sesion, calcularTotalesCompletos]);
 
-  // ✅ CALCULAR DIFERENCIA EN TIEMPO REAL
   useEffect(() => {
     if (totales && saldoFinalReal) {
       const saldoRealNum = parseFloat(saldoFinalReal) || 0;
@@ -127,11 +115,10 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     }
   }, [saldoFinalReal, totales]);
 
-  // ✅ MANEJAR CIERRE DE CAJA (ONLINE Y OFFLINE) - COMPLETAMENTE CORREGIDO
+  // ✅ MANEJAR CIERRE MEJORADO CON ACTUALIZACIÓN AUTOMÁTICA
   const handleCerrarSesion = async () => {
     const saldoFinalNumero = parseFloat(saldoFinalReal);
 
-    // Validaciones
     if (!saldoFinalReal || isNaN(saldoFinalNumero) || saldoFinalNumero < 0) {
       await Swal.fire({
         icon: "error",
@@ -157,8 +144,8 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     try {
       const sesionId = sesion.id || sesion.id_local;
       const closureData = {
-        sesion_caja_id: sesion.id, // Para online
-        sesion_caja_id_local: sesion.id_local || sesionId, // Para offline
+        sesion_caja_id: sesion.id,
+        sesion_caja_id_local: sesion.id_local || sesionId,
         vendedor_id: user.id,
         vendedor_nombre: user.nombre || user.username,
         total_ventas: totales?.total_ventas || 0,
@@ -178,36 +165,29 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
       if (isOnline && sesion.id) {
         // ✅ MODO ONLINE
-        console.log("🔄 Creando cierre online:", closureData);
-
         result = await dispatch(createClosure(closureData));
 
         if (result && result.success !== false) {
-          // Cerrar la sesión en el servidor
           await dispatch(
             closeSesionCaja(sesion.id, {
               saldo_final: saldoFinalNumero,
               observaciones: observaciones.trim() || null,
             })
           );
-
-          console.log("✅ Cierre online completado exitosamente");
         } else {
           throw new Error(
             result?.error || "Error al crear cierre de caja online"
           );
         }
       } else {
-        // ✅ MODO OFFLINE
-        console.log("📴 Creando cierre offline:", closureData);
-
+        // ✅ MODO OFFLINE - GUARDAR Y CERRAR LOCALMENTE
         result = await OfflineClosureService.createOfflineClosure(closureData);
 
         if (!result.success) {
           throw new Error(result.error);
         }
 
-        // Marcar sesión como cerrada localmente
+        // ✅ CERRAR SESIÓN LOCALMENTE INMEDIATAMENTE
         if (sesion.id_local || sesionId) {
           const sesionActualizada = {
             ...sesion,
@@ -223,12 +203,20 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             sesionActualizada
           );
           console.log("✅ Sesión marcada como cerrada localmente");
-        }
 
-        console.log("✅ Cierre offline guardado exitosamente");
+          // ✅ ACTUALIZAR ESTADO GLOBAL INMEDIATAMENTE
+          dispatch({
+            type: "SESIONES_CAJA_UPDATE_LOCAL",
+            payload: {
+              id: sesionId,
+              estado: "cerrada",
+              fecha_cierre: new Date().toISOString(),
+            },
+          });
+        }
       }
 
-      // Mostrar confirmación
+      // ✅ MOSTRAR CONFIRMACIÓN Y CERRAR MODAL
       await Swal.fire({
         icon: "success",
         title: isOnline ? "Cierre Completado" : "Cierre Guardado (Offline)",
@@ -238,7 +226,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         confirmButtonText: "Aceptar",
       });
 
-      // Cerrar modal y resetear estado
+      // ✅ FORZAR RECARGA DE SESIÓN ABIERTA
+      if (user?.id) {
+        setTimeout(() => {
+          dispatch(loadOpenSesion(user.id));
+        }, 1000);
+      }
+
       handleCloseModal();
     } catch (error) {
       console.error("❌ Error en cierre de caja:", error);
@@ -254,7 +248,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     }
   };
 
-  // ✅ CERRAR MODAL Y RESETEAR ESTADO
+  // ✅ CERRAR MODAL MEJORADO
   const handleCloseModal = () => {
     setSaldoFinalReal("");
     setObservaciones("");
@@ -264,7 +258,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     onClose();
   };
 
-  // ✅ REINTENTAR CÁLCULO
   const handleRetryCalculation = () => {
     calcularTotalesCompletos();
   };
