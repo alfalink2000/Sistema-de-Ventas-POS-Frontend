@@ -31,8 +31,8 @@ export const useOfflineCierres = () => {
       // ✅ CARGAR DESDE MÚLTIPLES FUENTES
       const [cierresSincronizados, cierresPendientes, sesionesCerradas] =
         await Promise.all([
-          IndexedDBService.safeGetAll("cierres"), // Cierres del servidor
-          IndexedDBService.safeGetAll("cierres_pendientes"), // Cierres locales pendientes
+          IndexedDBService.getAll("cierres"), // Cierres del servidor
+          IndexedDBService.getAll("cierres_pendientes"), // Cierres locales pendientes
           IndexedDBService.safeGetAll(
             "sesiones_caja_offline",
             "estado",
@@ -195,7 +195,7 @@ export const useOfflineCierres = () => {
 // ✅ FUNCIÓN AUXILIAR PARA CALCULAR TOTALES DE UNA SESIÓN
 async function calcularTotalesSesion(sesionIdLocal) {
   try {
-    const todasVentas = await IndexedDBService.safeGetAll("ventas_pendientes");
+    const todasVentas = await IndexedDBService.getAll("ventas_pendientes");
 
     const ventasSesion = todasVentas.filter(
       (venta) =>

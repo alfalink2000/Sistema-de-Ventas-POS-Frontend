@@ -120,6 +120,31 @@ class IndexedDBService {
     }
   }
 
+  // ✅ MÉTODO ESPECÍFICO PARA OBTENER REGISTROS NO SINCRONIZADOS
+  async getPendingRecords(storeName) {
+    try {
+      if (!this.initialized) {
+        await this.init();
+      }
+
+      if (!this.db.objectStoreNames.contains(storeName)) {
+        console.warn(`⚠️ Object store "${storeName}" no existe`);
+        return [];
+      }
+
+      const store = this.db
+        .transaction(storeName, "readonly")
+        .objectStore(storeName);
+      const allData = await store.getAll();
+
+      // Filtrar manualmente registros no sincronizados
+      return allData.filter((item) => item.sincronizado === false);
+    } catch (error) {
+      console.error(`❌ Error en getPendingRecords(${storeName}):`, error);
+      return [];
+    }
+  }
+
   // ✅ MÉTODO SEGURO PARA OBTENER TODOS LOS REGISTROS
   async safeGetAll(storeName, indexName = null, value = null) {
     try {
@@ -147,8 +172,17 @@ class IndexedDBService {
           return await store.getAll();
         }
 
+        // ✅ CORREGIDO: IndexedDB no acepta booleanos directamente, convertir a número
+        let normalizedValue = value;
+        if (typeof value === "boolean") {
+          normalizedValue = value ? 1 : 0;
+          console.log(
+            `🔄 Convirtiendo valor booleano ${value} a número ${normalizedValue} para índice`
+          );
+        }
+
         const index = store.index(indexName);
-        return await index.getAll(value);
+        return await index.getAll(normalizedValue);
       }
 
       // Si no hay índice, obtener todos los registros
@@ -160,13 +194,20 @@ class IndexedDBService {
       );
 
       // En caso de error con índice, intentar sin índice
-      if (error.name === "NotFoundError" && indexName) {
+      if (error.name === "NotFoundError" || error.name === "DataError") {
         console.log(`🔄 Reintentando sin índice ${indexName}...`);
         try {
           const store = this.db
             .transaction(storeName, "readonly")
             .objectStore(storeName);
-          return await store.getAll();
+          const allData = await store.getAll();
+
+          // Filtrar manualmente si tenemos un valor
+          if (indexName && value !== null) {
+            return allData.filter((item) => item[indexName] === value);
+          }
+
+          return allData;
         } catch (fallbackError) {
           console.error(`❌ Error en fallback:`, fallbackError);
           return [];
@@ -438,8 +479,14 @@ class IndexedDBService {
         return [];
       }
 
+      // ✅ CORREGIDO: Normalizar valores booleanos
+      let normalizedValue = value;
+      if (typeof value === "boolean") {
+        normalizedValue = value ? 1 : 0;
+      }
+
       const index = store.index(indexName);
-      return await index.getAll(value);
+      return await index.getAll(normalizedValue);
     } catch (error) {
       console.error(
         `❌ Error en getByIndex(${storeName}, ${indexName}, ${value}):`,

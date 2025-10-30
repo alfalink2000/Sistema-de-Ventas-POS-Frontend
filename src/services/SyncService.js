@@ -40,10 +40,9 @@ class SyncService {
   // ✅ CORREGIDO: Sincronización de sesiones pendientes
   async syncPendingSessions() {
     try {
-      const pendingSessions = await IndexedDBService.safeGetAll(
-        "sesiones_caja_offline",
-        "sincronizado",
-        false
+      // ✅ USAR EL NUEVO MÉTODO ESPECÍFICO
+      const pendingSessions = await IndexedDBService.getPendingRecords(
+        "sesiones_caja_offline"
       );
 
       console.log(
@@ -63,10 +62,10 @@ class SyncService {
             console.log(`🔄 Sincronizando sesión cerrada: ${session.id_local}`);
 
             // Buscar cierre asociado
-            const cierreAsociado = await IndexedDBService.safeGetAll(
-              "cierres_pendientes",
-              "sesion_caja_id_local",
-              session.id_local
+            const cierreAsociado = await IndexedDBService.getPendingRecords(
+              "cierres_pendientes"
+            ).then((cierres) =>
+              cierres.filter((c) => c.sesion_caja_id_local === session.id_local)
             );
 
             if (cierreAsociado.length > 0) {
@@ -394,10 +393,9 @@ class SyncService {
   // ✅ CORREGIDO: Sincronización de ventas pendientes
   async syncPendingSales() {
     try {
-      const pendingSales = await IndexedDBService.safeGetAll(
-        "ventas_pendientes",
-        "sincronizado",
-        false
+      // ✅ USAR EL NUEVO MÉTODO ESPECÍFICO
+      const pendingSales = await IndexedDBService.getPendingRecords(
+        "ventas_pendientes"
       );
 
       console.log(
@@ -517,10 +515,9 @@ class SyncService {
   // ✅ CORREGIDO: Sincronización de cierres pendientes
   async syncPendingClosures() {
     try {
-      const pendingClosures = await IndexedDBService.safeGetAll(
-        "cierres_pendientes",
-        "sincronizado",
-        false
+      // ✅ USAR EL NUEVO MÉTODO ESPECÍFICO
+      const pendingClosures = await IndexedDBService.getPendingRecords(
+        "cierres_pendientes"
       );
 
       console.log(
@@ -788,9 +785,9 @@ class SyncService {
       cutoffDate.setDate(cutoffDate.getDate() - 30);
 
       const [oldSessions, oldSales, oldClosures] = await Promise.all([
-        IndexedDBService.safeGetAll("sesiones_caja_offline"),
-        IndexedDBService.safeGetAll("ventas_pendientes"),
-        IndexedDBService.safeGetAll("cierres_pendientes"),
+        IndexedDBService.getAll("sesiones_caja_offline"),
+        IndexedDBService.getAll("ventas_pendientes"),
+        IndexedDBService.getAll("cierres_pendientes"),
       ]);
 
       const cleanupTasks = [];
@@ -866,8 +863,7 @@ class SyncService {
     return this.trySync();
   }
 
-  // En SyncService.js, reemplaza el healthCheck con esta versión corregida:
-
+  // ✅ CORREGIDO: Health check usando métodos seguros
   async healthCheck() {
     const checks = {
       indexedDB: false,
@@ -890,24 +886,12 @@ class SyncService {
 
       checks.storage = await IndexedDBService.estimateSize();
 
-      // ✅ USAR MÉTODOS SEGUROS QUE MANEJAN ÍNDICES FALTANTES
+      // ✅ USAR MÉTODOS SEGUROS
       const [pendingSessions, pendingSales, pendingClosures] =
         await Promise.all([
-          IndexedDBService.safeGetAll(
-            "sesiones_caja_offline",
-            "sincronizado",
-            false
-          ),
-          IndexedDBService.safeGetAll(
-            "ventas_pendientes",
-            "sincronizado",
-            false
-          ),
-          IndexedDBService.safeGetAll(
-            "cierres_pendientes",
-            "sincronizado",
-            false
-          ),
+          IndexedDBService.getPendingRecords("sesiones_caja_offline"),
+          IndexedDBService.getPendingRecords("ventas_pendientes"),
+          IndexedDBService.getPendingRecords("cierres_pendientes"),
         ]);
 
       checks.pendingData =
@@ -946,23 +930,12 @@ class SyncService {
     }
 
     try {
+      // ✅ USAR MÉTODOS SEGUROS
       const [pendingSessions, pendingSales, pendingClosures, health] =
         await Promise.all([
-          IndexedDBService.safeGetAll(
-            "sesiones_caja_offline",
-            "sincronizado",
-            false
-          ),
-          IndexedDBService.safeGetAll(
-            "ventas_pendientes",
-            "sincronizado",
-            false
-          ),
-          IndexedDBService.safeGetAll(
-            "cierres_pendientes",
-            "sincronizado",
-            false
-          ),
+          IndexedDBService.getPendingRecords("sesiones_caja_offline"),
+          IndexedDBService.getPendingRecords("ventas_pendientes"),
+          IndexedDBService.getPendingRecords("cierres_pendientes"),
           this.healthCheck(),
         ]);
 
