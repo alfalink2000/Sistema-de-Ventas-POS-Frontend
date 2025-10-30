@@ -139,9 +139,9 @@
 /* Estados de advertencia - COMPACTO */
 .dataWarning {
   background: #fef3c7;
-  border: 1px solid #f59e0b;
+  border: 1px solid #f59f0b8e;
   border-radius: 6px;
-  padding: 6px 8px;
+  /* padding: 6px 8px; */
   margin-top: 4px;
 }
 
@@ -150,7 +150,7 @@
   align-items: center;
   gap: 4px;
   color: #92400e;
-  font-size: 0.65rem;
+  font-size: 0.5rem;
 }
 
 .warningIcon {

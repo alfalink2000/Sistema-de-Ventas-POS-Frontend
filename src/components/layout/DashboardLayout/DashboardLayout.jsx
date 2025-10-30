@@ -1,7 +1,6 @@
 // components/layout/DashboardLayout/DashboardLayout.jsx
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import { useLocation } from "react-router-dom";
 import Header from "../Header/Header";
 import Sidebar from "../Sidebar/Sidebar";
 import styles from "./DashboardLayout.module.css";

@@ -1,4 +1,4 @@
-/* components/layout/Header/Header.module.css - VERSIÓN CORREGIDA */
+/* components/layout/Header/Header.module.css - VERSIÓN MEJORADA */
 .header {
   display: flex;
   justify-content: space-between;
@@ -10,14 +10,14 @@
   box-shadow: 0 2px 20px rgba(37, 99, 235, 0.2);
   color: white;
   position: relative;
-  min-width: 0; /* ✅ IMPORTANTE: Permite que los hijos se ajusten */
+  min-width: 0;
 }
 
 .headerLeft {
   display: flex;
   align-items: center;
   gap: 20px;
-  flex-shrink: 0; /* ✅ Evita que se encoja demasiado */
+  flex-shrink: 0;
 }
 
 .menuButtonContainer {
@@ -65,7 +65,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0; /* ✅ Permite que el texto se ajuste */
+  min-width: 0;
   flex-shrink: 1;
 }
 
@@ -87,27 +87,138 @@
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 16px; /* ✅ Reducido el gap */
-  min-width: 0; /* ✅ IMPORTANTE: Permite que los hijos se ajusten */
-  flex-shrink: 1; /* ✅ Permite que se encoja si es necesario */
+  gap: 12px; /* ✅ Gap reducido para más elementos */
+  min-width: 0;
+  flex-shrink: 1;
 }
 
-/* ✅ INDICADOR DE GANANCIAS - COMPACTADO */
-.earningsIndicator {
+/* ✅ INDICADOR DE SINCRONIZACIÓN COMPACTO */
+.syncIndicator {
   display: flex;
   align-items: center;
-  gap: 10px; /* ✅ Gap reducido */
-  padding: 10px 14px; /* ✅ Padding reducido */
-  background: rgba(34, 197, 94, 0.15);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 10px; /* ✅ Border radius reducido */
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
   cursor: default;
-  max-width: 220px; /* ✅ Ancho máximo controlado */
-  min-width: 0; /* ✅ Permite que se ajuste */
-  flex-shrink: 1; /* ✅ Permite que se encoja */
-  overflow: hidden; /* ✅ Evita desbordamiento */
+  max-width: 140px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+.syncIndicator:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.syncIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.syncIcon.online {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.syncIcon.offline {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.wifiIcon,
+.wifiOffIcon {
+  font-size: 14px;
+  color: white;
+}
+
+.syncSpinner {
+  font-size: 14px;
+  color: white;
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.syncInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.syncStatus {
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pendingCount {
+  font-size: 9px;
+  opacity: 0.8;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.syncButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 4px;
+  padding: 4px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.syncButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.syncButtonIcon {
+  font-size: 12px;
+}
+
+/* ✅ INDICADOR DE GANANCIAS - MÁS COMPACTO */
+.earningsIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  cursor: default;
+  max-width: 160px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .earningsIndicator:hover {
@@ -117,18 +228,18 @@
 }
 
 .earningsIcon {
-  width: 36px; /* ✅ Tamaño reducido */
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: linear-gradient(135deg, #22c55e, #16a34a);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0; /* ✅ No se encoge el icono */
+  flex-shrink: 0;
 }
 
 .trendingIcon {
-  font-size: 16px; /* ✅ Tamaño reducido */
+  font-size: 14px;
   color: white;
 }
 
@@ -136,12 +247,12 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0; /* ✅ IMPORTANTE: Permite que el texto se ajuste */
-  flex: 1; /* ✅ Ocupa el espacio disponible */
+  min-width: 0;
+  flex: 1;
 }
 
 .earningsLabel {
-  font-size: 10px; /* ✅ Tamaño reducido */
+  font-size: 9px;
   opacity: 0.9;
   font-weight: 500;
   text-transform: uppercase;
@@ -153,7 +264,7 @@
 
 .earningsAmount {
   font-weight: 700;
-  font-size: 14px; /* ✅ Tamaño reducido */
+  font-size: 12px;
   color: #22c55e;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   white-space: nowrap;
@@ -163,33 +274,32 @@
 
 .earningsDetails {
   display: flex;
-  gap: 6px; /* ✅ Gap reducido */
-  font-size: 9px; /* ✅ Tamaño reducido */
+  gap: 4px;
+  font-size: 8px;
   opacity: 0.8;
   white-space: nowrap;
 }
 
-.salesCount,
-.totalSales {
+.salesCount {
   background: rgba(255, 255, 255, 0.1);
-  padding: 2px 4px; /* ✅ Padding reducido */
+  padding: 1px 4px;
   border-radius: 3px;
   font-weight: 500;
 }
 
-/* ✅ INDICADOR SIN SESIÓN - COMPACTADO */
+/* ✅ INDICADOR SIN SESIÓN - MÁS COMPACTO */
 .noSessionIndicator {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   background: rgba(148, 163, 184, 0.15);
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
+  border-radius: 8px;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
   cursor: default;
-  max-width: 200px;
+  max-width: 140px;
   min-width: 0;
   flex-shrink: 1;
   overflow: hidden;
@@ -201,10 +311,10 @@
 }
 
 .noSessionIcon {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: linear-gradient(135deg, #64748b, #475569);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,7 +322,7 @@
 }
 
 .dollarIcon {
-  font-size: 16px;
+  font-size: 14px;
   color: white;
 }
 
@@ -225,7 +335,7 @@
 }
 
 .noSessionLabel {
-  font-size: 10px;
+  font-size: 9px;
   opacity: 0.9;
   font-weight: 500;
   text-transform: uppercase;
@@ -236,7 +346,7 @@
 }
 
 .noSessionText {
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.8;
   font-weight: 500;
   white-space: nowrap;
@@ -248,13 +358,13 @@
 .userInfo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 8px;
   transition: all 0.3s ease;
   cursor: pointer;
-  flex-shrink: 0; /* ✅ No se encoge el user info */
+  flex-shrink: 0;
 }
 
 .userInfo:hover {
@@ -263,10 +373,10 @@
 }
 
 .userAvatar {
-  width: 32px; /* ✅ Tamaño reducido */
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,7 +384,7 @@
 }
 
 .userIcon {
-  font-size: 14px; /* ✅ Tamaño reducido */
+  font-size: 12px;
   color: white;
 }
 
@@ -287,22 +397,22 @@
 
 .userName {
   font-weight: 600;
-  font-size: 13px; /* ✅ Tamaño reducido */
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px; /* ✅ Ancho máximo controlado */
+  max-width: 100px;
 }
 
 .userRole {
-  font-size: 10px; /* ✅ Tamaño reducido */
+  font-size: 9px;
   opacity: 0.8;
   text-transform: capitalize;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
+  max-width: 100px;
 }
 
 /* Botón de salir - COMPACTADO */
@@ -312,15 +422,15 @@
   gap: 6px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
   color: white;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
-  flex-shrink: 0; /* ✅ No se encoge el botón */
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
@@ -332,21 +442,25 @@
 }
 
 .logoutIcon {
-  font-size: 14px;
+  font-size: 12px;
 }
 
-/* RESPONSIVE MEJORADO */
+/* ✅ RESPONSIVE MEJORADO CON MÁS ELEMENTOS */
 @media (max-width: 1200px) {
   .header {
     padding: 0 24px;
   }
 
+  .syncIndicator {
+    max-width: 120px;
+  }
+
   .earningsIndicator {
-    max-width: 200px;
+    max-width: 140px;
   }
 
   .earningsDetails {
-    display: none; /* ✅ Ocultar detalles en pantallas medianas */
+    display: none;
   }
 }
 
@@ -355,25 +469,28 @@
     padding: 0 20px;
   }
 
+  .syncIndicator,
   .earningsIndicator,
   .noSessionIndicator {
-    max-width: 180px;
+    max-width: 110px;
   }
 
   .userName,
   .userRole {
-    max-width: 100px;
+    max-width: 80px;
   }
 }
 
 @media (max-width: 900px) {
-  .earningsAmount {
-    font-size: 13px;
+  .earningsAmount,
+  .syncStatus {
+    font-size: 11px;
   }
 
   .earningsLabel,
-  .noSessionLabel {
-    font-size: 9px;
+  .noSessionLabel,
+  .syncStatus {
+    font-size: 8px;
   }
 }
 
@@ -387,25 +504,29 @@
     display: none;
   }
 
+  .syncIndicator,
   .earningsIndicator,
   .noSessionIndicator {
-    max-width: 160px;
-    padding: 8px 10px;
+    max-width: 100px;
+    padding: 6px 8px;
   }
 
   .earningsAmount {
-    font-size: 12px;
+    font-size: 10px;
   }
 
   .earningsIcon,
-  .noSessionIcon {
-    width: 32px;
-    height: 32px;
+  .noSessionIcon,
+  .syncIcon {
+    width: 28px;
+    height: 28px;
   }
 
   .trendingIcon,
-  .dollarIcon {
-    font-size: 14px;
+  .dollarIcon,
+  .wifiIcon,
+  .wifiOffIcon {
+    font-size: 12px;
   }
 
   .userDetails {
@@ -417,26 +538,30 @@
   }
 
   .logoutButton {
-    padding: 8px;
+    padding: 6px;
   }
 
   .headerRight {
-    gap: 12px;
+    gap: 8px;
   }
 }
 
 @media (max-width: 640px) {
-  .earningsIndicator,
-  .noSessionIndicator {
-    display: none; /* ✅ Ocultar completamente en móviles pequeños */
+  .syncIndicator .syncInfo,
+  .earningsIndicator .earningsInfo,
+  .noSessionIndicator .noSessionInfo {
+    display: none;
   }
 
-  .headerLeft {
-    gap: 12px;
+  .syncIndicator,
+  .earningsIndicator,
+  .noSessionIndicator {
+    max-width: 40px;
+    padding: 6px;
   }
 
   .appName {
-    font-size: 18px;
+    font-size: 16px;
   }
 }
 
@@ -446,18 +571,25 @@
   }
 
   .headerRight {
-    gap: 8px;
+    gap: 6px;
   }
 
   .userInfo {
-    padding: 6px 8px;
+    padding: 4px 6px;
+  }
+
+  .syncIndicator,
+  .earningsIndicator,
+  .noSessionIndicator {
+    max-width: 36px;
   }
 }
 
 /* ESTADOS DE FOCUS PARA ACCESIBILIDAD */
 .menuButton:focus-visible,
 .userInfo:focus-visible,
-.logoutButton:focus-visible {
+.logoutButton:focus-visible,
+.syncButton:focus-visible {
   outline: 2px solid white;
   outline-offset: 2px;
 }

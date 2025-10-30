@@ -1,4 +1,4 @@
-// src/components/features/offline/OfflineDataStatus/OfflineDataStatus.jsx (VERSIÓN MEJORADA)
+// src/components/features/offline/OfflineDataStatus/OfflineDataStatus.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useOfflineAuth } from "../../../hook/useOfflineAuth";
 import { useOfflineData } from "../../../hook/useOfflineData";
@@ -10,14 +10,23 @@ import {
   FiRefreshCw,
   FiAlertTriangle,
   FiCheckCircle,
+  FiDatabase,
 } from "react-icons/fi";
 import styles from "./OfflineDataStatus.module.css";
 
 const OfflineDataStatus = () => {
-  const { hasOfflineData, offlineUsers, syncUsers, isLoading } =
-    useOfflineAuth();
+  const {
+    hasOfflineData,
+    offlineUsers,
+    syncUsers,
+    isLoading,
+    usersStats,
+    cleanupDuplicates,
+  } = useOfflineAuth();
+
   const { productos, categorias, lastUpdate } = useOfflineData();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showStats, setShowStats] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -34,6 +43,12 @@ const OfflineDataStatus = () => {
 
   const handleSync = async () => {
     await syncUsers();
+  };
+
+  const handleCleanup = async () => {
+    await cleanupDuplicates();
+    // Recargar usuarios después de limpiar
+    window.location.reload(); // O usar tu función de recarga
   };
 
   const formatDate = (dateString) => {
@@ -66,79 +81,70 @@ const OfflineDataStatus = () => {
 
   const dataStatus = getDataStatus();
 
-  if (isOnline) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.statusOnline}>
-          <FiWifi className={styles.onlineIcon} />
-          <span>Conexión activa</span>
-        </div>
+  // ✅ MOSTRAR INFORMACIÓN DE DEBUG SI HAY DUPLICADOS
+  const hasDuplicates = usersStats && usersStats.duplicates > 0;
 
-        {/* Mostrar estado de datos incluso cuando hay conexión */}
-        <div className={styles.dataStatus}>
-          <div className={styles.dataItem}>
-            <FiUsers className={styles.dataIcon} />
-            <span>{offlineUsers.length} usuarios disponibles offline</span>
-          </div>
-
-          <div className={styles.dataItem}>
-            <FiPackage className={styles.dataIcon} />
-            <span>{productos.length} productos disponibles offline</span>
-          </div>
-
-          {dataStatus === "critical" && isOnline && (
-            <div className={styles.dataWarning}>
-              <div className={styles.dataWarningContent}>
-                <FiAlertTriangle className={styles.warningIcon} />
-                <span>
-                  Datos offline insuficientes. Sincroniza para modo offline.
-                </span>
-              </div>
-            </div>
-          )}
-
-          {dataStatus === "optimal" && (
-            <div className={styles.dataSuccess}>
-              <div className={styles.dataSuccessContent}>
-                <FiCheckCircle className={styles.successIcon} />
-                <span>Listo para trabajar sin conexión</span>
-              </div>
-            </div>
-          )}
-
-          {(dataStatus === "critical" || dataStatus === "minimal") &&
-            isOnline && (
-              <button
-                className={styles.syncButton}
-                onClick={handleSync}
-                disabled={isLoading}
-              >
-                <FiRefreshCw className={isLoading ? styles.spinning : ""} />
-                {isLoading ? "Sincronizando..." : "Sincronizar Datos Offline"}
-              </button>
-            )}
-        </div>
-      </div>
-    );
-  }
-
-  // Modo offline
   return (
     <div className={styles.container}>
-      <div className={styles.statusOffline}>
-        <FiWifiOff className={styles.offlineIcon} />
-        <span>Modo Offline</span>
+      <div className={isOnline ? styles.statusOnline : styles.statusOffline}>
+        {isOnline ? (
+          <FiWifi className={styles.onlineIcon} />
+        ) : (
+          <FiWifiOff className={styles.offlineIcon} />
+        )}
+        <span>{isOnline ? "Conexión activa" : "Modo Offline"}</span>
+
+        {/* ✅ BOTÓN DE DEBUG */}
+        {hasDuplicates && (
+          <button
+            className={styles.debugButton}
+            onClick={() => setShowStats(!showStats)}
+            title="Mostrar información de depuración"
+          >
+            <FiDatabase />
+          </button>
+        )}
       </div>
+
+      {/* ✅ INFORMACIÓN DE DEBUG */}
+      {showStats && usersStats && (
+        <div className={styles.debugInfo}>
+          <div className={styles.debugItem}>
+            <strong>Estadísticas de Usuarios:</strong>
+          </div>
+          <div className={styles.debugItem}>
+            Registros totales: {usersStats.totalRecords}
+          </div>
+          <div className={styles.debugItem}>
+            Usuarios únicos: {usersStats.uniqueUsers}
+          </div>
+          <div className={styles.debugItem}>
+            Duplicados:{" "}
+            <span className={styles.duplicateWarning}>
+              {usersStats.duplicates}
+            </span>
+          </div>
+          {usersStats.duplicates > 0 && (
+            <button className={styles.cleanupButton} onClick={handleCleanup}>
+              🧹 Limpiar Duplicados
+            </button>
+          )}
+        </div>
+      )}
 
       <div className={styles.dataStatus}>
         <div className={styles.dataItem}>
           <FiUsers className={styles.dataIcon} />
-          <span>{offlineUsers.length} usuarios disponibles</span>
+          <span>
+            {offlineUsers.length} usuario{offlineUsers.length !== 1 ? "s" : ""}{" "}
+            disponible{offlineUsers.length !== 1 ? "s" : ""} offline
+            {hasDuplicates && <span className={styles.duplicateBadge}>!</span>}
+          </span>
         </div>
 
         <div className={styles.dataItem}>
           <FiPackage className={styles.dataIcon} />
-          <span>{productos.length} productos cargados</span>
+          <span>{productos.length} productos disponibles offline</span>
         </div>
 
         {lastUpdate && (
@@ -147,25 +153,37 @@ const OfflineDataStatus = () => {
           </div>
         )}
 
+        {/* Mensajes de estado */}
         {dataStatus === "optimal" && (
           <div className={styles.dataSuccess}>
-            <div className={styles.dataSuccessContent}>
-              <FiCheckCircle className={styles.successIcon} />
-              <span>Todos los datos disponibles para trabajar offline</span>
-            </div>
+            <FiCheckCircle className={styles.successIcon} />
+            <span>Listo para trabajar sin conexión</span>
           </div>
         )}
 
         {dataStatus === "critical" && (
           <div className={styles.dataWarning}>
-            <div className={styles.dataWarningContent}>
-              <FiAlertTriangle className={styles.warningIcon} />
-              <span>
-                Datos insuficientes. Conecta a internet para sincronizar.
-              </span>
-            </div>
+            <FiAlertTriangle className={styles.warningIcon} />
+            <span>
+              {isOnline
+                ? "Datos offline insuficientes. Sincroniza para modo offline."
+                : "Datos insuficientes. Conecta a internet para sincronizar."}
+            </span>
           </div>
         )}
+
+        {/* Botón de sincronización */}
+        {(dataStatus === "critical" || dataStatus === "minimal") &&
+          isOnline && (
+            <button
+              className={styles.syncButton}
+              onClick={handleSync}
+              disabled={isLoading}
+            >
+              <FiRefreshCw className={isLoading ? styles.spinning : ""} />
+              {isLoading ? "Sincronizando..." : "Sincronizar Datos Offline"}
+            </button>
+          )}
       </div>
     </div>
   );

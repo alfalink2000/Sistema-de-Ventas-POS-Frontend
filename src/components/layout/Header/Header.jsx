@@ -1,4 +1,4 @@
-// components/layout/Header/Header.jsx - CON INDICADOR DE GANANCIAS
+// components/layout/Header/Header.jsx - VERSIÓN MEJORADA
 import { useDispatch, useSelector } from "react-redux";
 import { startLogout } from "../../../actions/authActions";
 import {
@@ -7,14 +7,22 @@ import {
   FiUser,
   FiTrendingUp,
   FiDollarSign,
+  FiWifi,
+  FiWifiOff,
+  FiRefreshCw,
 } from "react-icons/fi";
 import styles from "./Header.module.css";
+import { useSyncStatus } from "../../../hook/useSyncStatus";
 
 const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   const dispatch = useDispatch();
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
   const { sales } = useSelector((state) => state.sales);
   const { products } = useSelector((state) => state.products);
+
+  // ✅ HOOK DE SINCRONIZACIÓN
+  const { isOnline, isSyncing, pendingCount, forceSync, health } =
+    useSyncStatus();
 
   const handleLogout = () => {
     dispatch(startLogout());
@@ -26,7 +34,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       return { gananciaBruta: 0, ventasTotales: 0 };
     }
 
-    // Filtrar ventas de la sesión actual
     const ventasSesionActual = sales.filter(
       (venta) => venta.sesion_caja_id === sesionAbierta.id
     );
@@ -35,14 +42,12 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       return { gananciaBruta: 0, ventasTotales: 0 };
     }
 
-    // Calcular ganancia bruta (precio_venta - precio_compra)
     let gananciaBruta = 0;
     let ventasTotales = 0;
 
     ventasSesionActual.forEach((venta) => {
       ventasTotales += venta.total || 0;
 
-      // Si tenemos los detalles de la venta, calcular ganancia exacta
       if (venta.productos && Array.isArray(venta.productos)) {
         venta.productos.forEach((productoVenta) => {
           const producto = products.find(
@@ -56,7 +61,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
           }
         });
       } else {
-        // Estimación conservadora (30% de ganancia)
         gananciaBruta += (venta.total || 0) * 0.3;
       }
     });
@@ -81,7 +85,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   return (
     <header className={styles.header}>
       <div className={styles.headerLeft}>
-        {/* ✅ Espacio consistente para el botón del menú */}
         <div className={styles.menuButtonContainer}>
           {sidebarOpen ? (
             <button className={styles.menuButton} onClick={onToggleSidebar}>
@@ -100,6 +103,46 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       </div>
 
       <div className={styles.headerRight}>
+        {/* ✅ INDICADOR DE SINCRONIZACIÓN COMPACTO */}
+        <div className={styles.syncIndicator}>
+          <div
+            className={`${styles.syncIcon} ${
+              isOnline ? styles.online : styles.offline
+            }`}
+          >
+            {isSyncing ? (
+              <FiRefreshCw className={styles.syncSpinner} />
+            ) : isOnline ? (
+              <FiWifi className={styles.wifiIcon} />
+            ) : (
+              <FiWifiOff className={styles.wifiOffIcon} />
+            )}
+          </div>
+          <div className={styles.syncInfo}>
+            <span className={styles.syncStatus}>
+              {isSyncing
+                ? "Sincronizando..."
+                : isOnline
+                ? "En línea"
+                : "Offline"}
+            </span>
+            {pendingCount > 0 && (
+              <span className={styles.pendingCount}>
+                {pendingCount} pendiente{pendingCount !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {pendingCount > 0 && isOnline && !isSyncing && (
+            <button
+              className={styles.syncButton}
+              onClick={forceSync}
+              title="Sincronizar ahora"
+            >
+              <FiRefreshCw className={styles.syncButtonIcon} />
+            </button>
+          )}
+        </div>
+
         {/* ✅ INDICADOR DE GANANCIAS EN TIEMPO REAL */}
         {sesionAbierta ? (
           <div className={styles.earningsIndicator}>
@@ -115,9 +158,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                 <span className={styles.salesCount}>
                   {cantidadVentas} ventas
                 </span>
-                <span className={styles.totalSales}>
-                  {formatCurrency(ventasTotales)} total
-                </span>
               </div>
             </div>
           </div>
@@ -128,9 +168,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
             </div>
             <div className={styles.noSessionInfo}>
               <span className={styles.noSessionLabel}>Sesión No Iniciada</span>
-              <span className={styles.noSessionText}>
-                Abre una sesión para comenzar
-              </span>
+              <span className={styles.noSessionText}>Abre una sesión</span>
             </div>
           </div>
         )}

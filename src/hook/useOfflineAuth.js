@@ -7,6 +7,7 @@ export const useOfflineAuth = () => {
   const [offlineUsers, setOfflineUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasOfflineData, setHasOfflineData] = useState(false);
+  const [usersStats, setUsersStats] = useState(null);
 
   useEffect(() => {
     loadOfflineUsers();
@@ -16,8 +17,17 @@ export const useOfflineAuth = () => {
   const loadOfflineUsers = async () => {
     try {
       setIsLoading(true);
+
+      // ✅ LIMPIAR DUPLICADOS primero (opcional, puedes comentar esto después del primer uso)
+      // await UserOfflineService.cleanupDuplicateUsers();
+
       const users = await UserOfflineService.getAllOfflineUsers();
+      const stats = await UserOfflineService.getOfflineUsersStats();
+
       setOfflineUsers(users);
+      setUsersStats(stats);
+
+      console.log("📊 Estadísticas de usuarios:", stats);
     } catch (error) {
       console.error("Error cargando usuarios offline:", error);
     } finally {
@@ -27,7 +37,7 @@ export const useOfflineAuth = () => {
 
   const checkOfflineData = async () => {
     try {
-      const hasUsers = await UserOfflineService.hasOfflineUsers();
+      const hasUsers = offlineUsers.length > 0;
 
       // Verificar también si hay datos maestros
       const masterData = await SyncService.loadMasterDataFromCache();
@@ -95,10 +105,12 @@ export const useOfflineAuth = () => {
     offlineUsers,
     isLoading,
     hasOfflineData,
+    usersStats,
     loginOffline,
     syncUsers,
     getOfflineUserByUsername,
     loadOfflineUsers,
     checkOfflineData,
+    cleanupDuplicates: UserOfflineService.cleanupDuplicateUsers,
   };
 };
