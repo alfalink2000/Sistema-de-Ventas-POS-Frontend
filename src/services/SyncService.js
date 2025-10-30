@@ -866,6 +866,8 @@ class SyncService {
     return this.trySync();
   }
 
+  // En SyncService.js, reemplaza el healthCheck con esta versión corregida:
+
   async healthCheck() {
     const checks = {
       indexedDB: false,
@@ -888,6 +890,7 @@ class SyncService {
 
       checks.storage = await IndexedDBService.estimateSize();
 
+      // ✅ USAR MÉTODOS SEGUROS QUE MANEJAN ÍNDICES FALTANTES
       const [pendingSessions, pendingSales, pendingClosures] =
         await Promise.all([
           IndexedDBService.safeGetAll(
