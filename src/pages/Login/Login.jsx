@@ -1,15 +1,35 @@
-// pages/Login/Login.jsx
+// pages/Login/Login.jsx - VERSIÓN COMPLETA Y CORREGIDA
 import { useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import LoginForm from "../../components/features/auth/LoginForm/LoginForm";
 import OfflineDataStatus from "../../components/offline/OfflineDataStatus/OfflineDataStatus";
+import { useOfflineSync } from "../../hooks/useOfflineSync";
+import { syncOfflineUsers } from "../../actions/authActions";
 import styles from "./Login.module.css";
 
 const Login = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isSyncing } = useOfflineSync();
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      console.log("🌐 Conexión restaurada");
+      setIsOnline(true);
+
+      // Sincronizar usuarios automáticamente cuando hay conexión
+      if (!isSyncing) {
+        setTimeout(() => {
+          dispatch(syncOfflineUsers());
+        }, 2000);
+      }
+    };
+
+    const handleOffline = () => {
+      console.log("📴 Conexión perdida - Modo offline");
+      setIsOnline(false);
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -18,13 +38,50 @@ const Login = () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [dispatch, isSyncing]);
+
+  // Redirigir si ya está autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log("✅ Usuario autenticado, redirigiendo...");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 500);
+    }
+  }, [isAuthenticated]);
 
   return (
     <div className={styles.loginContainer}>
-      {/* ✅ HEADER FIJO CON OFFLINE STATUS */}
+      {/* ✅ HEADER MEJORADO CON ESTADO OFFLINO */}
       <div className={styles.offlineHeader}>
         <OfflineDataStatus />
+
+        {!isOnline && (
+          <div className={styles.offlineBanner}>
+            <div className={styles.offlineContent}>
+              <span className={styles.offlineIcon}>📱</span>
+              <div>
+                <strong>Modo Offline Activado</strong>
+                <p>
+                  Puedes iniciar sesión con credenciales previamente
+                  sincronizadas
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isOnline && isSyncing && (
+          <div className={styles.syncBanner}>
+            <div className={styles.syncContent}>
+              <span className={styles.syncIcon}>🔄</span>
+              <div>
+                <strong>Sincronizando datos...</strong>
+                <p>Actualizando información para modo offline</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className={styles.loginBackground}>
@@ -32,7 +89,6 @@ const Login = () => {
       </div>
 
       <div className={styles.loginCard}>
-        {/* HEADER ORIGINAL SIN OFFLINE STATUS */}
         <div className={styles.loginHeader}>
           <div className={styles.logo}>
             <div className={styles.reactIcon}>
@@ -42,13 +98,34 @@ const Login = () => {
             </div>
             <div className={styles.logoText}>
               <h1>KioskoFlow</h1>
-              <p>Sistema de Punto de Venta</p>
+              <p>Sistema de Punto de Venta {!isOnline && "(Offline)"}</p>
+              {isOnline && (
+                <div className={styles.onlineStatus}>
+                  <span className={styles.statusDot}></span>
+                  Conectado
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* FORMULARIO SIN CAMBIOS */}
         <LoginForm />
+
+        {/* ✅ INFORMACIÓN ADICIONAL PARA MODO OFFLINO */}
+        {!isOnline && (
+          <div className={styles.offlineInfo}>
+            <h4>💡 Información sobre Modo Offline</h4>
+            <ul>
+              <li>• Solo usuarios previamente sincronizados pueden acceder</li>
+              <li>• Las ventas se guardarán localmente</li>
+              <li>
+                • Los datos se sincronizarán automáticamente al recuperar
+                conexión
+              </li>
+              <li>• Algunas funciones pueden estar limitadas</li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

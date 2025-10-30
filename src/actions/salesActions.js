@@ -1,145 +1,203 @@
-// src/actions/salesActions.js - VERSIÓN COMPLETAMENTE CORREGIDA
+// actions/salesActions.js - CON SOPORTE OFFLINE COMPLETO
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
-import IndexedDBService from "../services/IndexedDBService";
-import SyncService from "../services/SyncService";
 import Swal from "sweetalert2";
+import { useOfflineOperations } from "../hooks/useOfflineOperations";
 
+export const loadSales = (limite = 50, pagina = 1) => {
+  return async (dispatch) => {
+    dispatch({ type: types.salesStartLoading });
+
+    try {
+      console.log(`🔄 [SALES] Cargando ventas...`, {
+        limite,
+        pagina,
+        online: navigator.onLine,
+      });
+
+      let ventas = [];
+
+      if (navigator.onLine) {
+        // ✅ CON CONEXIÓN: Cargar desde API
+        const response = await fetchConToken(
+          `ventas?limite=${limite}&pagina=${pagina}`
+        );
+
+        if (response && response.ok === true) {
+          ventas = response.ventas || [];
+          console.log(
+            `✅ [SALES] ${ventas.length} ventas cargadas desde servidor`
+          );
+        } else {
+          console.warn("⚠️ [SALES] Respuesta no exitosa desde API");
+        }
+      }
+
+      // ✅ EN OFFLINE O COMO FALLBACK: Cargar ventas pendientes locales
+      const { getPendingSales } = useOfflineOperations();
+      const ventasPendientes = await getPendingSales();
+
+      if (ventasPendientes.length > 0) {
+        console.log(
+          `📱 [SALES] ${ventasPendientes.length} ventas pendientes de sincronizar`
+        );
+        // Combinar ventas del servidor con ventas pendientes locales
+        ventas = [...ventasPendientes, ...ventas];
+      }
+
+      // ✅ ENRIQUECER DATOS PARA EL FRONTEND
+      const ventasEnriquecidas = ventas.map((venta) => ({
+        ...venta,
+        estado_venta: venta.sincronizado ? "completada" : "pendiente",
+        es_local: !!venta.es_local,
+        icono_estado: venta.sincronizado ? "✅" : "⏳",
+        color_estado: venta.sincronizado ? "success" : "warning",
+      }));
+
+      // ✅ ORDENAR POR FECHA (MÁS RECIENTE PRIMERO)
+      const ventasOrdenadas = ventasEnriquecidas.sort((a, b) => {
+        return new Date(b.fecha_venta) - new Date(a.fecha_venta);
+      });
+
+      console.log(`✅ [SALES] ${ventasOrdenadas.length} ventas procesadas`);
+
+      dispatch({
+        type: types.salesLoad,
+        payload: ventasOrdenadas,
+      });
+
+      return ventasOrdenadas;
+    } catch (error) {
+      console.error("❌ [SALES] Error cargando ventas:", error);
+
+      // ✅ FALLBACK: Cargar solo ventas pendientes locales
+      try {
+        const { getPendingSales } = useOfflineOperations();
+        const ventasPendientes = await getPendingSales();
+
+        dispatch({
+          type: types.salesLoad,
+          payload: ventasPendientes,
+        });
+
+        return ventasPendientes;
+      } catch (offlineError) {
+        dispatch({
+          type: types.salesLoad,
+          payload: [],
+        });
+        return [];
+      }
+    } finally {
+      dispatch({ type: types.salesFinishLoading });
+    }
+  };
+};
+
+// ✅ CREAR VENTA CON SOPORTE OFFLINE COMPLETO
 export const createSale = (saleData) => {
   return async (dispatch, getState) => {
     try {
-      console.log("🔄 Procesando venta (con soporte offline)...", saleData);
+      console.log("🔄 [SALES] Creando venta...", {
+        productos: saleData.productos?.length,
+        online: navigator.onLine,
+      });
 
-      // Validar datos antes de procesar
-      if (!saleData.productos || saleData.productos.length === 0) {
-        throw new Error("No hay productos en la venta");
+      // ✅ VALIDAR STOCK ANTES DE PROCESAR
+      const { validateStockForSale, processSaleStockUpdate } =
+        useOfflineOperations();
+
+      const validacionStock = await validateStockForSale(saleData.productos);
+
+      if (!validacionStock.valido) {
+        const mensajeError = validacionStock.errores.join("\n");
+        throw new Error(`Error de stock:\n${mensajeError}`);
       }
 
+      let resultado;
       const isOnline = navigator.onLine;
 
-      // ✅ OBTENER SESIÓN ACTIVA DEL STATE
-      const { sesionesCaja, auth } = getState();
-      const { sesionAbierta } = sesionesCaja;
-      const { user } = auth;
-
-      console.log("📋 Sesión activa encontrada:", sesionAbierta);
-
-      if (!sesionAbierta) {
-        throw new Error(
-          "No hay una sesión de caja activa. Abre una sesión primero."
-        );
-      }
-
-      // Generar ID local único
-      const id_local = `local_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
-
-      // ✅ DATOS COMPLETOS CON REFERENCIA A SESIÓN
-      const saleWithLocalId = {
-        ...saleData,
-        id_local,
-        sincronizado: false,
-        es_local: true,
-        fecha_creacion: new Date().toISOString(),
-        // ✅ REFERENCIA CRÍTICA A LA SESIÓN
-        sesion_caja_id: sesionAbierta.id, // ID del servidor (si existe)
-        sesion_caja_id_local: sesionAbierta.id_local || sesionAbierta.id, // ID local
-        vendedor_id: user.id,
-        vendedor_nombre: user.nombre || user.username,
-        estado: "completada",
-        fecha_venta: new Date().toISOString(),
-      };
-
-      console.log("💾 Datos de venta a guardar:", {
-        sesion_caja_id: saleWithLocalId.sesion_caja_id,
-        sesion_caja_id_local: saleWithLocalId.sesion_caja_id_local,
-        total: saleWithLocalId.total,
-        productos: saleWithLocalId.productos?.length,
-      });
-
       if (isOnline) {
-        // Intentar enviar directamente al servidor
-        try {
-          const response = await fetchConToken("ventas", saleData, "POST");
+        // ✅ CON CONEXIÓN: Crear en servidor
+        const response = await fetchConToken("ventas", saleData, "POST");
 
-          if (response.ok && response.venta) {
-            console.log("✅ Venta enviada directamente al servidor");
+        if (response && response.ok === true && response.venta) {
+          resultado = response.venta;
+          console.log(
+            "✅ [SALES] Venta creada exitosamente en servidor:",
+            response.venta.id
+          );
 
-            dispatch({
-              type: types.saleAddNew,
-              payload: response.venta,
-            });
+          // ✅ ACTUALIZAR STOCK EN SERVIDOR (ya se hace automáticamente en el backend)
+        } else {
+          throw new Error(
+            response?.error || "Error al crear venta en servidor"
+          );
+        }
+      } else {
+        // ✅ SIN CONEXIÓN: Crear localmente
+        const { createSaleOffline } = useOfflineOperations();
 
-            await Swal.fire({
-              icon: "success",
-              title: "¡Venta Exitosa!",
-              text: `Venta #${response.venta.id} registrada - Total: $${saleData.total}`,
-              timer: 2000,
-              showConfirmButton: false,
-            });
+        const resultadoOffline = await createSaleOffline(saleData);
 
-            dispatch(clearCart());
-            return { success: true, id: response.venta.id, es_local: false };
+        if (resultadoOffline.success) {
+          resultado = resultadoOffline.venta;
+          console.log(
+            "✅ [SALES] Venta creada localmente:",
+            resultadoOffline.id_local
+          );
+
+          // ✅ ACTUALIZAR STOCK LOCALMENTE
+          const actualizacionStock = await processSaleStockUpdate(
+            saleData.productos,
+            resultadoOffline.id_local
+          );
+
+          if (!actualizacionStock.success) {
+            console.error(
+              "⚠️ [SALES] Algunos stocks no se actualizaron:",
+              actualizacionStock.resultados.fallidos
+            );
           }
-        } catch (onlineError) {
-          console.log(
-            "🌐 Falló envío online, guardando localmente:",
-            onlineError
-          );
-          // Continuar con guardado local
+        } else {
+          throw new Error(resultadoOffline.error);
         }
       }
 
-      // ✅ GUARDAR VENTA OFFLINE CON REFERENCIA A SESIÓN
-      console.log("💾 Guardando venta offline en IndexedDB...");
-      await IndexedDBService.add("ventas_pendientes", saleWithLocalId);
-
-      // ✅ GUARDAR DETALLES DE VENTA
-      if (saleData.productos && saleData.productos.length > 0) {
-        console.log(
-          `📦 Guardando ${saleData.productos.length} detalles de venta...`
-        );
-
-        for (const producto of saleData.productos) {
-          const detalleVenta = {
-            venta_id_local: id_local,
-            producto_id: producto.producto_id,
-            cantidad: producto.cantidad,
-            precio_unitario: producto.precio_unitario,
-            subtotal: producto.subtotal,
-            sincronizado: false,
-            fecha_creacion: new Date().toISOString(),
-          };
-
-          await IndexedDBService.add("detalles_venta_pendientes", detalleVenta);
-          console.log(
-            `✅ Detalle guardado: ${producto.producto_id} x ${producto.cantidad}`
-          );
-        }
-      }
-
-      console.log("💾 Venta guardada localmente:", {
-        id_local,
-        sesion: saleWithLocalId.sesion_caja_id_local,
-        total: saleWithLocalId.total,
+      // ✅ ACTUALIZAR ESTADO GLOBAL
+      dispatch({
+        type: types.saleAddNew,
+        payload: resultado,
       });
 
-      // Mostrar confirmación al usuario
+      // ✅ ACTUALIZAR PRODUCTOS EN ESTADO GLOBAL (para reflejar cambios de stock)
+      if (!isOnline) {
+        dispatch({
+          type: types.productsUpdateFromSale,
+          payload: saleData.productos,
+        });
+      }
+
+      // ✅ MOSTRAR CONFIRMACIÓN
+      const mensajeExito = isOnline
+        ? `Venta #${resultado.id} registrada exitosamente`
+        : `Venta local #${resultado.id_local} guardada. Se sincronizará cuando recuperes la conexión`;
+
       await Swal.fire({
-        icon: "success",
-        title: "Venta Guardada (Offline)",
-        text: `La venta se guardó localmente y se sincronizará cuando haya conexión. Total: $${saleData.total}`,
+        icon: isOnline ? "success" : "info",
+        title: isOnline ? "¡Venta Exitosa!" : "Venta Guardada (Offline)",
+        text: mensajeExito,
         timer: 3000,
         showConfirmButton: false,
       });
 
-      // Limpiar carrito incluso en modo offline
-      dispatch(clearCart());
-
-      return { success: true, id: id_local, es_local: true };
+      return {
+        success: true,
+        venta: resultado,
+        es_local: !isOnline,
+      };
     } catch (error) {
-      console.error("❌ Error en createSale:", error);
+      console.error("❌ [SALES] Error creando venta:", error);
 
       await Swal.fire({
         icon: "error",
@@ -148,49 +206,243 @@ export const createSale = (saleData) => {
         confirmButtonText: "Entendido",
       });
 
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   };
 };
 
-// ... el resto de las acciones se mantienen igual ...
-export const loadSales = (limite = 50, pagina = 1) => {
+// ✅ OBTENER VENTAS PENDIENTES DE SINCRONIZACIÓN
+export const loadPendingSales = () => {
   return async (dispatch) => {
-    console.log(`🔄 [SALES] Iniciando carga de ventas...`);
-    dispatch({ type: types.salesStartLoading });
-
     try {
-      const response = await fetchConToken(
-        `ventas?limite=${limite}&pagina=${pagina}`
+      console.log("🔄 [SALES] Cargando ventas pendientes...");
+
+      const { getPendingSales } = useOfflineOperations();
+      const ventasPendientes = await getPendingSales();
+
+      console.log(
+        `⏳ [SALES] ${ventasPendientes.length} ventas pendientes de sincronizar`
       );
-      console.log("📦 [SALES] Respuesta del backend:", response);
-
-      let ventas = [];
-
-      if (response && response.ok === true && response.ventas) {
-        ventas = response.ventas;
-      }
-
-      console.log(`✅ [SALES] ${ventas.length} ventas cargadas`);
 
       dispatch({
-        type: types.salesLoad,
-        payload: ventas,
+        type: types.salesLoadPending,
+        payload: ventasPendientes,
       });
 
-      return ventas;
+      return ventasPendientes;
     } catch (error) {
-      console.error("❌ [SALES] Error cargando ventas:", error);
-      dispatch({
-        type: types.salesLoad,
-        payload: [],
-      });
+      console.error("❌ [SALES] Error cargando ventas pendientes:", error);
       return [];
     }
   };
 };
 
-// Action para limpiar carrito (necesario para el código anterior)
-export const clearCart = () => ({
-  type: types.cartClear,
+// ✅ SINCRONIZAR VENTAS PENDIENTES MANUALMENTE
+export const syncPendingSales = () => {
+  return async (dispatch) => {
+    try {
+      if (!navigator.onLine) {
+        await Swal.fire({
+          icon: "warning",
+          title: "Sin conexión",
+          text: "No hay conexión a internet para sincronizar",
+          confirmButtonText: "Entendido",
+        });
+        return false;
+      }
+
+      await Swal.fire({
+        title: "Sincronizando...",
+        text: "Enviando ventas pendientes al servidor",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const { getPendingSales, fullSync } = useOfflineOperations();
+      const ventasPendientes = await getPendingSales();
+
+      if (ventasPendientes.length === 0) {
+        Swal.close();
+        await Swal.fire({
+          icon: "info",
+          title: "Sin ventas pendientes",
+          text: "No hay ventas pendientes de sincronizar",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+        return true;
+      }
+
+      console.log(
+        `🔄 [SALES] Sincronizando ${ventasPendientes.length} ventas pendientes...`
+      );
+
+      // ✅ USAR SINCRONIZACIÓN COMPLETA
+      const syncResult = await fullSync();
+
+      Swal.close();
+
+      if (syncResult.success) {
+        // ✅ RECARGAR VENTAS DESPUÉS DE SINCRONIZAR
+        await dispatch(loadSales());
+
+        await Swal.fire({
+          icon: "success",
+          title: "Sincronización completada",
+          html: `
+            <div style="text-align: left;">
+              <p><strong>Ventas sincronizadas:</strong></p>
+              <p>✅ Ventas: ${syncResult.sales?.success || 0} exitosas</p>
+              <p>📊 Total procesado: ${syncResult.sales?.total || 0}</p>
+              ${
+                syncResult.sales?.failed > 0
+                  ? `<p>❌ Falladas: ${syncResult.sales.failed}</p>`
+                  : ""
+              }
+            </div>
+          `,
+          confirmButtonText: "Aceptar",
+        });
+
+        return true;
+      } else {
+        throw new Error(syncResult.error || "Error en sincronización");
+      }
+    } catch (error) {
+      console.error("❌ [SALES] Error sincronizando ventas:", error);
+
+      Swal.close();
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error de sincronización",
+        text:
+          error.message || "No se pudieron sincronizar las ventas pendientes",
+        confirmButtonText: "Entendido",
+      });
+
+      return false;
+    }
+  };
+};
+
+// ✅ OBTENER VENTA POR ID
+export const getSaleById = (saleId) => {
+  return async (dispatch) => {
+    try {
+      console.log(`🔄 [SALES] Obteniendo venta: ${saleId}`);
+
+      let venta;
+
+      if (navigator.onLine) {
+        // Buscar en servidor
+        const response = await fetchConToken(`ventas/${saleId}`);
+
+        if (response.ok && response.venta) {
+          venta = response.venta;
+        } else {
+          throw new Error(response.error || "Error al obtener venta");
+        }
+      } else {
+        // Buscar en ventas locales
+        const { getPendingSales } = useOfflineOperations();
+        const ventasPendientes = await getPendingSales();
+        venta = ventasPendientes.find((v) => v.id_local === saleId);
+
+        if (!venta) {
+          throw new Error("Venta no encontrada localmente");
+        }
+      }
+
+      dispatch({
+        type: types.saleSetActive,
+        payload: venta,
+      });
+
+      return venta;
+    } catch (error) {
+      console.error(`❌ [SALES] Error obteniendo venta ${saleId}:`, error);
+      throw error;
+    }
+  };
+};
+
+// ✅ CANCELAR VENTA
+export const cancelSale = (saleId, motivo) => {
+  return async (dispatch) => {
+    try {
+      if (!navigator.onLine) {
+        throw new Error("No se pueden cancelar ventas en modo offline");
+      }
+
+      const result = await Swal.fire({
+        title: "¿Estás seguro?",
+        text: "Esta acción no se puede deshacer",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Sí, cancelar",
+        cancelButtonText: "Volver",
+      });
+
+      if (!result.isConfirmed) {
+        return { cancelled: true };
+      }
+
+      const response = await fetchConToken(
+        `ventas/cancelar/${saleId}`,
+        { motivo },
+        "PUT"
+      );
+
+      if (response.ok && response.message) {
+        dispatch({
+          type: types.saleUpdate,
+          payload: {
+            id: saleId,
+            estado: "cancelada",
+            motivo_cancelacion: motivo,
+          },
+        });
+
+        await Swal.fire({
+          icon: "success",
+          title: "Venta Cancelada",
+          text: response.message,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+
+        return { success: true };
+      } else {
+        throw new Error(response.error || "Error al cancelar venta");
+      }
+    } catch (error) {
+      console.error(`❌ [SALES] Error cancelando venta ${saleId}:`, error);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "Error al cancelar la venta",
+        confirmButtonText: "Entendido",
+      });
+
+      return { success: false, error: error.message };
+    }
+  };
+};
+
+export const setActiveSale = (sale) => ({
+  type: types.saleSetActive,
+  payload: sale,
+});
+
+export const clearActiveSale = () => ({
+  type: types.saleClearActive,
 });

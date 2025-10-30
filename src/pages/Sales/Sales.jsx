@@ -1,40 +1,66 @@
-// pages/Sales/Sales.jsx - VERSIÓN ACTUALIZADA
+// pages/Sales/Sales.jsx - CON VENTAS OFFLINE COMPLETAS
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import ProductGridSales from "../../components/features/sales/ProductGridSales/ProductGridSales"; // ✅ NUEVO COMPONENTE
+import ProductGridSales from "../../components/features/sales/ProductGridSales/ProductGridSales";
 import Cart from "../../components/features/sales/Cart/Cart";
 import PaymentModal from "../../components/features/sales/PaymentModal/PaymentModal";
 import SesionCajaModal from "../../components/features/caja/SesionCajaModal/SesionCajaModal";
 import { loadProducts } from "../../actions/productsActions";
 import { clearCart } from "../../actions/cartActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
-import { FiFilter, FiSearch, FiPackage } from "react-icons/fi";
+import { useOfflineSync } from "../../hooks/useOfflineSync";
+import {
+  FiFilter,
+  FiSearch,
+  FiPackage,
+  FiWifi,
+  FiWifiOff,
+} from "react-icons/fi";
 import styles from "./Sales.module.css";
 
-import ConnectionStatus from "../../components/ui/ConnectionStatus/ConnectionStatus";
-import { useOfflineSales } from "../../hook/useOfflineSales";
-
 const Sales = () => {
-  const { isOnline } = useOfflineSales();
-
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [categories, setCategories] = useState([]);
+  const [showSesionModal, setShowSesionModal] = useState(false);
 
   const dispatch = useDispatch();
+  const { isOnline, syncStatus, getProductsOffline, createSaleOffline } =
+    useOfflineSync();
 
   const { products, loading, error } = useSelector((state) => state.products);
   const { items } = useSelector((state) => state.cart);
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
   const { user } = useSelector((state) => state.auth);
 
+  // Cargar productos (online u offline)
   useEffect(() => {
-    dispatch(loadProducts());
+    const loadProductsData = async () => {
+      if (isOnline) {
+        // Online: cargar desde API
+        dispatch(loadProducts());
+      } else {
+        // Offline: cargar desde IndexedDB
+        try {
+          const offlineProducts = await getProductsOffline();
+          // Dispatch manual para actualizar estado
+          dispatch({
+            type: "PRODUCTS_LOAD_OFFLINE",
+            payload: offlineProducts,
+          });
+        } catch (error) {
+          console.error("Error cargando productos offline:", error);
+        }
+      }
+    };
+
+    loadProductsData();
+
     if (user) {
       dispatch(loadOpenSesion(user.id));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user, isOnline, getProductsOffline]);
 
   // Extraer categorías únicas de los productos
   useEffect(() => {
@@ -74,6 +100,13 @@ const Sales = () => {
   const handleSaleSuccess = (saleData) => {
     console.log("Venta exitosa:", saleData);
     dispatch(clearCart());
+
+    // Mostrar mensaje según el modo
+    if (!isOnline) {
+      alert(
+        `✅ Venta guardada localmente (#${saleData.id_local}). Se sincronizará cuando haya conexión.`
+      );
+    }
   };
 
   const clearFilters = () => {
@@ -90,9 +123,21 @@ const Sales = () => {
             {isOnline
               ? "Conectado al servidor"
               : "Modo offline - Las ventas se guardarán localmente"}
+            {syncStatus.pendingSales > 0 &&
+              ` (${syncStatus.pendingSales} pendientes)`}
           </p>
         </div>
-        <ConnectionStatus />
+
+        {/* Indicador de conexión */}
+        <div
+          className={`${styles.connectionStatus} ${
+            isOnline ? styles.online : styles.offline
+          }`}
+        >
+          {isOnline ? <FiWifi /> : <FiWifiOff />}
+          <span>{isOnline ? "En línea" : "Offline"}</span>
+        </div>
+
         <div className={styles.headerStats}>
           <div className={styles.stat}>
             <span className={styles.statNumber}>{filteredProducts.length}</span>
@@ -102,6 +147,14 @@ const Sales = () => {
             <span className={styles.statNumber}>{items.length}</span>
             <span className={styles.statLabel}>En carrito</span>
           </div>
+          {!isOnline && (
+            <div className={styles.stat}>
+              <span className={styles.statNumber}>
+                {syncStatus.pendingSales}
+              </span>
+              <span className={styles.statLabel}>Pendientes</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -112,6 +165,26 @@ const Sales = () => {
           <div className={styles.alertContent}>
             <h3>No hay sesión de caja activa</h3>
             <p>Debes abrir una sesión de caja para realizar ventas</p>
+            <button
+              className={styles.openSessionBtn}
+              onClick={() => setShowSesionModal(true)}
+            >
+              Abrir Sesión
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Alerta de modo offline */}
+      {!isOnline && (
+        <div className={styles.offlineAlert}>
+          <div className={styles.alertIcon}>📱</div>
+          <div className={styles.alertContent}>
+            <h3>Modo Offline Activado</h3>
+            <p>
+              Las ventas se guardarán localmente y se sincronizarán
+              automáticamente cuando recuperes la conexión
+            </p>
           </div>
         </div>
       )}
@@ -174,6 +247,7 @@ const Sales = () => {
                 <span className={styles.resultsCount}>
                   ({filteredProducts.length}{" "}
                   {filteredProducts.length === 1 ? "producto" : "productos"})
+                  {!isOnline && " 📱"}
                 </span>
               </h2>
               {sesionAbierta && (
@@ -206,6 +280,12 @@ const Sales = () => {
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         onSuccess={handleSaleSuccess}
+        isOnline={isOnline}
+      />
+
+      <SesionCajaModal
+        isOpen={showSesionModal}
+        onClose={() => setShowSesionModal(false)}
       />
     </div>
   );

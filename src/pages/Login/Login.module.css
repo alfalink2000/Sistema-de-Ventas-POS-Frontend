@@ -1,4 +1,4 @@
-/* pages/Login/Login.module.css */
+/* pages/Login/Login.module.css - VERSIÓN MEJORADA */
 .loginContainer {
   height: 100vh;
   display: flex;
@@ -13,6 +13,80 @@
   right: 0;
   bottom: 0;
   overflow: auto;
+}
+
+/* HEADER FIJO PARA OFFLINE STATUS */
+.offlineHeader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e2e8f0;
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.loginContainer {
+  position: relative;
+  padding-top: 80px; /* Espacio para el header fijo */
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* NUEVOS ESTILOS PARA BANNERS */
+.offlineBanner {
+  background: linear-gradient(135deg, #fef3c7, #f59e0b);
+  padding: 12px 20px;
+  border-left: 4px solid #d97706;
+  width: 100%;
+}
+
+.offlineContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #92400e;
+}
+
+.offlineIcon {
+  font-size: 1.5rem;
+}
+
+.syncBanner {
+  background: linear-gradient(135deg, #dbeafe, #3b82f6);
+  padding: 12px 20px;
+  border-left: 4px solid #1d4ed8;
+  width: 100%;
+}
+
+.syncContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #1e40af;
+}
+
+.syncIcon {
+  font-size: 1.5rem;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Fondo con patrón sutil */
@@ -113,6 +187,62 @@
   font-weight: 500;
 }
 
+.onlineStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  color: var(--color-gray-600);
+  justify-content: center;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.offlineInfo {
+  padding: 20px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.offlineInfo h4 {
+  margin: 0 0 12px;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.offlineInfo ul {
+  margin: 0;
+  padding-left: 16px;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.offlineInfo li {
+  margin-bottom: 4px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .loginCard {
@@ -128,6 +258,10 @@
 
   .logoText h1 {
     font-size: 1.25rem;
+  }
+
+  .offlineHeader {
+    position: fixed;
   }
 }
 
@@ -155,11 +289,24 @@
   .logoText p {
     font-size: 0.75rem;
   }
+
+  .offlineBanner,
+  .syncBanner {
+    padding: 10px 16px;
+  }
 }
 
 /* Mejoras de accesibilidad */
 @media (prefers-reduced-motion: reduce) {
   .reactIcon {
+    animation: none;
+  }
+
+  .syncIcon {
+    animation: none;
+  }
+
+  .statusDot {
     animation: none;
   }
 }
@@ -170,30 +317,4 @@ body {
 
 .loginContainer * {
   box-sizing: border-box;
-}
-/* HEADER FIJO PARA OFFLINE STATUS */
-.offlineHeader {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: auto;
-  min-height: 40px;
-  background: rgba(255, 255, 255, 0.95);
-  border-bottom: 1px solid #e2e8f0;
-  backdrop-filter: blur(10px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* padding: 8px 20px; */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-.loginContainer {
-  position: relative;
-  padding-top: 80px; /* Espacio para el header fijo */
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }

@@ -1,5 +1,7 @@
 // store/types.js
 export const types = {
+  connectionStatusUpdate: "[connection] Status Update",
+
   // Auth Types
   authStartLogin: "[auth] Start Login",
   authLogin: "[auth] Login",
@@ -9,6 +11,8 @@ export const types = {
   authCheckingFinish: "[auth] Checking Finish",
   authError: "[auth] Error",
   authClearError: "[auth] Clear Error",
+  authSyncComplete: "[auth] Sync Complete",
+  authStatsLoaded: "[auth] Stats Loaded",
 
   // Users
   usersStartLoading: "[Users] Start loading",

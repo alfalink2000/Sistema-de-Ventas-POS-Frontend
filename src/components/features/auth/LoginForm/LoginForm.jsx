@@ -1,7 +1,8 @@
-// components/features/auth/LoginForm/LoginForm.jsx
+// components/features/auth/LoginForm/LoginForm.jsx - CON AUTENTICACIÓN OFFLINE
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { startLogin } from "../../../../actions/authActions";
+import { useOfflineSync } from "../../../../hooks/useOfflineSync";
 import Input from "../../../ui/Input/Input";
 import styles from "./LoginForm.module.css";
 
@@ -12,39 +13,74 @@ const LoginForm = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(false);
 
   const dispatch = useDispatch();
+  const { loginOffline, isOnline } = useOfflineSync();
   const { loading, error, isAuthenticated } = useSelector(
     (state) => state.auth
   );
 
-  // Sincronizar el loading local con el del estado global
+  // Detectar modo offline
+  useEffect(() => {
+    setOfflineMode(!isOnline);
+  }, [isOnline]);
+
+  // Sincronizar loading local con el del estado global
   useEffect(() => {
     setLocalLoading(loading);
   }, [loading]);
-
-  // Redirigir si la autenticación es exitosa
-  useEffect(() => {
-    if (isAuthenticated) {
-      console.log("✅ Autenticación exitosa, redirigiendo...");
-      // Pequeño delay para que el usuario vea el mensaje de éxito
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 500);
-    }
-  }, [isAuthenticated]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.username.trim() || !formData.password.trim()) return;
 
-    console.log("🔄 Iniciando proceso de login...");
+    console.log("🔄 Iniciando proceso de login...", {
+      offline: offlineMode,
+      username: formData.username,
+    });
     setLocalLoading(true);
 
     try {
-      await dispatch(startLogin(formData.username.trim(), formData.password));
+      let result;
+
+      if (offlineMode) {
+        // ✅ MODO OFFLINE: Usar controlador offline
+        console.log("📱 Intentando login offline...");
+        result = await loginOffline(
+          formData.username.trim(),
+          formData.password
+        );
+
+        if (result.success) {
+          console.log("✅ Login offline exitoso");
+          // Dispatch manual para autenticación offline
+          dispatch({
+            type: "AUTH_LOGIN_OFFLINE",
+            payload: {
+              user: result.user,
+              token: result.token,
+              isOffline: true,
+            },
+          });
+        } else {
+          throw new Error(result.error || "Error en autenticación offline");
+        }
+      } else {
+        // ✅ MODO ONLINE: Usar acción normal
+        console.log("🌐 Intentando login online...");
+        result = await dispatch(
+          startLogin(formData.username.trim(), formData.password)
+        );
+
+        if (!result?.success) {
+          throw new Error(result?.error || "Error en autenticación online");
+        }
+      }
     } catch (err) {
       console.error("❌ Error en handleSubmit:", err);
+      // El error se maneja en el estado de Redux
+    } finally {
       setLocalLoading(false);
     }
   };
@@ -57,6 +93,12 @@ const LoginForm = () => {
   };
 
   const handleForgotPassword = () => {
+    if (offlineMode) {
+      alert(
+        "La recuperación de contraseña no está disponible en modo offline. Conéctate a internet para usar esta función."
+      );
+      return;
+    }
     console.log("Funcionalidad de recuperación de contraseña");
   };
 
@@ -102,10 +144,26 @@ const LoginForm = () => {
     </svg>
   );
 
+  const OfflineIcon = () => (
+    <svg className={styles.offlineIcon} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+    </svg>
+  );
+
   return (
     <form onSubmit={handleSubmit} className={styles.loginForm}>
       <div className={styles.formHeader}>
-        <p>Ingresa tus credenciales para acceder al sistema</p>
+        <p>
+          {offlineMode
+            ? "Ingresa tus credenciales sincronizadas previamente"
+            : "Ingresa tus credenciales para acceder al sistema"}
+        </p>
+        {offlineMode && (
+          <div className={styles.offlineNotice}>
+            <OfflineIcon />
+            <span>Modo Offline Activado</span>
+          </div>
+        )}
       </div>
 
       <div className={styles.formContent}>
@@ -154,6 +212,12 @@ const LoginForm = () => {
             <div className={styles.errorMessage}>
               <span className={styles.errorIcon}>⚠️</span>
               {error}
+              {offlineMode && (
+                <div className={styles.offlineHelp}>
+                  Asegúrate de haber iniciado sesión previamente con conexión a
+                  internet
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -164,17 +228,19 @@ const LoginForm = () => {
             disabled={localLoading || !formData.username || !formData.password}
             className={`${styles.submitButton} ${
               localLoading ? styles.submitButtonLoading : ""
-            }`}
+            } ${offlineMode ? styles.offlineButton : ""}`}
           >
             {localLoading ? (
               <div className={styles.loadingContent}>
                 <LoadingSpinner />
-                <span>Procesando...</span>
+                <span>{offlineMode ? "Verificando..." : "Procesando..."}</span>
               </div>
             ) : (
               <div className={styles.normalContent}>
-                <LockIcon />
-                <span>Acceder al Sistema</span>
+                {offlineMode ? <OfflineIcon /> : <LockIcon />}
+                <span>
+                  {offlineMode ? "Acceder Offline" : "Acceder al Sistema"}
+                </span>
               </div>
             )}
           </button>
@@ -185,7 +251,7 @@ const LoginForm = () => {
             type="button"
             onClick={handleForgotPassword}
             className={styles.forgotPassword}
-            disabled={localLoading}
+            disabled={localLoading || offlineMode}
           >
             ¿Olvidaste tu contraseña?
           </button>
@@ -195,7 +261,7 @@ const LoginForm = () => {
       <div className={styles.formFooter}>
         <p className={styles.helpText}>
           <ShieldIcon />
-          Sistema seguro • v1.0
+          Sistema seguro • v1.0 {offlineMode && "• Offline"}
         </p>
       </div>
     </form>

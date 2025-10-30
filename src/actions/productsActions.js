@@ -1,446 +1,506 @@
-// actions/productsActions.js - CORREGIDO IGUAL A TU EJEMPLO
+// actions/productsActions.js - CON SOPORTE OFFLINE COMPLETO
 import { types } from "../types/types";
+import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
-import { fetchAPIConfig } from "../helpers/fetchAPIConfig";
+import { useOfflineOperations } from "../hooks/useOfflineOperations";
 
-// ✅ ACTION PARA CARGAR PRODUCTOS (igual a tu ejemplo)
-export const loadProducts = (forceRefresh = false) => {
-  return async (dispatch, getState) => {
-    // ✅ SI YA TENEMOS PRODUCTOS Y NO ES FORZADO, NO RECARGAR
-    if (!forceRefresh && getState().products.products.length > 0) {
-      const lastUpdate = getState().products.lastUpdate;
-      const now = Date.now();
-      if (lastUpdate && now - lastUpdate < 10000) {
-        console.log("🔄 Productos ya cargados recientemente, omitiendo...");
-        return Promise.resolve();
-      }
-    }
-
-    console.log("📦 Cargando productos...");
-    dispatch(startLoading());
-
-    try {
-      const body = await fetchAPIConfig("productos");
-
-      if (body.ok) {
-        console.log(
-          `✅ ${body.productos.length} productos cargados exitosamente`
-        );
-        dispatch(loadProductsAction(body.productos));
-        return Promise.resolve();
-      } else {
-        console.error("❌ Error en respuesta de productos:", body.msg);
-        return Promise.reject(
-          new Error(body.msg || "Error cargando productos")
-        );
-      }
-    } catch (error) {
-      console.error("❌ Error de conexión en loadProducts:", error);
-      return Promise.reject(error);
-    } finally {
-      dispatch(finishLoading());
-    }
-  };
-};
-
-// ✅ ACTION PARA CREAR PRODUCTO (igual a tu ejemplo)
-export const createProduct = (formData) => {
+export const loadProducts = (filters = {}) => {
   return async (dispatch) => {
+    console.log("🔄 [PRODUCTS] Iniciando carga de productos...", {
+      online: navigator.onLine,
+      filters,
+    });
+
+    dispatch({ type: types.productsStartLoading });
+
     try {
-      Swal.fire({
-        title: "Creando producto...",
-        text: "Por favor espera",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
+      const { getProductsOffline, syncProductsOffline, isCacheUpdated } =
+        useOfflineOperations();
 
-      console.log("🚀 Enviando al servidor:", {
-        nombre: formData.get("nombre"),
-        precio: formData.get("precio"),
-        categoria_id: formData.get("categoria_id"),
-      });
+      let productos = [];
+      let fromCache = false;
 
-      const body = await fetchAPIConfig("productos", formData, "POST", true);
+      if (navigator.onLine) {
+        // ✅ CON CONEXIÓN: Sincronizar y cargar desde servidor
+        console.log("🌐 [PRODUCTS] Cargando desde servidor...");
 
-      Swal.close();
+        const response = await fetchConToken("productos");
+        console.log("📦 [PRODUCTS] Respuesta del backend:", response);
 
-      console.log("📥 Respuesta del servidor:", body);
+        if (response && response.ok === true) {
+          // Determinar estructura de respuesta
+          if (response.productos && Array.isArray(response.productos)) {
+            productos = response.productos;
+          } else if (Array.isArray(response)) {
+            productos = response;
+          } else if (response.rows && Array.isArray(response.rows)) {
+            productos = response.rows;
+          }
 
-      if (body.ok) {
-        dispatch(addNewProduct(body.product));
+          console.log(
+            `✅ [PRODUCTS] ${productos.length} productos cargados desde servidor`
+          );
 
-        Swal.fire({
-          icon: "success",
-          title: "¡Producto agregado!",
-          text: "Producto registrado correctamente",
-        });
-
-        return { success: true, data: body };
+          // ✅ SINCRONIZAR CON OFFLINE
+          const syncResult = await syncProductsOffline();
+          if (syncResult.success) {
+            console.log(
+              `💾 [PRODUCTS] ${syncResult.count} productos sincronizados offline`
+            );
+          }
+        } else {
+          console.warn(
+            "⚠️ [PRODUCTS] Respuesta no exitosa desde API, usando cache offline"
+          );
+          fromCache = true;
+          productos = await getProductsOffline(filters);
+        }
       } else {
-        Swal.fire("Error", body.msg, "error");
-        return { success: false, error: body.msg };
-      }
-    } catch (error) {
-      console.error("Error creando producto:", error);
-      Swal.close();
-
-      Swal.fire("Error", "Error de conexión al crear el producto", "error");
-      return { success: false, error: error.message };
-    }
-  };
-};
-
-// ✅ ACTION PARA ACTUALIZAR PRODUCTO (igual a tu ejemplo)
-export const updateProduct = (formData) => {
-  return async (dispatch) => {
-    try {
-      console.log("🔍 VERIFICANDO formData en updateProduct:");
-
-      if (!(formData instanceof FormData)) {
-        throw new Error("formData debe ser una instancia de FormData");
+        // ✅ SIN CONEXIÓN: Cargar desde cache offline
+        console.log("📱 [PRODUCTS] Modo offline - cargando desde cache local");
+        fromCache = true;
+        productos = await getProductsOffline(filters);
       }
 
-      // ✅ OBTENER EL ID COMO STRING (NO CONVERTIR A NÚMERO)
-      const productId = formData.get("id");
+      // ✅ APLICAR FILTROS ADICIONALES SI ES NECESARIO
+      if (filters.categoria_id && !fromCache) {
+        productos = productos.filter(
+          (p) => p.categoria_id === filters.categoria_id
+        );
+      }
+
+      if (filters.activo !== undefined && !fromCache) {
+        productos = productos.filter((p) => p.activo === filters.activo);
+      }
+
+      // ✅ ENRIQUECER DATOS PARA EL FRONTEND
+      const productosEnriquecidos = productos.map((producto) => ({
+        ...producto,
+        estado_stock:
+          producto.stock <= 0
+            ? "agotado"
+            : producto.stock <= producto.stock_minimo
+            ? "bajo"
+            : "normal",
+        necesita_reposicion: producto.stock <= producto.stock_minimo,
+        ganancia_estimada: producto.precio_venta - producto.precio_compra,
+        margen_ganancia:
+          producto.precio_compra > 0
+            ? (
+                ((producto.precio_venta - producto.precio_compra) /
+                  producto.precio_compra) *
+                100
+              ).toFixed(1)
+            : 0,
+      }));
+
       console.log(
-        "🆔 ID obtenido del FormData:",
-        productId,
-        `(tipo: ${typeof productId})`
+        `✅ [PRODUCTS] ${productosEnriquecidos.length} productos procesados (${
+          fromCache ? "CACHE" : "SERVER"
+        })`
       );
 
-      if (!productId) {
-        throw new Error("ID del producto no encontrado en FormData");
-      }
-
-      // ✅ USAR EL ID DIRECTAMENTE COMO STRING
-      console.log("✅ ID para la API:", productId);
-
-      // ✅ CREAR UN NUEVO FORMDATA SIN EL CAMPO 'id'
-      const cleanFormData = new FormData();
-
-      console.log("🧹 Limpiando FormData...");
-      for (let [key, value] of formData.entries()) {
-        if (key !== "id") {
-          cleanFormData.append(key, value);
-          console.log(`   ✅ Manteniendo: ${key} = ${value}`);
-        } else {
-          console.log(`   🗑️  Eliminando: ${key} = ${value}`);
-        }
-      }
-
-      Swal.fire({
-        title: "Actualizando producto...",
-        text: "Por favor espera",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
+      dispatch({
+        type: types.productsLoad,
+        payload: productosEnriquecidos,
       });
 
-      console.log("🚀 Enviando PUT a:", `productos/${productId}`);
+      return productosEnriquecidos;
+    } catch (error) {
+      console.error("❌ [PRODUCTS] Error cargando productos:", error);
 
-      const body = await fetchAPIConfig(
-        `productos/${productId}`, // ✅ Usar ID string directamente
-        cleanFormData,
-        "PUT",
-        true
-      );
+      // ✅ FALLBACK: Intentar cargar desde cache offline
+      try {
+        const { getProductsOffline } = useOfflineOperations();
+        const productosOffline = await getProductsOffline(filters);
 
-      console.log("📥 Respuesta del servidor:", body);
-
-      Swal.close();
-
-      if (body.ok) {
-        console.log("✅ Producto actualizado exitosamente");
-        dispatch(updateProductAction(body.product));
-
-        setTimeout(() => {
-          dispatch(loadProducts(true));
-        }, 1000);
-
-        Swal.fire(
-          "¡Actualización exitosa!",
-          "Producto actualizado correctamente",
-          "success"
+        console.log(
+          `📱 [PRODUCTS] Fallback: ${productosOffline.length} productos desde cache offline`
         );
 
-        return { success: true, data: body };
-      } else {
-        console.error("❌ Error del servidor:", body.msg);
-        Swal.fire("Error", body.msg || "Error al actualizar producto", "error");
-        return { success: false, error: body.msg };
-      }
-    } catch (error) {
-      console.error("❌ Error actualizando producto:", error);
-      Swal.close();
-
-      Swal.fire(
-        "Error",
-        `Error al actualizar el producto: ${error.message}`,
-        "error"
-      );
-      return { success: false, error: error.message };
-    }
-  };
-};
-
-// ✅ ACTION PARA ELIMINAR PRODUCTO (igual a tu ejemplo)
-export const deleteProduct = (id) => {
-  return async (dispatch, getState) => {
-    try {
-      const result = await Swal.fire({
-        title: "¿Estás seguro?",
-        text: "¡No podrás revertir esta acción!",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonColor: "#d33",
-        cancelButtonColor: "#3085d6",
-        confirmButtonText: "Sí, eliminar",
-        cancelButtonText: "Cancelar",
-      });
-
-      if (!result.isConfirmed) {
-        return { success: false, cancelled: true };
-      }
-
-      Swal.fire({
-        title: "Eliminando producto...",
-        text: "Por favor espera",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
-
-      const body = await fetchAPIConfig(`productos/${id}`, {}, "DELETE");
-
-      Swal.close();
-
-      if (body.ok) {
-        // ✅ NO ELIMINAR DEL ESTADO LOCAL - SOLO RECARGAR
-        console.log("🔄 Recargando productos desde el backend...");
-        await dispatch(loadProducts(true));
-
-        Swal.fire({
-          icon: "success",
-          title: "¡Eliminado!",
-          text: "Producto eliminado correctamente",
-          timer: 2000,
-          showConfirmButton: false,
-        });
-
-        return { success: true, data: body };
-      } else {
-        // ✅ MANEJAR ERROR - EL PRODUCTO SIGUE EN EL ESTADO
-        if (body.msg && body.msg.includes("último producto")) {
-          Swal.fire({
-            icon: "error",
-            title: "No se puede eliminar",
-            text: body.msg,
-            confirmButtonText: "Entendido",
-          });
-        } else {
-          Swal.fire({
-            icon: "error",
-            title: "Error",
-            text: body.msg || "Error al eliminar el producto",
-            confirmButtonText: "Entendido",
-          });
-        }
-        return { success: false, error: body.msg };
-      }
-    } catch (error) {
-      console.error("Error eliminando producto:", error);
-      Swal.close();
-
-      Swal.fire({
-        icon: "error",
-        title: "Error de conexión",
-        text: "No se pudo conectar con el servidor",
-        confirmButtonText: "Entendido",
-      });
-
-      return { success: false, error: error.message };
-    }
-  };
-};
-
-// ✅ ACTION PARA BUSCAR PRODUCTOS
-export const searchProducts = (searchTerm) => {
-  return async (dispatch) => {
-    dispatch({ type: types.productStartLoading });
-
-    try {
-      const body = await fetchAPIConfig(
-        `productos/buscar?q=${encodeURIComponent(searchTerm)}`
-      );
-
-      if (body.ok && body.productos) {
         dispatch({
           type: types.productsLoad,
-          payload: body.productos,
+          payload: productosOffline,
         });
-      } else {
+
+        return productosOffline;
+      } catch (offlineError) {
+        console.error(
+          "❌ [PRODUCTS] Error incluso en modo offline:",
+          offlineError
+        );
+
         dispatch({
           type: types.productsLoad,
           payload: [],
         });
+
+        return [];
       }
-    } catch (error) {
-      console.error("Error buscando productos:", error);
-      dispatch({ type: types.productFinishLoading });
+    } finally {
+      dispatch({ type: types.productsFinishLoading });
     }
   };
 };
 
-// ✅ ACTION PARA ACTUALIZAR STOCK
-export const updateStock = (productId, stockData) => {
+// ✅ BUSCAR PRODUCTOS CON SOPORTE OFFLINE
+export const searchProducts = (searchTerm, categoriaId = null) => {
   return async (dispatch) => {
     try {
-      console.log("🔄 Actualizando stock para producto:", productId);
-      console.log("📤 Datos de stock:", stockData);
+      console.log(`🔍 [PRODUCTS] Buscando: "${searchTerm}"`, {
+        categoriaId,
+        online: navigator.onLine,
+      });
 
-      const body = await fetchAPIConfig(
-        `productos/${productId}/stock`,
-        stockData,
-        "PUT"
+      const { searchProductsOffline } = useOfflineOperations();
+
+      let resultados = await searchProductsOffline(searchTerm, categoriaId);
+
+      // ✅ ENRIQUECER RESULTADOS
+      resultados = resultados.map((producto) => ({
+        ...producto,
+        estado_stock:
+          producto.stock <= 0
+            ? "agotado"
+            : producto.stock <= producto.stock_minimo
+            ? "bajo"
+            : "normal",
+        coincide_nombre: producto.nombre
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()),
+        coincide_codigo: producto.codigo_barras?.includes(searchTerm),
+      }));
+
+      console.log(
+        `✅ [PRODUCTS] ${resultados.length} productos encontrados para: "${searchTerm}"`
       );
 
-      if (body.ok) {
-        // ✅ ACTUALIZAR EL PRODUCTO COMPLETO EN EL ESTADO
+      dispatch({
+        type: types.productsSearch,
+        payload: resultados,
+      });
+
+      return resultados;
+    } catch (error) {
+      console.error("❌ [PRODUCTS] Error buscando productos:", error);
+
+      dispatch({
+        type: types.productsSearch,
+        payload: [],
+      });
+
+      return [];
+    }
+  };
+};
+
+// ✅ OBTENER PRODUCTO POR ID CON SOPORTE OFFLINE
+export const getProductById = (productId) => {
+  return async (dispatch) => {
+    try {
+      console.log(`🔄 [PRODUCTS] Obteniendo producto: ${productId}`);
+
+      const { getProductByIdOffline } = useOfflineOperations();
+
+      const producto = await getProductByIdOffline(productId);
+
+      if (!producto) {
+        console.warn(`⚠️ [PRODUCTS] Producto ${productId} no encontrado`);
+        return null;
+      }
+
+      // ✅ ENRIQUECER DATOS
+      const productoEnriquecido = {
+        ...producto,
+        estado_stock:
+          producto.stock <= 0
+            ? "agotado"
+            : producto.stock <= producto.stock_minimo
+            ? "bajo"
+            : "normal",
+        ganancia_estimada: producto.precio_venta - producto.precio_compra,
+        margen_ganancia:
+          producto.precio_compra > 0
+            ? (
+                ((producto.precio_venta - producto.precio_compra) /
+                  producto.precio_compra) *
+                100
+              ).toFixed(1)
+            : 0,
+        necesita_reposicion: producto.stock <= producto.stock_minimo,
+      };
+
+      console.log(
+        `✅ [PRODUCTS] Producto cargado: ${productoEnriquecido.nombre}`
+      );
+
+      dispatch({
+        type: types.productSetActive,
+        payload: productoEnriquecido,
+      });
+
+      return productoEnriquecido;
+    } catch (error) {
+      console.error(
+        `❌ [PRODUCTS] Error obteniendo producto ${productId}:`,
+        error
+      );
+      return null;
+    }
+  };
+};
+
+// ✅ ACTUALIZAR STOCK CON SOPORTE OFFLINE
+export const updateProductStock = (productoId, stockData) => {
+  return async (dispatch) => {
+    try {
+      console.log(`🔄 [PRODUCTS] Actualizando stock: ${productoId}`, stockData);
+
+      const { updateStockOffline } = useOfflineOperations();
+
+      const resultado = await updateStockOffline(
+        productoId,
+        stockData.nuevo_stock,
+        {
+          tipo: "ajuste_manual",
+          motivo: stockData.motivo || "Ajuste manual",
+          usuario: stockData.usuario || "Sistema",
+        }
+      );
+
+      if (resultado.success) {
+        console.log(
+          `✅ [PRODUCTS] Stock actualizado: ${productoId} -> ${stockData.nuevo_stock}`
+        );
+
+        // ✅ ACTUALIZAR ESTADO GLOBAL
         dispatch({
-          type: types.productUpdated,
-          payload: body.product, // Usar el producto completo devuelto por el backend
+          type: types.productUpdateStock,
+          payload: {
+            productoId,
+            stock_anterior: resultado.stock_anterior,
+            stock_nuevo: resultado.stock_nuevo,
+            producto: resultado.producto,
+          },
         });
 
         await Swal.fire({
           icon: "success",
           title: "Stock Actualizado",
-          text: body.message || "Stock actualizado correctamente",
-          timer: 1500,
+          text: `Stock actualizado correctamente: ${resultado.stock_anterior} → ${resultado.stock_nuevo}`,
+          timer: 2000,
           showConfirmButton: false,
         });
 
-        return { success: true, data: body };
+        return true;
       } else {
-        throw new Error(body.msg || "Error al actualizar stock");
+        throw new Error(resultado.error);
       }
     } catch (error) {
-      console.error("Error actualizando stock:", error);
-
-      let errorMessage = "Error al actualizar stock";
-      if (error.message.includes("500")) {
-        errorMessage = "Error interno del servidor. Intente nuevamente.";
-      } else if (error.message.includes("404")) {
-        errorMessage = "Producto no encontrado.";
-      } else if (error.message.includes("403")) {
-        errorMessage = "No tiene permisos para realizar esta acción.";
-      }
+      console.error(
+        `❌ [PRODUCTS] Error actualizando stock ${productoId}:`,
+        error
+      );
 
       await Swal.fire({
         icon: "error",
         title: "Error",
-        text: errorMessage,
+        text: error.message || "Error al actualizar stock",
         confirmButtonText: "Entendido",
       });
 
-      return { success: false, error: error.message };
+      return false;
     }
   };
 };
 
-// ✅ ACTION PARA ACTUALIZAR STOCK RÁPIDO (desde el carrito)
-export const updateStockFromCart = (productId, cantidadVendida) => {
-  return async (dispatch, getState) => {
+// ✅ REDUCIR STOCK POR VENTA CON SOPORTE OFFLINE
+export const reduceProductStock = (productoId, cantidad, ventaId = null) => {
+  return async (dispatch) => {
     try {
-      const { products } = getState().products;
-      const producto = products.find((p) => p.id === productId);
+      console.log(`🔄 [PRODUCTS] Reduciendo stock: ${productoId} -${cantidad}`);
 
-      if (!producto) {
+      const { reduceStockOffline } = useOfflineOperations();
+
+      const resultado = await reduceStockOffline(productoId, cantidad, ventaId);
+
+      if (resultado.success) {
+        console.log(`✅ [PRODUCTS] Stock reducido: ${productoId} -${cantidad}`);
+
+        dispatch({
+          type: types.productUpdateStock,
+          payload: {
+            productoId,
+            stock_anterior: resultado.stock_anterior,
+            stock_nuevo: resultado.stock_nuevo,
+            producto: resultado.producto,
+          },
+        });
+
+        return true;
+      } else {
         console.error(
-          "Producto no encontrado para actualizar stock:",
-          productId
+          `❌ [PRODUCTS] Error reduciendo stock: ${resultado.error}`
         );
         return false;
       }
+    } catch (error) {
+      console.error(
+        `❌ [PRODUCTS] Error reduciendo stock ${productoId}:`,
+        error
+      );
+      return false;
+    }
+  };
+};
 
-      const nuevoStock = producto.stock - cantidadVendida;
+// ✅ CARGAR PRODUCTOS BAJO STOCK CON SOPORTE OFFLINE
+export const loadLowStockProducts = (limite = 10) => {
+  return async (dispatch) => {
+    try {
+      console.log(`🔄 [PRODUCTS] Cargando productos bajo stock...`);
 
-      if (nuevoStock < 0) {
+      const { getLowStockProductsOffline } = useOfflineOperations();
+
+      const productosBajoStock = await getLowStockProductsOffline(limite);
+
+      console.log(
+        `📉 [PRODUCTS] ${productosBajoStock.length} productos con stock bajo`
+      );
+
+      dispatch({
+        type: types.productsLoadLowStock,
+        payload: productosBajoStock,
+      });
+
+      return productosBajoStock;
+    } catch (error) {
+      console.error(
+        "❌ [PRODUCTS] Error cargando productos bajo stock:",
+        error
+      );
+
+      dispatch({
+        type: types.productsLoadLowStock,
+        payload: [],
+      });
+
+      return [];
+    }
+  };
+};
+
+// ✅ SINCRONIZAR PRODUCTOS MANUALMENTE
+export const syncProducts = () => {
+  return async (dispatch) => {
+    try {
+      if (!navigator.onLine) {
         await Swal.fire({
           icon: "warning",
-          title: "Stock Insuficiente",
-          text: `No hay suficiente stock para ${producto.nombre}`,
+          title: "Sin conexión",
+          text: "No hay conexión a internet para sincronizar",
           confirmButtonText: "Entendido",
         });
         return false;
       }
 
-      // ✅ CORREGIR RUTA TAMBIÉN AQUÍ
-      const body = await fetchAPIConfig(
-        `productos/${productId}/stock`, // ✅ CORREGIDO
-        { stock: nuevoStock },
-        "PUT"
-      );
+      await Swal.fire({
+        title: "Sincronizando...",
+        text: "Actualizando catálogo de productos",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
 
-      if (body.ok) {
-        dispatch({
-          type: types.productUpdated,
-          payload: {
-            id: productId,
-            stock: nuevoStock,
-            ...producto,
-          },
+      const { syncProductsOffline } = useOfflineOperations();
+      const resultado = await syncProductsOffline();
+
+      Swal.close();
+
+      if (resultado.success) {
+        // Recargar productos después de sincronizar
+        await dispatch(loadProducts());
+
+        await Swal.fire({
+          icon: "success",
+          title: "Sincronización completada",
+          text:
+            resultado.message || `${resultado.count} productos actualizados`,
+          timer: 2000,
+          showConfirmButton: false,
         });
 
-        console.log(
-          `✅ Stock actualizado: ${producto.nombre} - ${cantidadVendida} unidades`
-        );
-        return { success: true, data: body };
+        return true;
       } else {
-        throw new Error(body.msg || "Error al actualizar stock");
+        throw new Error(resultado.error);
       }
     } catch (error) {
-      console.error("Error actualizando stock desde carrito:", error);
-      return { success: false, error: error.message };
+      console.error("❌ [PRODUCTS] Error sincronizando productos:", error);
+
+      Swal.close();
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error de sincronización",
+        text: error.message || "No se pudieron actualizar los productos",
+        confirmButtonText: "Entendido",
+      });
+
+      return false;
     }
   };
 };
 
-// ✅ REFRESH PRODUCTOS SI ES NECESARIO
-export const refreshProductsIfNeeded = () => {
-  return async (dispatch, getState) => {
-    const lastUpdate = getState().products.lastUpdate;
-    const now = Date.now();
+// ✅ OBTENER ESTADÍSTICAS DE PRODUCTOS
+export const loadProductsStats = () => {
+  return async (dispatch) => {
+    try {
+      const { getProductsOffline } = useOfflineOperations();
 
-    if (!lastUpdate || now - lastUpdate > 30000) {
-      dispatch(loadProducts());
+      const productos = await getProductsOffline();
+
+      const stats = {
+        total: productos.length,
+        activos: productos.filter((p) => p.activo).length,
+        inactivos: productos.filter((p) => !p.activo).length,
+        agotados: productos.filter((p) => p.stock === 0).length,
+        bajo_stock: productos.filter(
+          (p) => p.stock > 0 && p.stock <= p.stock_minimo
+        ).length,
+        valor_total_inventario: productos.reduce(
+          (sum, p) => sum + p.stock * p.precio_compra,
+          0
+        ),
+        productos_por_categoria: {},
+      };
+
+      // Agrupar por categoría
+      productos.forEach((producto) => {
+        if (!stats.productos_por_categoria[producto.categoria_id]) {
+          stats.productos_por_categoria[producto.categoria_id] = 0;
+        }
+        stats.productos_por_categoria[producto.categoria_id]++;
+      });
+
+      dispatch({
+        type: types.productsLoadStats,
+        payload: stats,
+      });
+
+      return stats;
+    } catch (error) {
+      console.error("❌ [PRODUCTS] Error cargando estadísticas:", error);
+      return {};
     }
   };
 };
 
-// ✅ SET ACTIVE PRODUCT
 export const setActiveProduct = (product) => ({
   type: types.productSetActive,
   payload: product,
 });
 
-// ✅ ACTION CREATORS SINCRÓNICOS
-const startLoading = () => ({ type: types.productStartLoading });
-const finishLoading = () => ({ type: types.productFinishLoading });
-const loadProductsAction = (products) => ({
-  type: types.productsLoad,
-  payload: products,
-});
-
-const addNewProduct = (product) => ({
-  type: types.productAddNew,
-  payload: product,
-});
-
-const updateProductAction = (product) => ({
-  type: types.productUpdated,
-  payload: product,
+export const clearActiveProduct = () => ({
+  type: types.productClearActive,
 });
