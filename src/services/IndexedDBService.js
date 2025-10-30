@@ -1,18 +1,28 @@
-// src/services/IndexedDBService.js
+// src/services/IndexedDBService.js - VERSIÓN COMPLETA MEJORADA
 class IndexedDBService {
   constructor() {
     this.dbName = "KioskoPOSDB";
-    this.version = 6; // ⬅️ INCREMENTADO a 6 para sesiones offline
+    this.version = 6;
     this.db = null;
+    this.initialized = false;
   }
 
   async init() {
+    if (this.initialized && this.db) {
+      return this.db;
+    }
+
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        console.error("❌ Error abriendo IndexedDB:", request.error);
+        reject(request.error);
+      };
+
       request.onsuccess = () => {
         this.db = request.result;
+        this.initialized = true;
         console.log("✅ IndexedDB inicializada correctamente");
         resolve(this.db);
       };
@@ -22,13 +32,17 @@ class IndexedDBService {
         console.log("🔄 Actualizando IndexedDB a versión:", this.version);
         this.createObjectStores(db);
       };
+
+      request.onblocked = () => {
+        console.warn("⚠️ IndexedDB bloqueada - cierra otras pestañas");
+      };
     });
   }
 
   createObjectStores(db) {
     console.log("📁 Creando/actualizando object stores...");
 
-    // Productos (para catálogo offline)
+    // Productos
     if (!db.objectStoreNames.contains("productos")) {
       const productosStore = db.createObjectStore("productos", {
         keyPath: "id",
@@ -40,13 +54,13 @@ class IndexedDBService {
       console.log("✅ Object store 'productos' creado");
     }
 
-    // Categorías (para filtros offline)
+    // Categorías
     if (!db.objectStoreNames.contains("categorias")) {
       db.createObjectStore("categorias", { keyPath: "id" });
       console.log("✅ Object store 'categorias' creado");
     }
 
-    // Ventas pendientes de sincronización
+    // Ventas pendientes
     if (!db.objectStoreNames.contains("ventas_pendientes")) {
       const ventasStore = db.createObjectStore("ventas_pendientes", {
         keyPath: "id_local",
@@ -77,7 +91,7 @@ class IndexedDBService {
       console.log("✅ Object store 'detalles_venta_pendientes' creado");
     }
 
-    // ✅ MEJORADO: Sesiones de caja offline con más índices
+    // Sesiones de caja offline
     if (!db.objectStoreNames.contains("sesiones_caja_offline")) {
       const sesionesStore = db.createObjectStore("sesiones_caja_offline", {
         keyPath: "id_local",
@@ -93,10 +107,10 @@ class IndexedDBService {
       sesionesStore.createIndex("fecha_apertura", "fecha_apertura", {
         unique: false,
       });
-      console.log("✅ Object store 'sesiones_caja_offline' creado/mejorado");
+      console.log("✅ Object store 'sesiones_caja_offline' creado");
     }
 
-    // ✅ MEJORADO: Cierres pendientes con más índices
+    // Cierres pendientes
     if (!db.objectStoreNames.contains("cierres_pendientes")) {
       const cierresStore = db.createObjectStore("cierres_pendientes", {
         keyPath: "id_local",
@@ -111,10 +125,10 @@ class IndexedDBService {
       cierresStore.createIndex("fecha_cierre", "fecha_cierre", {
         unique: false,
       });
-      console.log("✅ Object store 'cierres_pendientes' creado/mejorado");
+      console.log("✅ Object store 'cierres_pendientes' creado");
     }
 
-    // Configuración y cache
+    // Configuración
     if (!db.objectStoreNames.contains("configuracion")) {
       db.createObjectStore("configuracion", { keyPath: "key" });
       console.log("✅ Object store 'configuracion' creado");
@@ -131,16 +145,18 @@ class IndexedDBService {
       console.log("✅ Object store 'cache_maestros' creado");
     }
 
-    // Usuarios para autenticación offline
+    // Usuarios offline
     if (!db.objectStoreNames.contains("offline_users")) {
       const usersStore = db.createObjectStore("offline_users", {
-        keyPath: "savedAt",
+        keyPath: "id",
       });
-      usersStore.createIndex("user_id", "user.id", { unique: false });
+      usersStore.createIndex("username", "username", { unique: false });
+      usersStore.createIndex("activo", "activo", { unique: false });
+      usersStore.createIndex("lastLogin", "lastLogin", { unique: false });
       console.log("✅ Object store 'offline_users' creado");
     }
 
-    // Cierres de caja para reportes offline
+    // Cierres
     if (!db.objectStoreNames.contains("cierres")) {
       const cierresStore = db.createObjectStore("cierres", {
         keyPath: "id",
@@ -155,10 +171,51 @@ class IndexedDBService {
       console.log("✅ Object store 'cierres' creado");
     }
 
+    // Métricas de sincronización
+    if (!db.objectStoreNames.contains("sync_metrics")) {
+      const metricsStore = db.createObjectStore("sync_metrics", {
+        keyPath: "id",
+      });
+      metricsStore.createIndex("timestamp", "timestamp", { unique: false });
+      metricsStore.createIndex("success", "success", { unique: false });
+      console.log("✅ Object store 'sync_metrics' creado");
+    }
+
     console.log(
       "🎉 Todos los object stores creados:",
       Array.from(db.objectStoreNames)
     );
+  }
+
+  // ✅ NUEVO: Verificar si un object store existe
+  async storeExists(storeName) {
+    try {
+      if (!this.db) await this.init();
+      return this.db.objectStoreNames.contains(storeName);
+    } catch (error) {
+      console.error(`❌ Error verificando store ${storeName}:`, error);
+      return false;
+    }
+  }
+
+  // ✅ NUEVO: Método seguro para getAll
+  async safeGetAll(storeName, indexName = null, query = null) {
+    try {
+      if (!this.db) await this.init();
+
+      // Verificar si el store existe
+      if (!this.db.objectStoreNames.contains(storeName)) {
+        console.warn(
+          `⚠️ Store ${storeName} no existe, devolviendo array vacío`
+        );
+        return [];
+      }
+
+      return await this.getAll(storeName, indexName, query);
+    } catch (error) {
+      console.error(`❌ Error seguro en getAll(${storeName}):`, error);
+      return [];
+    }
   }
 
   // Métodos CRUD genéricos
@@ -212,6 +269,9 @@ class IndexedDBService {
       if (indexName && query) {
         const index = store.index(indexName);
         request = index.getAll(query);
+      } else if (indexName) {
+        const index = store.index(indexName);
+        request = index.getAll();
       } else {
         request = store.getAll();
       }
@@ -247,12 +307,6 @@ class IndexedDBService {
     });
   }
 
-  // Método para verificar si un object store existe
-  async storeExists(storeName) {
-    if (!this.db) await this.init();
-    return this.db.objectStoreNames.contains(storeName);
-  }
-
   // Método para obtener información de la base de datos
   async getDBInfo() {
     if (!this.db) await this.init();
@@ -262,16 +316,113 @@ class IndexedDBService {
       version: this.db.version,
       objectStores: Array.from(this.db.objectStoreNames),
       size: await this.estimateSize(),
+      initialized: this.initialized,
     };
   }
 
   // Método para estimar el tamaño de la base de datos
   async estimateSize() {
     if ("storage" in navigator && "estimate" in navigator.storage) {
-      const estimate = await navigator.storage.estimate();
-      return estimate;
+      try {
+        const estimate = await navigator.storage.estimate();
+        return estimate;
+      } catch (error) {
+        console.error("Error estimando almacenamiento:", error);
+        return null;
+      }
     }
     return null;
+  }
+
+  // ✅ NUEVO: Verificar salud de la base de datos
+  async healthCheck() {
+    try {
+      if (!this.initialized) {
+        return { healthy: false, error: "No inicializada" };
+      }
+
+      const dbInfo = await this.getDBInfo();
+      const criticalStores = [
+        "productos",
+        "categorias",
+        "ventas_pendientes",
+        "offline_users",
+      ];
+
+      const missingStores = criticalStores.filter(
+        (store) => !dbInfo.objectStores.includes(store)
+      );
+
+      return {
+        healthy: missingStores.length === 0,
+        objectStores: dbInfo.objectStores,
+        missingStores,
+        size: dbInfo.size,
+        version: dbInfo.version,
+      };
+    } catch (error) {
+      console.error("Error en health check:", error);
+      return { healthy: false, error: error.message };
+    }
+  }
+
+  // ✅ NUEVO: Reinicializar base de datos (útil para debugging)
+  async reinitialize() {
+    try {
+      this.db?.close();
+      this.db = null;
+      this.initialized = false;
+
+      console.log("🔄 Reinicializando IndexedDB...");
+      await this.init();
+
+      return await this.healthCheck();
+    } catch (error) {
+      console.error("❌ Error reinicializando IndexedDB:", error);
+      throw error;
+    }
+  }
+
+  // ✅ NUEVO: Backup de datos (útil para migraciones)
+  async backupData() {
+    try {
+      if (!this.db) await this.init();
+
+      const stores = Array.from(this.db.objectStoreNames);
+      const backup = {};
+
+      for (const storeName of stores) {
+        backup[storeName] = await this.safeGetAll(storeName);
+      }
+
+      console.log(`💾 Backup creado con ${stores.length} stores`);
+      return backup;
+    } catch (error) {
+      console.error("❌ Error creando backup:", error);
+      return null;
+    }
+  }
+
+  // ✅ NUEVO: Restaurar datos desde backup
+  async restoreData(backup) {
+    try {
+      if (!this.db) await this.init();
+
+      for (const [storeName, data] of Object.entries(backup)) {
+        if (this.db.objectStoreNames.contains(storeName)) {
+          await this.clear(storeName);
+          for (const item of data) {
+            await this.add(storeName, item);
+          }
+        }
+      }
+
+      console.log(`🔄 Backup restaurado: ${Object.keys(backup).length} stores`);
+      return true;
+    } catch (error) {
+      console.error("❌ Error restaurando backup:", error);
+      return false;
+    }
   }
 }
 
