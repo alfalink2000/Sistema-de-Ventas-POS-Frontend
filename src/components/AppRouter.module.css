@@ -1,0 +1,121 @@
+/* AppRouter.module.css - ESTILOS COMPLETOS */
+.loadingContainer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 20px;
+  color: white;
+  text-align: center;
+}
+
+.loadingContent {
+  max-width: 500px;
+  width: 100%;
+  margin-top: 30px;
+}
+
+.loadingContent h3 {
+  margin: 0 0 12px 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+}
+
+.loadingContent p {
+  margin: 0 0 30px 0;
+  font-size: 16px;
+  opacity: 0.9;
+  color: white;
+}
+
+.loadingSection {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.sectionTitle {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  opacity: 0.9;
+}
+
+.itemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loadingItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  color: white;
+  backdrop-filter: blur(10px);
+}
+
+.spinnerSmall {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.completedItem {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  font-size: 14px;
+  color: white;
+  opacity: 0.8;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .loadingContainer {
+    padding: 20px;
+  }
+
+  .loadingContent h3 {
+    font-size: 24px;
+  }
+
+  .loadingContent p {
+    font-size: 14px;
+  }
+
+  .loadingItem,
+  .completedItem {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .loadingContent h3 {
+    font-size: 20px;
+  }
+
+  .itemsList {
+    gap: 6px;
+  }
+}

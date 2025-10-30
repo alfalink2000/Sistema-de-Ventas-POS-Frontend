@@ -54,7 +54,6 @@ class SyncService {
         total: pendingSessions.length,
         success: 0,
         failed: 0,
-        conflicts: 0,
       };
 
       for (const session of pendingSessions) {
@@ -72,64 +71,28 @@ class SyncService {
 
             if (cierreAsociado.length > 0) {
               const cierre = cierreAsociado[0];
-              const { id_local, ...cierreData } = cierre;
 
-              const response = await fetchConToken(
-                "cierres",
-                cierreData,
-                "POST"
+              // ✅ VERIFICAR SI LA SESIÓN YA EXISTE EN EL SERVIDOR
+              const sesionExistente = await this.verificarSesionExistente(
+                session
               );
 
-              if (response.ok && response.cierre) {
-                // Marcar cierre como sincronizado
-                await IndexedDBService.put("cierres_pendientes", {
-                  ...cierre,
-                  sincronizado: true,
-                  id_servidor: response.cierre.id,
-                  fecha_sincronizacion: new Date().toISOString(),
-                });
-
-                // Cerrar sesión en servidor
-                const closeResponse = await fetchConToken(
-                  `sesiones-caja/cerrar/${
-                    session.id_servidor || session.id_local
-                  }`,
-                  {
-                    saldo_final: session.saldo_final,
-                    observaciones: session.observaciones,
-                  },
-                  "PUT"
+              if (sesionExistente) {
+                console.log(
+                  `✅ Sesión ya existe en servidor: ${sesionExistente.id}`
                 );
 
-                if (closeResponse.ok) {
-                  // Eliminar sesión del almacenamiento local
-                  await IndexedDBService.delete(
-                    "sesiones_caja_offline",
-                    session.id_local
-                  );
-                  results.success++;
-                  console.log(
-                    `✅ Sesión cerrada sincronizada: ${session.id_local}`
-                  );
-                }
+                // ✅ ACTUALIZAR SESIÓN EXISTENTE CON DATOS DE CIERRE
+                await this.actualizarSesionExistente(
+                  sesionExistente.id,
+                  session,
+                  cierre
+                );
+              } else {
+                // ✅ CREAR NUEVA SESIÓN EN SERVIDOR
+                await this.crearSesionCompleta(session, cierre);
               }
-            }
-          } else if (session.estado === "abierta") {
-            // ✅ SINCRONIZAR SESIONES ABIERTAS
-            const { id_local, ...sessionData } = session;
-            const response = await fetchConToken(
-              "sesiones-caja/abrir",
-              sessionData,
-              "POST"
-            );
 
-            if (response.ok && response.sesion) {
-              await IndexedDBService.put("sesiones_caja_offline", {
-                ...session,
-                sincronizado: true,
-                id_servidor: response.sesion.id,
-                fecha_sincronizacion: new Date().toISOString(),
-              });
               results.success++;
             }
           }
@@ -149,6 +112,154 @@ class SyncService {
     } catch (error) {
       console.error("❌ Error en syncPendingSessions:", error);
       throw error;
+    }
+  }
+  // ✅ VERIFICAR SI LA SESIÓN YA EXISTE EN SERVIDOR
+  async verificarSesionExistente(sessionLocal) {
+    try {
+      const response = await fetchConToken(
+        `sesiones-caja/verificar?vendedor_id=${sessionLocal.vendedor_id}&fecha=${sessionLocal.fecha_apertura}`
+      );
+
+      return response.ok && response.existe ? response.sesion : null;
+    } catch (error) {
+      console.error("Error verificando sesión existente:", error);
+      return null;
+    }
+  }
+
+  // ✅ ACTUALIZAR SESIÓN EXISTENTE CON CIERRE
+  async actualizarSesionExistente(sesionId, sessionLocal, cierreLocal) {
+    try {
+      // 1. Cerrar sesión en servidor
+      const closeResponse = await fetchConToken(
+        `sesiones-caja/cerrar/${sesionId}`,
+        {
+          saldo_final: sessionLocal.saldo_final,
+          observaciones: sessionLocal.observaciones,
+        },
+        "PUT"
+      );
+
+      if (closeResponse.ok) {
+        // 2. Crear cierre asociado
+        const { id_local, ...cierreData } = cierreLocal;
+        cierreData.sesion_caja_id = sesionId; // Usar ID del servidor
+
+        const cierreResponse = await fetchConToken(
+          "cierres",
+          cierreData,
+          "POST"
+        );
+
+        if (cierreResponse.ok) {
+          // 3. Marcar como sincronizado
+          await this.marcarSesionSincronizada(
+            sessionLocal.id_local,
+            cierreLocal.id_local
+          );
+          console.log(`✅ Sesión existente actualizada: ${sesionId}`);
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error(`Error actualizando sesión existente ${sesionId}:`, error);
+      return false;
+    }
+  }
+
+  // ✅ CREAR NUEVA SESIÓN COMPLETA EN SERVIDOR
+  async crearSesionCompleta(sessionLocal, cierreLocal) {
+    try {
+      // 1. Crear sesión en servidor
+      const { id_local, estado, fecha_cierre, saldo_final, ...sessionData } =
+        sessionLocal;
+
+      const sesionResponse = await fetchConToken(
+        "sesiones-caja/abrir",
+        sessionData,
+        "POST"
+      );
+
+      if (sesionResponse.ok && sesionResponse.sesion) {
+        const sesionServidor = sesionResponse.sesion;
+
+        // 2. Cerrar inmediatamente la sesión
+        const closeResponse = await fetchConToken(
+          `sesiones-caja/cerrar/${sesionServidor.id}`,
+          {
+            saldo_final: sessionLocal.saldo_final,
+            observaciones: sessionLocal.observaciones,
+          },
+          "PUT"
+        );
+
+        if (closeResponse.ok) {
+          // 3. Crear cierre asociado
+          const { id_local, ...cierreData } = cierreLocal;
+          cierreData.sesion_caja_id = sesionServidor.id;
+
+          const cierreResponse = await fetchConToken(
+            "cierres",
+            cierreData,
+            "POST"
+          );
+
+          if (cierreResponse.ok) {
+            // 4. Marcar como sincronizado
+            await this.marcarSesionSincronizada(
+              sessionLocal.id_local,
+              cierreLocal.id_local
+            );
+            console.log(
+              `✅ Nueva sesión creada y cerrada: ${sesionServidor.id}`
+            );
+            return true;
+          }
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error("Error creando sesión completa:", error);
+      return false;
+    }
+  }
+
+  // ✅ MARCAR SESIÓN Y CIERRE COMO SINCRONIZADOS
+  async marcarSesionSincronizada(sesionIdLocal, cierreIdLocal) {
+    try {
+      // Marcar sesión como sincronizada
+      const sesion = await IndexedDBService.get(
+        "sesiones_caja_offline",
+        sesionIdLocal
+      );
+      if (sesion) {
+        await IndexedDBService.put("sesiones_caja_offline", {
+          ...sesion,
+          sincronizado: true,
+          fecha_sincronizacion: new Date().toISOString(),
+        });
+      }
+
+      // Marcar cierre como sincronizado
+      const cierre = await IndexedDBService.get(
+        "cierres_pendientes",
+        cierreIdLocal
+      );
+      if (cierre) {
+        await IndexedDBService.put("cierres_pendientes", {
+          ...cierre,
+          sincronizado: true,
+          fecha_sincronizacion: new Date().toISOString(),
+        });
+      }
+
+      console.log(
+        `✅ Marcados como sincronizados: sesión ${sesionIdLocal}, cierre ${cierreIdLocal}`
+      );
+    } catch (error) {
+      console.error("Error marcando como sincronizado:", error);
     }
   }
 

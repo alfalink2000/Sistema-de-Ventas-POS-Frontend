@@ -100,71 +100,62 @@ export const loadOpenSesion = (vendedorId) => {
       let sesion = null;
 
       if (navigator.onLine) {
-        // Si hay conexión, buscar en API
+        // ✅ PRIMERO: Buscar en servidor
         const response = await fetchConToken(
           `sesiones-caja/abierta?vendedor_id=${vendedorId}`
         );
-
-        console.log("📦 [SESIONES] Respuesta del backend:", {
-          ok: response.ok,
-          existe: response.existe,
-          sesion: response.sesion ? "PRESENTE" : "AUSENTE",
-        });
 
         if (response && response.ok === true) {
           existe = response.existe;
           sesion = response.sesion;
 
-          // ✅ CORREGIDO: Solo guardar si la sesión está ABIERTA
-          if (existe && sesion && sesion.estado === "abierta") {
+          // ✅ LIMPIAR SESIONES LOCALES SI EL SERVIDOR NO TIENE SESIÓN ABIERTA
+          if (!existe) {
+            await limpiarSesionesLocalesAbiertas(vendedorId);
+          } else if (existe && sesion && sesion.estado === "abierta") {
+            // ✅ GUARDAR SESIÓN DEL SERVIDOR LOCALMENTE
             await IndexedDBService.put("sesiones_caja_offline", {
               ...sesion,
               sincronizado: true,
               id_servidor: sesion.id,
             });
-            console.log("✅ Sesión abierta guardada para offline");
-          } else if (existe && sesion && sesion.estado !== "abierta") {
-            console.warn(
-              "⚠️ Sesión encontrada pero no está abierta:",
-              sesion.estado
-            );
-            // Eliminar sesión cerrada del almacenamiento local
-            await IndexedDBService.delete(
-              "sesiones_caja_offline",
-              sesion.id_local || sesion.id
-            );
           }
-        } else {
-          console.error("❌ [SESIONES] Respuesta no OK:", response);
-          throw new Error(response?.error || "Error al cargar sesión abierta");
         }
-      } else {
-        // ✅ CORREGIDO: En offline, buscar solo sesiones ABIERTAS
-        const sesiones = await IndexedDBService.getAll("sesiones_caja_offline");
-        const sesionAbierta = sesiones.find(
+      }
+
+      // ✅ SEGUNDO: Buscar localmente SOLO si el servidor no tiene sesión
+      if (!existe) {
+        const sesionesLocales = await IndexedDBService.safeGetAll(
+          "sesiones_caja_offline"
+        );
+
+        // ✅ FILTRAR SOLO SESIONES ABIERTAS DEL VENDEDOR ACTUAL
+        const sesionAbiertaLocal = sesionesLocales.find(
           (s) => s.estado === "abierta" && s.vendedor_id === vendedorId
         );
 
-        existe = !!sesionAbierta;
-        sesion = sesionAbierta;
+        if (sesionAbiertaLocal) {
+          // ✅ VERIFICAR QUE NO SEA UNA SESIÓN MUY ANTIGUA (más de 24 horas)
+          const fechaApertura = new Date(sesionAbiertaLocal.fecha_apertura);
+          const ahora = new Date();
+          const horasAbierta = (ahora - fechaApertura) / (1000 * 60 * 60);
 
-        console.log("📱 [SESIONES] Buscando sesión ABIERTA local:", {
-          encontrada: existe,
-          sesionId: sesion?.id || sesion?.id_local,
-          estado: sesion?.estado,
-        });
-
-        // ✅ LIMPIAR SESIONES CERRADAS accidentalmente guardadas
-        const sesionesCerradas = sesiones.filter((s) => s.estado === "cerrada");
-        if (sesionesCerradas.length > 0) {
-          console.log(
-            `🧹 Limpiando ${sesionesCerradas.length} sesiones cerradas del almacenamiento local`
-          );
-          for (const sesionCerrada of sesionesCerradas) {
-            await IndexedDBService.delete(
-              "sesiones_caja_offline",
-              sesionCerrada.id_local || sesionCerrada.id
+          if (horasAbierta > 24) {
+            console.warn(
+              `⚠️ Sesión local muy antigua (${horasAbierta.toFixed(
+                1
+              )}h), forzando cierre:`,
+              sesionAbiertaLocal.id_local
             );
+
+            // ✅ CERRAR SESIÓN ANTIGUA AUTOMÁTICAMENTE
+            await cerrarSesionAntigua(sesionAbiertaLocal);
+            existe = false;
+            sesion = null;
+          } else {
+            existe = true;
+            sesion = sesionAbiertaLocal;
+            console.log("📱 Usando sesión local activa:", sesion.id_local);
           }
         }
       }
@@ -174,10 +165,9 @@ export const loadOpenSesion = (vendedorId) => {
         sesion: sesion,
       };
 
-      console.log("✅ [SESIONES] Enviando al reducer:", {
+      console.log("✅ [SESIONES] Resultado final:", {
         existe: payload.existe,
         sesionId: payload.sesion?.id || payload.sesion?.id_local,
-        vendedor: payload.sesion?.vendedor_nombre,
         estado: payload.sesion?.estado,
       });
 
@@ -190,40 +180,67 @@ export const loadOpenSesion = (vendedorId) => {
     } catch (error) {
       console.error("❌ [SESIONES] Error cargando sesión abierta:", error);
 
-      // En caso de error, intentar cargar desde local
-      try {
-        const sesiones = await IndexedDBService.getAll("sesiones_caja_offline");
-        const sesionAbierta = sesiones.find((s) => s.estado === "abierta");
+      // En caso de error, no mostrar sesiones antiguas
+      const errorPayload = {
+        existe: false,
+        sesion: null,
+        error: error.message,
+      };
 
-        const errorPayload = {
-          existe: !!sesionAbierta,
-          sesion: sesionAbierta,
-          error: error.message,
-        };
+      dispatch({
+        type: types.sesionesCajaLoadOpen,
+        payload: errorPayload,
+      });
 
-        dispatch({
-          type: types.sesionesCajaLoadOpen,
-          payload: errorPayload,
-        });
-
-        return errorPayload;
-      } catch (localError) {
-        const errorPayload = {
-          existe: false,
-          sesion: null,
-          error: error.message,
-        };
-
-        dispatch({
-          type: types.sesionesCajaLoadOpen,
-          payload: errorPayload,
-        });
-
-        return errorPayload;
-      }
+      return errorPayload;
     }
   };
 };
+
+// ✅ LIMPIAR SESIONES LOCALES ABIERTAS
+async function limpiarSesionesLocalesAbiertas(vendedorId) {
+  try {
+    const sesionesLocales = await IndexedDBService.safeGetAll(
+      "sesiones_caja_offline"
+    );
+    const sesionesAbiertas = sesionesLocales.filter(
+      (s) => s.estado === "abierta" && s.vendedor_id === vendedorId
+    );
+
+    for (const sesion of sesionesAbiertas) {
+      console.log(
+        `🗑️ Eliminando sesión local abierta obsoleta: ${sesion.id_local}`
+      );
+      await IndexedDBService.delete("sesiones_caja_offline", sesion.id_local);
+    }
+
+    if (sesionesAbiertas.length > 0) {
+      console.log(
+        `✅ ${sesionesAbiertas.length} sesiones locales obsoletas eliminadas`
+      );
+    }
+  } catch (error) {
+    console.error("Error limpiando sesiones locales:", error);
+  }
+}
+
+// ✅ CERRAR SESIÓN ANTIGUA AUTOMÁTICAMENTE
+async function cerrarSesionAntigua(sesion) {
+  try {
+    const sesionActualizada = {
+      ...sesion,
+      estado: "cerrada",
+      fecha_cierre: new Date().toISOString(),
+      observaciones: "Sesión cerrada automáticamente por antigüedad",
+      sincronizado: false,
+    };
+
+    await IndexedDBService.put("sesiones_caja_offline", sesionActualizada);
+    console.log(`✅ Sesión antigua cerrada: ${sesion.id_local}`);
+  } catch (error) {
+    console.error("Error cerrando sesión antigua:", error);
+  }
+}
 
 export const openSesionCaja = (sesionData) => {
   return async (dispatch) => {
