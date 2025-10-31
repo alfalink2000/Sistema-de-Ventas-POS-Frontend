@@ -1,8 +1,224 @@
-// actions/productsActions.js - CON SOPORTE OFFLINE COMPLETO
+// actions/productsActions.js - VERSIÓN CORREGIDA (SIN HOOKS DE REACT)
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
-import { useOfflineOperations } from "../hook/useOfflineOperations";
+import { IndexedDBService } from "../services/IndexedDBService";
+
+// Servicio para operaciones offline (reemplaza el hook)
+class OfflineProductsService {
+  static async getProductsOffline(filters = {}) {
+    try {
+      const productos = await IndexedDBService.getAll("productos");
+
+      // Aplicar filtros
+      let filtered = productos;
+
+      if (filters.categoria_id) {
+        filtered = filtered.filter(
+          (p) => p.categoria_id === filters.categoria_id
+        );
+      }
+
+      if (filters.activo !== undefined) {
+        filtered = filtered.filter((p) => p.activo === filters.activo);
+      }
+
+      return filtered;
+    } catch (error) {
+      console.error("❌ [OFFLINE SERVICE] Error obteniendo productos:", error);
+      return [];
+    }
+  }
+
+  static async syncProductsOffline() {
+    try {
+      if (!navigator.onLine) {
+        return { success: false, error: "Sin conexión" };
+      }
+
+      const productosLocales = await IndexedDBService.getAll("productos");
+      const productosNoSincronizados = productosLocales.filter(
+        (p) => !p.sincronizado
+      );
+
+      let sincronizados = 0;
+
+      for (const producto of productosNoSincronizados) {
+        try {
+          if (producto.id_local) {
+            // Crear nuevo producto en servidor
+            const response = await fetchConToken("productos", producto, "POST");
+            if (response && response.ok) {
+              // Actualizar en IndexedDB con ID real
+              await IndexedDBService.delete("productos", producto.id);
+              await IndexedDBService.add("productos", {
+                ...response.producto,
+                sincronizado: true,
+              });
+              sincronizados++;
+            }
+          } else {
+            // Actualizar producto existente
+            const response = await fetchConToken(
+              `productos/${producto.id}`,
+              producto,
+              "PUT"
+            );
+            if (response && response.ok) {
+              await IndexedDBService.put("productos", {
+                ...producto,
+                sincronizado: true,
+              });
+              sincronizados++;
+            }
+          }
+        } catch (error) {
+          console.error(`Error sincronizando producto ${producto.id}:`, error);
+        }
+      }
+
+      return {
+        success: true,
+        count: sincronizados,
+        message: `${sincronizados} productos sincronizados`,
+      };
+    } catch (error) {
+      console.error(
+        "❌ [OFFLINE SERVICE] Error sincronizando productos:",
+        error
+      );
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async searchProductsOffline(searchTerm, categoriaId = null) {
+    try {
+      const productos = await IndexedDBService.getAll("productos");
+
+      let filtered = productos.filter(
+        (producto) =>
+          producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          producto.codigo_barras?.includes(searchTerm) ||
+          producto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      if (categoriaId) {
+        filtered = filtered.filter((p) => p.categoria_id === categoriaId);
+      }
+
+      return filtered;
+    } catch (error) {
+      console.error("❌ [OFFLINE SERVICE] Error buscando productos:", error);
+      return [];
+    }
+  }
+
+  static async getProductByIdOffline(productId) {
+    try {
+      return await IndexedDBService.get("productos", productId);
+    } catch (error) {
+      console.error("❌ [OFFLINE SERVICE] Error obteniendo producto:", error);
+      return null;
+    }
+  }
+
+  static async getLowStockProductsOffline(limite = 10) {
+    try {
+      const productos = await IndexedDBService.getAll("productos");
+      return productos
+        .filter((p) => p.stock > 0 && p.stock <= p.stock_minimo)
+        .slice(0, limite);
+    } catch (error) {
+      console.error(
+        "❌ [OFFLINE SERVICE] Error obteniendo productos bajo stock:",
+        error
+      );
+      return [];
+    }
+  }
+
+  static async updateStockOffline(productoId, nuevoStock, metadata = {}) {
+    try {
+      const producto = await IndexedDBService.get("productos", productoId);
+      if (!producto) {
+        return { success: false, error: "Producto no encontrado" };
+      }
+
+      const stock_anterior = producto.stock;
+      const productoActualizado = {
+        ...producto,
+        stock: nuevoStock,
+        sincronizado: false,
+        fecha_actualizacion: new Date().toISOString(),
+        historial_stock: [
+          ...(producto.historial_stock || []),
+          {
+            fecha: new Date().toISOString(),
+            stock_anterior,
+            stock_nuevo: nuevoStock,
+            tipo: metadata.tipo || "ajuste_manual",
+            motivo: metadata.motivo,
+            usuario: metadata.usuario,
+          },
+        ],
+      };
+
+      await IndexedDBService.put("productos", productoActualizado);
+
+      return {
+        success: true,
+        stock_anterior,
+        stock_nuevo: nuevoStock,
+        producto: productoActualizado,
+      };
+    } catch (error) {
+      console.error("❌ [OFFLINE SERVICE] Error actualizando stock:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async reduceStockOffline(productoId, cantidad, ventaId = null) {
+    try {
+      const producto = await IndexedDBService.get("productos", productoId);
+      if (!producto) {
+        return { success: false, error: "Producto no encontrado" };
+      }
+
+      const stock_anterior = producto.stock;
+      const stock_nuevo = Math.max(0, stock_anterior - cantidad);
+
+      const productoActualizado = {
+        ...producto,
+        stock: stock_nuevo,
+        sincronizado: false,
+        fecha_actualizacion: new Date().toISOString(),
+        historial_stock: [
+          ...(producto.historial_stock || []),
+          {
+            fecha: new Date().toISOString(),
+            stock_anterior,
+            stock_nuevo,
+            tipo: "venta",
+            venta_id: ventaId,
+            cantidad_vendida: cantidad,
+          },
+        ],
+      };
+
+      await IndexedDBService.put("productos", productoActualizado);
+
+      return {
+        success: true,
+        stock_anterior,
+        stock_nuevo,
+        producto: productoActualizado,
+      };
+    } catch (error) {
+      console.error("❌ [OFFLINE SERVICE] Error reduciendo stock:", error);
+      return { success: false, error: error.message };
+    }
+  }
+}
 
 export const loadProducts = (filters = {}) => {
   return async (dispatch) => {
@@ -14,9 +230,6 @@ export const loadProducts = (filters = {}) => {
     dispatch({ type: types.productsStartLoading });
 
     try {
-      const { getProductsOffline, syncProductsOffline, isCacheUpdated } =
-        useOfflineOperations();
-
       let productos = [];
       let fromCache = false;
 
@@ -42,7 +255,7 @@ export const loadProducts = (filters = {}) => {
           );
 
           // ✅ SINCRONIZAR CON OFFLINE
-          const syncResult = await syncProductsOffline();
+          const syncResult = await OfflineProductsService.syncProductsOffline();
           if (syncResult.success) {
             console.log(
               `💾 [PRODUCTS] ${syncResult.count} productos sincronizados offline`
@@ -53,13 +266,13 @@ export const loadProducts = (filters = {}) => {
             "⚠️ [PRODUCTS] Respuesta no exitosa desde API, usando cache offline"
           );
           fromCache = true;
-          productos = await getProductsOffline(filters);
+          productos = await OfflineProductsService.getProductsOffline(filters);
         }
       } else {
         // ✅ SIN CONEXIÓN: Cargar desde cache offline
         console.log("📱 [PRODUCTS] Modo offline - cargando desde cache local");
         fromCache = true;
-        productos = await getProductsOffline(filters);
+        productos = await OfflineProductsService.getProductsOffline(filters);
       }
 
       // ✅ APLICAR FILTROS ADICIONALES SI ES NECESARIO
@@ -111,8 +324,8 @@ export const loadProducts = (filters = {}) => {
 
       // ✅ FALLBACK: Intentar cargar desde cache offline
       try {
-        const { getProductsOffline } = useOfflineOperations();
-        const productosOffline = await getProductsOffline(filters);
+        const productosOffline =
+          await OfflineProductsService.getProductsOffline(filters);
 
         console.log(
           `📱 [PRODUCTS] Fallback: ${productosOffline.length} productos desde cache offline`
@@ -142,6 +355,7 @@ export const loadProducts = (filters = {}) => {
     }
   };
 };
+
 // ✅ CREAR PRODUCTO CON SOPORTE OFFLINE
 export const createProduct = (productData) => {
   return async (dispatch) => {
@@ -400,7 +614,7 @@ export const updateStockFromCart = (productId, quantity) => {
         `🔄 [PRODUCTS] Actualizando stock desde carrito: ${productId} -${quantity}`
       );
 
-      const resultado = await ProductsOfflineController.reduceStock(
+      const resultado = await OfflineProductsService.reduceStockOffline(
         productId,
         quantity,
         "venta_carrito"
@@ -414,7 +628,7 @@ export const updateStockFromCart = (productId, quantity) => {
         dispatch({
           type: types.productUpdateStock,
           payload: {
-            productoId,
+            productoId: productId,
             stock_anterior: resultado.stock_anterior,
             stock_nuevo: resultado.stock_nuevo,
             producto: resultado.producto,
@@ -434,6 +648,7 @@ export const updateStockFromCart = (productId, quantity) => {
     }
   };
 };
+
 // ✅ BUSCAR PRODUCTOS CON SOPORTE OFFLINE
 export const searchProducts = (searchTerm, categoriaId = null) => {
   return async (dispatch) => {
@@ -443,9 +658,10 @@ export const searchProducts = (searchTerm, categoriaId = null) => {
         online: navigator.onLine,
       });
 
-      const { searchProductsOffline } = useOfflineOperations();
-
-      let resultados = await searchProductsOffline(searchTerm, categoriaId);
+      let resultados = await OfflineProductsService.searchProductsOffline(
+        searchTerm,
+        categoriaId
+      );
 
       // ✅ ENRIQUECER RESULTADOS
       resultados = resultados.map((producto) => ({
@@ -491,9 +707,9 @@ export const getProductById = (productId) => {
     try {
       console.log(`🔄 [PRODUCTS] Obteniendo producto: ${productId}`);
 
-      const { getProductByIdOffline } = useOfflineOperations();
-
-      const producto = await getProductByIdOffline(productId);
+      const producto = await OfflineProductsService.getProductByIdOffline(
+        productId
+      );
 
       if (!producto) {
         console.warn(`⚠️ [PRODUCTS] Producto ${productId} no encontrado`);
@@ -547,9 +763,7 @@ export const updateProductStock = (productoId, stockData) => {
     try {
       console.log(`🔄 [PRODUCTS] Actualizando stock: ${productoId}`, stockData);
 
-      const { updateStockOffline } = useOfflineOperations();
-
-      const resultado = await updateStockOffline(
+      const resultado = await OfflineProductsService.updateStockOffline(
         productoId,
         stockData.nuevo_stock,
         {
@@ -611,9 +825,11 @@ export const reduceProductStock = (productoId, cantidad, ventaId = null) => {
     try {
       console.log(`🔄 [PRODUCTS] Reduciendo stock: ${productoId} -${cantidad}`);
 
-      const { reduceStockOffline } = useOfflineOperations();
-
-      const resultado = await reduceStockOffline(productoId, cantidad, ventaId);
+      const resultado = await OfflineProductsService.reduceStockOffline(
+        productoId,
+        cantidad,
+        ventaId
+      );
 
       if (resultado.success) {
         console.log(`✅ [PRODUCTS] Stock reducido: ${productoId} -${cantidad}`);
@@ -651,9 +867,8 @@ export const loadLowStockProducts = (limite = 10) => {
     try {
       console.log(`🔄 [PRODUCTS] Cargando productos bajo stock...`);
 
-      const { getLowStockProductsOffline } = useOfflineOperations();
-
-      const productosBajoStock = await getLowStockProductsOffline(limite);
+      const productosBajoStock =
+        await OfflineProductsService.getLowStockProductsOffline(limite);
 
       console.log(
         `📉 [PRODUCTS] ${productosBajoStock.length} productos con stock bajo`
@@ -704,8 +919,7 @@ export const syncProducts = () => {
         },
       });
 
-      const { syncProductsOffline } = useOfflineOperations();
-      const resultado = await syncProductsOffline();
+      const resultado = await OfflineProductsService.syncProductsOffline();
 
       Swal.close();
 
@@ -747,9 +961,7 @@ export const syncProducts = () => {
 export const loadProductsStats = () => {
   return async (dispatch) => {
     try {
-      const { getProductsOffline } = useOfflineOperations();
-
-      const productos = await getProductsOffline();
+      const productos = await OfflineProductsService.getProductsOffline();
 
       const stats = {
         total: productos.length,
