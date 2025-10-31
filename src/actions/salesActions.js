@@ -1,9 +1,35 @@
-// actions/salesActions.js - CON SOPORTE OFFLINE COMPLETO
+// actions/salesActions.js - VERSIÓN CORREGIDA
+
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import SalesOfflineController from "../controllers/offline/SalesOfflineController/SalesOfflineController";
 import ProductsOfflineController from "../controllers/offline/ProductsOfflineController/ProductsOfflineController";
+
+// ✅ FUNCIÓN AUXILIAR PARA ACTUALIZAR STOCK (AGREGAR ESTA FUNCIÓN)
+const processSaleStockUpdate = async (productos, ventaIdLocal = null) => {
+  try {
+    console.log("🔄 Procesando actualización de stock para venta...", {
+      productosCount: productos.length,
+      ventaIdLocal,
+    });
+
+    const resultados = await ProductsOfflineController.updateStockAfterSale(
+      productos
+    );
+
+    console.log("📊 Resultados de actualización de stock:", resultados);
+
+    return resultados;
+  } catch (error) {
+    console.error("❌ Error en processSaleStockUpdate:", error);
+    return {
+      success: false,
+      error: error.message,
+      resultados: { exitosos: [], fallidos: [] },
+    };
+  }
+};
 
 export const loadSales = (limite = 50, pagina = 1) => {
   return async (dispatch) => {
@@ -35,7 +61,6 @@ export const loadSales = (limite = 50, pagina = 1) => {
       }
 
       // ✅ EN OFFLINE O COMO FALLBACK: Cargar ventas pendientes locales
-
       const ventasPendientes = await SalesOfflineController.getPendingSales();
 
       if (ventasPendientes.length > 0) {
@@ -94,7 +119,7 @@ export const loadSales = (limite = 50, pagina = 1) => {
   };
 };
 
-// ✅ CREAR VENTA CON SOPORTE OFFLINE COMPLETO
+// ✅ CREAR VENTA CON SOPORTE OFFLINE COMPLETO - VERSIÓN CORREGIDA
 export const createSale = (saleData) => {
   return async (dispatch, getState) => {
     try {
@@ -104,9 +129,8 @@ export const createSale = (saleData) => {
       });
 
       // ✅ VALIDAR STOCK ANTES DE PROCESAR
-
       const validacionStock =
-        await ProductsOfflineController.validateStockForSale(
+        await ProductsOfflineController.validateStockForSaleSimple(
           saleData.productos
         );
 
@@ -128,8 +152,6 @@ export const createSale = (saleData) => {
             "✅ [SALES] Venta creada exitosamente en servidor:",
             response.venta.id
           );
-
-          // ✅ ACTUALIZAR STOCK EN SERVIDOR (ya se hace automáticamente en el backend)
         } else {
           throw new Error(
             response?.error || "Error al crear venta en servidor"
@@ -137,6 +159,7 @@ export const createSale = (saleData) => {
         }
       } else {
         // ✅ SIN CONEXIÓN: Crear localmente
+        console.log("📱 Creando venta offline...");
 
         const resultadoOffline = await SalesOfflineController.createSaleOffline(
           saleData
@@ -149,7 +172,8 @@ export const createSale = (saleData) => {
             resultadoOffline.id_local
           );
 
-          // ✅ ACTUALIZAR STOCK LOCALMENTE
+          // ✅ ACTUALIZAR STOCK LOCALMENTE - USANDO LA FUNCIÓN CORREGIDA
+          console.log("🔄 Actualizando stock localmente...");
           const actualizacionStock = await processSaleStockUpdate(
             saleData.productos,
             resultadoOffline.id_local
@@ -158,8 +182,9 @@ export const createSale = (saleData) => {
           if (!actualizacionStock.success) {
             console.error(
               "⚠️ [SALES] Algunos stocks no se actualizaron:",
-              actualizacionStock.resultados.fallidos
+              actualizacionStock.resultados?.fallidos
             );
+            // No lanzamos error aquí, solo registramos para no interrumpir la venta
           }
         } else {
           throw new Error(resultadoOffline.error);
@@ -175,7 +200,7 @@ export const createSale = (saleData) => {
       // ✅ ACTUALIZAR PRODUCTOS EN ESTADO GLOBAL (para reflejar cambios de stock)
       if (!isOnline) {
         dispatch({
-          type: types.productsUpdateFromSale,
+          type: "PRODUCTS_UPDATE_FROM_SALE",
           payload: saleData.productos,
         });
       }
@@ -350,7 +375,6 @@ export const getSaleById = (saleId) => {
         }
       } else {
         // Buscar en ventas locales
-
         const ventasPendientes = await SalesOfflineController.getPendingSales();
         venta = ventasPendientes.find((v) => v.id_local === saleId);
 

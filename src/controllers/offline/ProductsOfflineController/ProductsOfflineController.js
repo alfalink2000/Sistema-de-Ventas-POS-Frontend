@@ -1,4 +1,4 @@
-// src/controllers/offline/ProductsOfflineController.js
+// src/controllers/offline/ProductsOfflineController/ProductsOfflineController.js - VERSIÓN COMPLETA
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
 import IndexedDBService from "../../../services/IndexedDBService";
 
@@ -403,6 +403,222 @@ class ProductsOfflineController extends BaseOfflineController {
         success: false,
         error: error.message,
         resultados: { exitosos: [], fallidos: [] },
+      };
+    }
+  }
+
+  // ✅ NUEVO: VALIDAR STOCK PARA VENTA (VERSIÓN SIMPLIFICADA PARA SALES ACTIONS)
+  async validateStockForSaleSimple(productos) {
+    try {
+      const errores = [];
+      const resultados = [];
+
+      for (const productoVenta of productos) {
+        const producto = await IndexedDBService.get(
+          this.storeName,
+          productoVenta.producto_id
+        );
+
+        if (!producto) {
+          errores.push(
+            `Producto ID ${productoVenta.producto_id} no encontrado`
+          );
+          resultados.push({
+            producto_id: productoVenta.producto_id,
+            valido: false,
+            error: "Producto no encontrado",
+          });
+          continue;
+        }
+
+        const stockDisponible = producto.stock || 0;
+        const cantidadRequerida = productoVenta.cantidad || 0;
+
+        if (stockDisponible < cantidadRequerida) {
+          errores.push(
+            `${producto.nombre}: Stock insuficiente (${stockDisponible} disponible, ${cantidadRequerida} requerido)`
+          );
+          resultados.push({
+            producto_id: productoVenta.producto_id,
+            producto_nombre: producto.nombre,
+            valido: false,
+            stock_disponible: stockDisponible,
+            cantidad_requerida: cantidadRequerida,
+            deficit: cantidadRequerida - stockDisponible,
+          });
+        } else {
+          resultados.push({
+            producto_id: productoVenta.producto_id,
+            producto_nombre: producto.nombre,
+            valido: true,
+            stock_disponible: stockDisponible,
+            cantidad_requerida: cantidadRequerida,
+            stock_restante: stockDisponible - cantidadRequerida,
+          });
+        }
+      }
+
+      return {
+        valido: errores.length === 0,
+        errores: errores,
+        resultados: resultados,
+      };
+    } catch (error) {
+      console.error("❌ Error validando stock:", error);
+      return {
+        valido: false,
+        errores: [error.message],
+        resultados: [],
+      };
+    }
+  }
+
+  // ✅ NUEVO: ACTUALIZAR STOCK DESPUÉS DE VENTA (VERSIÓN SIMPLIFICADA)
+  async updateStockAfterSale(productos) {
+    try {
+      const resultados = [];
+
+      for (const productoVenta of productos) {
+        const producto = await IndexedDBService.get(
+          this.storeName,
+          productoVenta.producto_id
+        );
+
+        if (producto) {
+          const nuevoStock =
+            (producto.stock || 0) - (productoVenta.cantidad || 0);
+
+          await IndexedDBService.put(this.storeName, {
+            ...producto,
+            stock: nuevoStock,
+            ultima_actualizacion: new Date().toISOString(),
+          });
+
+          resultados.push({
+            producto_id: productoVenta.producto_id,
+            producto_nombre: producto.nombre,
+            exito: true,
+            stock_anterior: producto.stock,
+            stock_nuevo: nuevoStock,
+            cantidad_vendida: productoVenta.cantidad,
+          });
+        } else {
+          resultados.push({
+            producto_id: productoVenta.producto_id,
+            exito: false,
+            error: "Producto no encontrado",
+          });
+        }
+      }
+
+      return {
+        success: resultados.every((r) => r.exito),
+        resultados: resultados,
+      };
+    } catch (error) {
+      console.error("❌ Error actualizando stock:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  // ✅ NUEVO: OBTENER PRODUCTOS CON INFORMACIÓN COMPLETA
+  async getProductsWithDetails() {
+    try {
+      const productos = await this.getProducts();
+
+      // Enriquecer con información de categorías si está disponible
+      const categorias = await IndexedDBService.getAll("categorias");
+      const categoriasMap = {};
+
+      categorias.forEach((cat) => {
+        categoriasMap[cat.id] = cat.nombre;
+      });
+
+      return productos.map((producto) => ({
+        ...producto,
+        categoria_nombre:
+          categoriasMap[producto.categoria_id] || "Sin categoría",
+      }));
+    } catch (error) {
+      console.error("❌ Error obteniendo productos con detalles:", error);
+      return [];
+    }
+  }
+
+  // ✅ NUEVO: VERIFICAR DISPONIBILIDAD DE PRODUCTOS PARA VENTA RÁPIDA
+  async checkProductsAvailability(productos) {
+    try {
+      const disponibilidad = {
+        todosDisponibles: true,
+        productos: [],
+        errores: [],
+      };
+
+      for (const item of productos) {
+        const producto = await this.getProductById(item.producto_id);
+
+        if (!producto) {
+          disponibilidad.todosDisponibles = false;
+          disponibilidad.errores.push(
+            `Producto ${item.producto_id} no encontrado`
+          );
+          disponibilidad.productos.push({
+            producto_id: item.producto_id,
+            disponible: false,
+            error: "No encontrado",
+          });
+          continue;
+        }
+
+        if (!producto.activo) {
+          disponibilidad.todosDisponibles = false;
+          disponibilidad.errores.push(
+            `Producto ${producto.nombre} está inactivo`
+          );
+          disponibilidad.productos.push({
+            producto_id: item.producto_id,
+            nombre: producto.nombre,
+            disponible: false,
+            error: "Producto inactivo",
+          });
+          continue;
+        }
+
+        if (producto.stock < item.cantidad) {
+          disponibilidad.todosDisponibles = false;
+          disponibilidad.errores.push(
+            `Stock insuficiente: ${producto.nombre} (${producto.stock} disponible, ${item.cantidad} requerido)`
+          );
+          disponibilidad.productos.push({
+            producto_id: item.producto_id,
+            nombre: producto.nombre,
+            disponible: false,
+            stock_disponible: producto.stock,
+            cantidad_requerida: item.cantidad,
+            error: "Stock insuficiente",
+          });
+          continue;
+        }
+
+        disponibilidad.productos.push({
+          producto_id: item.producto_id,
+          nombre: producto.nombre,
+          disponible: true,
+          stock_disponible: producto.stock,
+          cantidad_requerida: item.cantidad,
+        });
+      }
+
+      return disponibilidad;
+    } catch (error) {
+      console.error("❌ Error verificando disponibilidad:", error);
+      return {
+        todosDisponibles: false,
+        productos: [],
+        errores: [error.message],
       };
     }
   }

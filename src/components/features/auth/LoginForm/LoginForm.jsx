@@ -5,6 +5,7 @@ import { startLogin } from "../../../../actions/authActions";
 import Input from "../../../ui/Input/Input";
 import styles from "./LoginForm.module.css";
 import AuthOfflineController from "../../../../controllers/offline/AuthOfflineController/AuthOfflineController";
+import { types } from "../../../../types/types";
 
 const LoginForm = () => {
   const [formData, setFormData] = useState({

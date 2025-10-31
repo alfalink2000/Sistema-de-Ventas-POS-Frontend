@@ -15,6 +15,7 @@ import SalesOfflineController from "../../../../controllers/offline/SalesOffline
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
 import Swal from "sweetalert2";
+import { types } from "../../../../types/types";
 import {
   FiWifi,
   FiWifiOff,
