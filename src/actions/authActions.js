@@ -23,15 +23,15 @@ export const checkingFinish = () => ({
 // ✅ CORREGIDO: LOGIN CON NUEVOS CONTROLLERS
 export const startLogin = (username, password) => {
   return async (dispatch) => {
-    dispatch(startLoading());
+    // ✅ USAR LOS TYPES CORRECTOS
+    dispatch({ type: types.authStartLoading });
 
     try {
       console.log("🔐 INICIANDO LOGIN para:", username);
-      console.log("🌐 Estado de conexión:", navigator.onLine);
 
       let loginResult;
 
-      // 1. PRIMERO INTENTAR CON SERVIDOR SI HAY CONEXIÓN
+      // 1. INTENTAR ONLINE PRIMERO
       if (navigator.onLine) {
         try {
           console.log("🔄 Intentando login ONLINE...");
@@ -43,30 +43,39 @@ export const startLogin = (username, password) => {
 
           console.log("📥 Respuesta del servidor:", response);
 
-          if (response && response.ok === true) {
+          if (response.ok === true) {
             const { token, usuario } = response;
 
-            // ✅ Guardar usuario usando el nuevo controller
-            await AuthOfflineController.saveUser(usuario, token);
-
+            // Guardar en localStorage
             localStorage.setItem("token", token);
             localStorage.setItem("user", JSON.stringify(usuario));
 
-            console.log("✅ Login online exitoso, sincronizando datos...");
+            console.log("✅ Login online exitoso");
 
-            // ✅ Sincronizar datos maestros en segundo plano
+            // ✅ DISPATCH CORRECTO
+            dispatch({
+              type: types.authLogin,
+              payload: usuario,
+            });
+
+            // ✅ CARGAR DATOS DESPUÉS DEL LOGIN
+            try {
+              await dispatch(loadProducts());
+              await dispatch(loadCategories());
+            } catch (loadError) {
+              console.error("Error cargando datos:", loadError);
+            }
+
+            // ✅ SINCRONIZACIÓN NO BLOQUEANTE
             setTimeout(async () => {
               try {
-                await SyncController.syncMasterData();
-                console.log("✅ Datos maestros sincronizados");
+                if (navigator.onLine) {
+                  await SyncController.syncMasterData();
+                }
               } catch (syncError) {
-                console.error("❌ Error sincronizando datos:", syncError);
+                console.error("❌ Error sincronizando:", syncError);
               }
             }, 1000);
-
-            // Cargar datos en Redux
-            await dispatch(loadProducts());
-            await dispatch(loadCategories());
 
             await Swal.fire({
               icon: "success",
@@ -76,37 +85,23 @@ export const startLogin = (username, password) => {
               showConfirmButton: false,
             });
 
-            dispatch({
-              type: types.authLogin,
-              payload: usuario,
-            });
-
             return { success: true, user: usuario };
           } else {
-            console.error("❌ Error del servidor:", response);
-            throw new Error(response.msg || "Credenciales incorrectas");
+            throw new Error(response.error || "Credenciales incorrectas");
           }
         } catch (onlineError) {
           console.error("💥 Error en login online:", onlineError);
-
-          // Si es error de red, continuar con modo offline
-          if (
-            onlineError.message.includes("Failed to fetch") ||
-            onlineError.message.includes("Network") ||
-            onlineError.message.includes("fetch")
-          ) {
-            console.log("🌐 Error de red - continuando con modo offline");
-            // Continuar con intento offline
+          // Si es error de red, continuar con offline
+          if (onlineError.message.includes("Failed to fetch")) {
+            console.log("🌐 Error de red - continuando offline");
           } else {
             throw onlineError;
           }
         }
       }
 
-      // 2. MODO OFFLINE (si no hay conexión o falló por red)
+      // 2. MODO OFFLINE
       console.log("📴 Intentando login OFFLINE...");
-
-      // ✅ Usar el controller offline
       const offlineResult = await AuthOfflineController.verifyCredentials(
         username,
         password
@@ -118,31 +113,7 @@ export const startLogin = (username, password) => {
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
 
-        console.log("✅ Login offline exitoso, cargando datos locales...");
-
-        // ✅ Cargar datos desde cache
-        try {
-          const productos = await ProductsOfflineController.getProducts();
-          if (productos && productos.length > 0) {
-            dispatch({
-              type: types.productsLoad,
-              payload: productos,
-            });
-            console.log(
-              `✅ ${productos.length} productos cargados desde cache`
-            );
-          }
-
-          // Para categorías, necesitarías CategoriesOfflineController
-          // Por ahora cargamos un array vacío
-          dispatch({
-            type: types.categoriesLoad,
-            payload: [],
-          });
-        } catch (cacheError) {
-          console.error("❌ Error cargando cache:", cacheError);
-        }
-
+        // ✅ DISPATCH CORRECTO PARA OFFLINE
         dispatch({
           type: types.authLogin,
           payload: user,
@@ -163,31 +134,10 @@ export const startLogin = (username, password) => {
     } catch (error) {
       console.error("❌ Error final en login:", error);
 
-      let errorMessage = error.message;
-      let errorTitle = "Error de acceso";
-
-      if (
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("Network") ||
-        error.message.includes("fetch")
-      ) {
-        errorTitle = "Error de conexión";
-        errorMessage =
-          "No se pudo conectar al servidor. Verifica tu conexión a internet.";
-      } else if (error.message.includes("offline")) {
-        errorTitle = "Modo Offline";
-        errorMessage =
-          "Usuario no disponible sin conexión. Conecta a internet para primer acceso.";
-      } else if (error.message.includes("expirada")) {
-        errorTitle = "Sesión Expirada";
-        errorMessage =
-          "Tu sesión ha expirado. Conecta a internet para renovar credenciales.";
-      }
-
       await Swal.fire({
         icon: "error",
-        title: errorTitle,
-        text: errorMessage,
+        title: "Error de acceso",
+        text: error.message,
         confirmButtonText: "Entendido",
       });
 
@@ -198,7 +148,8 @@ export const startLogin = (username, password) => {
 
       return { success: false, error: error.message };
     } finally {
-      dispatch(finishLoading());
+      // ✅ FINALIZAR LOADING CORRECTAMENTE
+      dispatch({ type: types.authFinishLoading });
     }
   };
 };
