@@ -15,9 +15,14 @@ import {
   FiWifiOff,
   FiRefreshCw,
   FiAlertCircle,
+  FiUploadCloud,
 } from "react-icons/fi";
-import { loadClosures } from "../../../../actions/closuresActions";
-import { useOfflineCierres } from "../../../../hook/useOfflineCierres";
+import {
+  loadClosures,
+  syncPendingClosures,
+} from "../../../../actions/closuresActions";
+import ClosuresOfflineController from "../../../../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
+import SyncController from "../../../../controllers/offline/SyncController/SyncController";
 import styles from "./ClosuresHistory.module.css";
 
 const ClosuresHistory = () => {
@@ -29,6 +34,8 @@ const ClosuresHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [localLoading, setLocalLoading] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
   const itemsPerPage = 10;
 
   const dispatch = useDispatch();
@@ -36,20 +43,34 @@ const ClosuresHistory = () => {
     (state) => state.closures
   );
 
-  // ✅ USAR HOOK OFFLINE
-  const {
-    cierres: offlineCierres,
-    loading: offlineLoading,
-    error: offlineError,
-    lastUpdate,
-    refreshCierres,
-  } = useOfflineCierres();
-
+  // ✅ CARGAR CIERRES PENDIENTES DE SINCRONIZACIÓN
   useEffect(() => {
-    const handleOnline = () => {
+    const loadPendingClosures = async () => {
+      try {
+        const pendingClosures =
+          await ClosuresOfflineController.getPendingClosures();
+        setPendingSyncCount(pendingClosures.length);
+      } catch (error) {
+        console.error("Error cargando cierres pendientes:", error);
+      }
+    };
+
+    loadPendingClosures();
+  }, []);
+
+  // ✅ MANEJAR CAMBIOS DE CONEXIÓN
+  useEffect(() => {
+    const handleOnline = async () => {
       setIsOnline(true);
       console.log("🌐 Conexión restaurada - Recargando cierres...");
+
+      // Recargar cierres del servidor
       dispatch(loadClosures(100));
+
+      // Actualizar contador de pendientes
+      const pendingClosures =
+        await ClosuresOfflineController.getPendingClosures();
+      setPendingSyncCount(pendingClosures.length);
     };
 
     const handleOffline = () => {
@@ -60,7 +81,7 @@ const ClosuresHistory = () => {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Cargar cierres cuando hay conexión
+    // Cargar cierres iniciales
     if (isOnline) {
       dispatch(loadClosures(100));
     }
@@ -71,20 +92,46 @@ const ClosuresHistory = () => {
     };
   }, [dispatch, isOnline]);
 
-  // Determinar qué datos usar
-  const closures = isOnline ? reduxCierres : offlineCierres;
-  const loading = isOnline ? reduxLoading : offlineLoading || localLoading;
-  const error = isOnline ? null : offlineError;
+  // ✅ SINCRONIZAR MANUALMENTE
+  const handleSync = async () => {
+    if (!isOnline) {
+      alert("No hay conexión a internet para sincronizar");
+      return;
+    }
 
+    setIsSyncing(true);
+    try {
+      await dispatch(syncPendingClosures());
+
+      // Actualizar contador después de sincronizar
+      const pendingClosures =
+        await ClosuresOfflineController.getPendingClosures();
+      setPendingSyncCount(pendingClosures.length);
+
+      // Recargar cierres
+      dispatch(loadClosures(100));
+    } catch (error) {
+      console.error("Error en sincronización manual:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // ✅ REFRESCAR DATOS
   const handleRetry = async () => {
     if (isOnline) {
       dispatch(loadClosures(100));
     } else {
       setLocalLoading(true);
-      await refreshCierres();
-      setLocalLoading(false);
+      // En modo offline, recargar desde IndexedDB
+      dispatch(loadClosures(100));
+      setTimeout(() => setLocalLoading(false), 1000);
     }
   };
+
+  // Determinar qué datos usar
+  const closures = reduxCierres || [];
+  const loading = reduxLoading || localLoading;
 
   // ✅ OBTENER AÑOS ÚNICOS DE LOS CIERRES
   const getUniqueYears = () => {
@@ -135,7 +182,8 @@ const ClosuresHistory = () => {
         closure.vendedor_nombre
           ?.toLowerCase()
           .includes(searchTerm.toLowerCase()) ||
-        closure.id?.toString().includes(searchTerm);
+        closure.id?.toString().includes(searchTerm) ||
+        closure.id_local?.toString().includes(searchTerm);
 
       // Filtro por mes
       const matchesMonth =
@@ -214,26 +262,37 @@ const ClosuresHistory = () => {
       "Ventas Totales",
       "Efectivo",
       "Tarjeta",
+      "Transferencia",
       "Ganancia Bruta",
       "Saldo Final Teórico",
       "Saldo Final Real",
       "Diferencia",
       "Duración",
+      "Estado",
+      "Sincronizado",
     ].join(",");
 
     const csvData = filteredClosures.map((closure) =>
       [
-        closure.id,
+        closure.id || closure.id_local,
         new Date(closure.fecha_cierre).toLocaleDateString(),
         closure.vendedor_nombre,
         closure.total_ventas,
         closure.total_efectivo,
         closure.total_tarjeta,
+        closure.total_transferencia || 0,
         closure.ganancia_bruta,
         closure.saldo_final_teorico,
         closure.saldo_final_real,
         closure.diferencia,
         calculateDuration(closure.fecha_apertura, closure.fecha_cierre),
+        closure.estado_diferencia ||
+          (closure.diferencia === 0
+            ? "exacto"
+            : closure.diferencia > 0
+            ? "sobrante"
+            : "faltante"),
+        closure.sincronizado ? "Sí" : "No",
       ].join(",")
     );
 
@@ -247,41 +306,48 @@ const ClosuresHistory = () => {
     URL.revokeObjectURL(url);
   };
 
-  // ✅ COMPONENTE DE ESTADO OFFLINE
+  // ✅ COMPONENTE DE ESTADO OFFLINO
   const renderOfflineStatus = () => (
     <div className={styles.offlineStatus}>
       <div className={styles.offlineHeader}>
         <FiWifiOff className={styles.offlineIcon} />
         <span>Modo Sin Conexión</span>
+        {pendingSyncCount > 0 && (
+          <span className={styles.pendingSyncBadge}>
+            {pendingSyncCount} pendientes de sincronizar
+          </span>
+        )}
       </div>
       <div className={styles.offlineInfo}>
-        <p>Mostrando {offlineCierres.length} cierres almacenados localmente</p>
-        {lastUpdate && (
-          <small>
-            Última actualización: {lastUpdate.toLocaleString("es-MX")}
-          </small>
+        <p>Mostrando {filteredClosures.length} cierres disponibles</p>
+        {pendingSyncCount > 0 && (
+          <p className={styles.pendingSyncInfo}>
+            Tienes {pendingSyncCount} cierre(s) pendientes de sincronización
+          </p>
         )}
       </div>
     </div>
   );
 
-  // ✅ COMPONENTE DE ERROR
-  const renderErrorState = () => (
-    <div className={styles.errorState}>
-      <FiAlertCircle className={styles.errorIcon} />
-      <h3>Error al cargar cierres</h3>
-      <p>{error || "No se pudieron cargar los cierres de caja"}</p>
-      <button
-        className={styles.retryButton}
-        onClick={handleRetry}
-        disabled={loading}
-      >
-        <FiRefreshCw
-          className={`${styles.retryIcon} ${loading ? styles.spinning : ""}`}
-        />
-        {loading ? "Reintentando..." : "Reintentar"}
-      </button>
-    </div>
+  // ✅ COMPONENTE DE SINCRONIZACIÓN
+  const renderSyncButton = () => (
+    <button
+      className={styles.syncButton}
+      onClick={handleSync}
+      disabled={!isOnline || isSyncing || pendingSyncCount === 0}
+      title={
+        !isOnline
+          ? "Requiere conexión a internet"
+          : pendingSyncCount === 0
+          ? "No hay cierres pendientes"
+          : "Sincronizar cierres pendientes"
+      }
+    >
+      <FiUploadCloud
+        className={`${styles.syncIcon} ${isSyncing ? styles.spinning : ""}`}
+      />
+      {isSyncing ? "Sincronizando..." : `Sincronizar (${pendingSyncCount})`}
+    </button>
   );
 
   if (loading) {
@@ -309,6 +375,12 @@ const ClosuresHistory = () => {
               <span className={styles.offlineBadge}>
                 <FiWifiOff />
                 Offline
+              </span>
+            )}
+            {pendingSyncCount > 0 && isOnline && (
+              <span className={styles.pendingBadge}>
+                <FiUploadCloud />
+                {pendingSyncCount} pendientes
               </span>
             )}
           </h2>
@@ -401,6 +473,9 @@ const ClosuresHistory = () => {
             </button>
           </div>
 
+          {/* ✅ BOTÓN SINCRONIZAR */}
+          {pendingSyncCount > 0 && renderSyncButton()}
+
           <button
             className={styles.exportButton}
             onClick={exportToCSV}
@@ -415,9 +490,6 @@ const ClosuresHistory = () => {
           </button>
         </div>
       </div>
-
-      {/* ✅ MOSTRAR ERROR SI HAY */}
-      {error && renderErrorState()}
 
       {/* Tabla de cierres */}
       <div className={styles.tableContainer}>
@@ -434,12 +506,13 @@ const ClosuresHistory = () => {
                 <th>Duración</th>
                 <th>Diferencia</th>
                 <th>Estado</th>
+                <th>Sincronizado</th>
               </tr>
             </thead>
             <tbody>
               {paginatedClosures.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className={styles.noData}>
+                  <td colSpan="10" className={styles.noData}>
                     <div className={styles.noDataContent}>
                       <FiCalendar className={styles.noDataIcon} />
                       <p>
@@ -468,19 +541,23 @@ const ClosuresHistory = () => {
                 </tr>
               ) : (
                 paginatedClosures.map((closure) => (
-                  <React.Fragment key={closure.id}>
+                  <React.Fragment key={closure.id || closure.id_local}>
                     <tr
                       className={styles.tableRow}
-                      onClick={() => toggleRow(closure.id)}
+                      onClick={() => toggleRow(closure.id || closure.id_local)}
                     >
                       <td className={styles.expandCell}>
-                        {expandedRow === closure.id ? (
+                        {expandedRow === (closure.id || closure.id_local) ? (
                           <FiChevronUp className={styles.expandIcon} />
                         ) : (
                           <FiChevronDown className={styles.expandIcon} />
                         )}
                       </td>
-                      <td className={styles.idCell}>#{closure.id}</td>
+                      <td className={styles.idCell}>
+                        {closure.id
+                          ? `#${closure.id}`
+                          : `📱${closure.id_local}`}
+                      </td>
                       <td className={styles.dateCell}>
                         {formatDate(closure.fecha_cierre)}
                       </td>
@@ -531,10 +608,23 @@ const ClosuresHistory = () => {
                             : "Faltante"}
                         </span>
                       </td>
+                      <td className={styles.syncCell}>
+                        {closure.sincronizado === false ? (
+                          <span className={styles.pendingSync}>
+                            <FiUploadCloud />
+                            Pendiente
+                          </span>
+                        ) : (
+                          <span className={styles.synced}>
+                            <FiWifi />
+                            Sincronizado
+                          </span>
+                        )}
+                      </td>
                     </tr>
-                    {expandedRow === closure.id && (
+                    {expandedRow === (closure.id || closure.id_local) && (
                       <tr className={styles.detailsRow}>
-                        <td colSpan="9">
+                        <td colSpan="10">
                           <div className={styles.detailsContent}>
                             <div className={styles.detailsGrid}>
                               <div className={styles.detailSection}>
@@ -580,6 +670,14 @@ const ClosuresHistory = () => {
                                   <span>Tarjeta:</span>
                                   <span>
                                     {formatCurrency(closure.total_tarjeta)}
+                                  </span>
+                                </div>
+                                <div className={styles.detailItem}>
+                                  <span>Transferencia:</span>
+                                  <span>
+                                    {formatCurrency(
+                                      closure.total_transferencia || 0
+                                    )}
                                   </span>
                                 </div>
                                 <div className={styles.detailItem}>
@@ -637,12 +735,24 @@ const ClosuresHistory = () => {
                             )}
 
                             {/* ✅ INDICADOR DE DATO LOCAL */}
-                            {!isOnline && (
+                            {(!closure.id ||
+                              closure.sincronizado === false) && (
                               <div className={styles.localDataIndicator}>
-                                <FiWifiOff />
-                                <span>
-                                  Dato cargado desde almacenamiento local
-                                </span>
+                                {closure.sincronizado === false ? (
+                                  <>
+                                    <FiUploadCloud />
+                                    <span>
+                                      Pendiente de sincronización - Cierre local
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FiWifiOff />
+                                    <span>
+                                      Dato cargado desde almacenamiento local
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
@@ -673,6 +783,12 @@ const ClosuresHistory = () => {
             {!isOnline && (
               <span className={styles.offlinePagination}> • Local</span>
             )}
+            {pendingSyncCount > 0 && (
+              <span className={styles.pendingPagination}>
+                {" "}
+                • {pendingSyncCount} pendientes
+              </span>
+            )}
           </div>
 
           <button
@@ -687,14 +803,13 @@ const ClosuresHistory = () => {
         </div>
       )}
 
-      {/* ✅ INFORMACIÓN DE PIE OFFLINE */}
+      {/* ✅ INFORMACIÓN DE PIE OFFLINO */}
       {!isOnline && filteredClosures.length > 0 && (
         <div className={styles.offlineFooter}>
           <FiWifiOff className={styles.offlineFooterIcon} />
           <span>
-            Modo offline • {filteredClosures.length} cierres locales • Última
-            actualización:{" "}
-            {lastUpdate ? lastUpdate.toLocaleString("es-MX") : "Nunca"}
+            Modo offline • {filteredClosures.length} cierres locales •{" "}
+            {pendingSyncCount} pendientes de sincronizar
           </span>
         </div>
       )}

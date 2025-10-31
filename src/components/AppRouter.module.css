@@ -1,4 +1,4 @@
-/* AppRouter.module.css - ESTILOS COMPLETOS */
+/* AppRouter.module.css - ESTILOS OPTIMIZADOS */
 .loadingContainer {
   min-height: 100vh;
   display: flex;
@@ -78,6 +78,19 @@
   font-size: 14px;
   color: white;
   opacity: 0.8;
+}
+
+.offlineNotice {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  border-left: 4px solid #f59e0b;
+}
+
+.offlineNotice p {
+  margin: 4px 0;
+  font-size: 14px;
 }
 
 @keyframes spin {

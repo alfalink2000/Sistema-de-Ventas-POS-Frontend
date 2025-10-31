@@ -1,4 +1,4 @@
-// AppRouter.jsx - VERSIÓN OPTIMIZADA PARA OFFLINE
+// AppRouter.jsx - VERSIÓN CORREGIDA Y OPTIMIZADA PARA OFFLINE
 import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import Login from "../pages/Login/Login";
@@ -17,8 +17,8 @@ import { loadInventory } from "../actions/inventoryActions";
 import { loadTodayClosure } from "../actions/closuresActions";
 import { loadOpenSesion } from "../actions/sesionesCajaActions";
 import LoadingSpinner from "../components/ui/LoadingSpinner/LoadingSpinner";
-import SyncService from "../services/SyncService";
-import { useOfflineData } from "../hook/useOfflineData";
+import IndexedDBService from "../services/IndexedDBService";
+import SyncController from "../controllers/offline/SyncController/SyncController";
 import styles from "./AppRouter.module.css";
 
 const AppRouter = () => {
@@ -33,8 +33,6 @@ const AppRouter = () => {
     sesionCaja: false,
   });
 
-  const { productos, categorias, loading: offlineLoading } = useOfflineData();
-
   const { isAuthenticated, checking, user } = useSelector(
     (state) => state.auth
   );
@@ -45,14 +43,36 @@ const AppRouter = () => {
   useEffect(() => {
     const initializeOffline = async () => {
       try {
-        await SyncService.init();
-        console.log("✅ Servicios offline inicializados");
+        // Inicializar IndexedDB
+        const dbInitialized = await IndexedDBService.init();
 
-        // ✅ SINCRONIZAR AUTOMÁTICAMENTE SI HAY CONEXIÓN
-        if (navigator.onLine) {
-          setTimeout(() => {
-            SyncService.trySync();
-          }, 3000);
+        if (dbInitialized) {
+          console.log("✅ IndexedDB inicializado correctamente");
+
+          // ✅ SINCRONIZAR AUTOMÁTICAMENTE SI HAY CONEXIÓN
+          if (navigator.onLine) {
+            console.log("🌐 Conexión detectada - Intentando sincronización...");
+            setTimeout(async () => {
+              try {
+                const syncStatus = await SyncController.getSyncStatus();
+                if (syncStatus.totalPending > 0) {
+                  console.log(
+                    `🔄 Sincronizando ${syncStatus.totalPending} registros pendientes...`
+                  );
+                  await SyncController.fullSync();
+                }
+              } catch (syncError) {
+                console.error(
+                  "❌ Error en sincronización automática:",
+                  syncError
+                );
+              }
+            }, 3000);
+          } else {
+            console.log("📱 Modo offline - Usando datos locales");
+          }
+        } else {
+          console.error("❌ No se pudo inicializar IndexedDB");
         }
       } catch (error) {
         console.error("❌ Error inicializando servicios offline:", error);
@@ -64,82 +84,123 @@ const AppRouter = () => {
     }
   }, [isAuthenticated, user]);
 
-  // ✅ CARGA DE DATOS OPTIMIZADA CON OFFLINE
+  // ✅ CARGA DE DATOS OPTIMIZADA CON SOPORTE OFFLINE
   useEffect(() => {
     if (!checking && isAuthenticated && user && !loadAttemptedRef.current) {
-      console.log("🔄 AppRouter: Iniciando carga completa de datos...", user);
+      console.log("🔄 AppRouter: Iniciando carga de datos...", user);
       loadAttemptedRef.current = true;
 
       const loadAllData = async () => {
         try {
           console.log("🚀 === INICIANDO CARGA DE DATOS ===");
 
-          // ✅ CARGAS CRÍTICAS PRIMERO
+          // ✅ VERIFICAR SI ESTAMOS OFFLINE
+          const isOffline = !navigator.onLine;
+
+          if (isOffline) {
+            console.log("📱 Modo offline - Verificando datos locales...");
+
+            // Verificar si tenemos datos locales suficientes
+            const dbInfo = await IndexedDBService.getDBInfo();
+            const hasProducts = dbInfo.counts.productos > 0;
+            const hasCategories = dbInfo.counts.categorias > 0;
+
+            if (hasProducts && hasCategories) {
+              console.log(
+                "✅ Datos locales disponibles - Continuando en modo offline"
+              );
+              setInitialLoadComplete(true);
+              return;
+            } else {
+              console.warn("⚠️ Datos locales insuficientes para modo offline");
+            }
+          }
+
+          // ✅ CARGAS CRÍTICAS PRIMERO (online u offline con fallback)
           const criticalLoads = [
             {
               key: "sesionCaja",
               action: () => dispatch(loadOpenSesion(user.id)),
               label: "sesión de caja",
+              optional: false,
             },
             {
               key: "products",
               action: () => dispatch(loadProducts()),
               label: "productos",
+              optional: false,
             },
             {
               key: "categories",
               action: () => dispatch(loadCategories()),
               label: "categorías",
+              optional: false,
             },
           ];
 
-          // ✅ CARGAS SECUNDARIAS DESPUÉS
-          const secondaryLoads = [
-            {
-              key: "sales",
-              action: () => dispatch(loadSales(10, 1)),
-              label: "ventas",
-            },
-            {
-              key: "inventory",
-              action: () => dispatch(loadInventory()),
-              label: "inventario",
-            },
-            {
-              key: "closures",
-              action: () => dispatch(loadTodayClosure()),
-              label: "cierres de caja",
-            },
-          ];
-
-          // ✅ EJECUTAR CARGAS CRÍTICAS
-          for (const { key, action, label } of criticalLoads) {
+          // ✅ EJECUTAR CARGAS CRÍTICAS CON MANEJO DE ERRORES
+          for (const { key, action, label, optional } of criticalLoads) {
             console.log(`📦 Cargando ${label}...`);
             setLoadProgress((prev) => ({ ...prev, [key]: true }));
-            await action();
-            setLoadProgress((prev) => ({ ...prev, [key]: false }));
-            console.log(`✅ ${label} cargados correctamente`);
+
+            try {
+              await action();
+              console.log(`✅ ${label} cargados correctamente`);
+            } catch (error) {
+              console.error(`❌ Error cargando ${label}:`, error);
+              if (!optional) {
+                // Para cargas críticas, intentar usar datos locales
+                console.log(
+                  `🔄 Intentando usar datos locales para ${label}...`
+                );
+              }
+            } finally {
+              setLoadProgress((prev) => ({ ...prev, [key]: false }));
+            }
           }
 
-          // ✅ EJECUTAR CARGAS SECUNDARIAS EN PARALELO
-          console.log("🔄 Ejecutando cargas secundarias en paralelo...");
-          const secondaryPromises = secondaryLoads.map(
-            ({ key, action, label }) => {
-              setLoadProgress((prev) => ({ ...prev, [key]: true }));
-              return action().finally(() => {
-                setLoadProgress((prev) => ({ ...prev, [key]: false }));
-                console.log(`✅ ${label} cargados`);
-              });
-            }
-          );
+          // ✅ CARGAS SECUNDARIAS SOLO SI ESTAMOS ONLINE
+          if (navigator.onLine) {
+            const secondaryLoads = [
+              {
+                key: "sales",
+                action: () => dispatch(loadSales(10, 1)),
+                label: "ventas",
+              },
+              {
+                key: "inventory",
+                action: () => dispatch(loadInventory()),
+                label: "inventario",
+              },
+              {
+                key: "closures",
+                action: () => dispatch(loadTodayClosure()),
+                label: "cierres de caja",
+              },
+            ];
 
-          await Promise.allSettled(secondaryPromises);
+            console.log("🔄 Ejecutando cargas secundarias...");
+            const secondaryPromises = secondaryLoads.map(
+              ({ key, action, label }) => {
+                setLoadProgress((prev) => ({ ...prev, [key]: true }));
+                return action().finally(() => {
+                  setLoadProgress((prev) => ({ ...prev, [key]: false }));
+                  console.log(`✅ ${label} cargados`);
+                });
+              }
+            );
 
-          console.log("🎉 === TODOS LOS DATOS CARGADOS EXITOSAMENTE ===");
+            await Promise.allSettled(secondaryPromises);
+          } else {
+            console.log("📱 Modo offline - Saltando cargas secundarias");
+          }
+
+          console.log("🎉 === CARGA DE DATOS COMPLETADA ===");
           setInitialLoadComplete(true);
         } catch (error) {
           console.error("❌ Error en carga inicial:", error);
-          // ✅ PERMITIR ACCESO A LA APP AUNQUE HAYA ERRORES
+          // ✅ PERMITIR ACCESO A LA APP AUNQUE HAYA ERRORES (modo resiliente)
+          console.log("🔄 Continuando con funcionalidad limitada...");
           setInitialLoadComplete(true);
         }
       };
@@ -148,7 +209,7 @@ const AppRouter = () => {
     }
   }, [isAuthenticated, checking, user, dispatch]);
 
-  // ✅ RESETEO MEJORADO AL CERRAR SESIÓN
+  // ✅ RESETEO AL CERRAR SESIÓN
   useEffect(() => {
     if (!isAuthenticated) {
       console.log("🔄 Usuario cerró sesión, reseteando estados...");
@@ -219,7 +280,11 @@ const AppRouter = () => {
         <LoadingSpinner size="large" />
         <div className={styles.loadingContent}>
           <h3>Preparando tu aplicación</h3>
-          <p>Cargando todos los datos necesarios...</p>
+          <p>
+            {!navigator.onLine
+              ? "📱 Modo offline - Cargando datos locales..."
+              : "Cargando todos los datos necesarios..."}
+          </p>
 
           {loadingItems.length > 0 && (
             <div className={styles.loadingSection}>
@@ -245,6 +310,15 @@ const AppRouter = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {!navigator.onLine && (
+            <div className={styles.offlineNotice}>
+              <p>
+                📱 <strong>Modo Offline</strong>
+              </p>
+              <p>Algunas funciones pueden estar limitadas</p>
             </div>
           )}
         </div>

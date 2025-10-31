@@ -2,11 +2,11 @@
 import { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
-import { updateStockFromCart } from "../../../../actions/productsActions";
 import { createSale } from "../../../../actions/salesActions";
 import { loadOpenSesion } from "../../../../actions/sesionesCajaActions";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
+import Swal from "sweetalert2";
 import styles from "./PaymentModal.module.css";
 
 const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
@@ -63,6 +63,42 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
     return stockIssues;
   };
 
+  // ✅ FUNCIÓN ALTERNATIVA PARA ACTUALIZAR STOCK
+  const updateProductStock = async (productId, quantity) => {
+    try {
+      // Buscar el producto actual
+      const product = products.find((p) => p.id === productId);
+      if (!product) {
+        throw new Error(`Producto con ID ${productId} no encontrado`);
+      }
+
+      // Calcular nuevo stock
+      const newStock = product.stock - quantity;
+      if (newStock < 0) {
+        throw new Error(
+          `Stock insuficiente: ${product.stock} disponible, ${quantity} requerido`
+        );
+      }
+
+      // Actualizar en Redux (simulación - en una app real esto haría una llamada API)
+      dispatch({
+        type: "PRODUCT_UPDATE_STOCK",
+        payload: {
+          id: productId,
+          stock: newStock,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      console.error(
+        `Error actualizando stock del producto ${productId}:`,
+        error
+      );
+      return false;
+    }
+  };
+
   const handleProcessSale = async () => {
     console.log("🔍 [PAYMENT] Iniciando proceso de venta...");
 
@@ -108,7 +144,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         throw new Error(`Stock insuficiente:\n${issueMessages}`);
       }
 
-      // 2. Actualizar stock de todos los productos vendidos
+      // 2. ✅ ACTUALIZAR STOCK USANDO LA FUNCIÓN ALTERNATIVA
       setStockUpdateStatus({
         updating: true,
         message: "Actualizando stock...",
@@ -119,9 +155,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
 
       for (const item of items) {
         try {
-          const success = await dispatch(
-            updateStockFromCart(item.id, item.quantity)
-          );
+          const success = await updateProductStock(item.id, item.quantity);
           stockUpdates.push({
             productId: item.id,
             productName: item.nombre,

@@ -1,4 +1,4 @@
-// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - ACTUALIZADO
+// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - CORREGIDO
 import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -9,8 +9,9 @@ import {
   createClosure,
   calculateClosureTotals,
 } from "../../../../actions/closuresActions";
-import OfflineClosureService from "../../../../services/OfflineClosureService";
-import IndexedDBService from "../../../../services/IndexedDBService";
+import ClosuresOfflineController from "../../../../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
+import SessionsOfflineController from "../../../../controllers/offline/SessionsOfflineController/SessionsOfflineController";
+import SalesOfflineController from "../../../../controllers/offline/SalesOfflineController/SalesOfflineController";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
 import Swal from "sweetalert2";
@@ -37,7 +38,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
 
-  // ✅ CALCULAR TOTALES
+  // ✅ CALCULAR TOTALES CON NUEVOS CONTROLADORES
   const calcularTotalesCompletos = useCallback(async () => {
     if (!sesion) return;
 
@@ -52,16 +53,23 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
       if (isOnline && sesion.id) {
         try {
+          // Intentar cálculo online primero
           totals = await dispatch(calculateClosureTotals(sesion.id));
         } catch (onlineError) {
           console.warn(
             "⚠️ Error en cálculo online, intentando offline:",
             onlineError
           );
-          totals = await OfflineClosureService.calculateClosureTotals(sesionId);
+          // Fallback a cálculo offline
+          totals = await ClosuresOfflineController.calculateSessionTotals(
+            sesionId
+          );
         }
       } else {
-        totals = await OfflineClosureService.calculateClosureTotals(sesionId);
+        // Cálculo offline directo
+        totals = await ClosuresOfflineController.calculateSessionTotals(
+          sesionId
+        );
       }
 
       const saldoInicial = sesion.saldo_inicial || 0;
@@ -75,6 +83,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
       setTotales(totalesCompletos);
 
+      // Sugerir saldo final real basado en el teórico
       if (!saldoFinalReal) {
         setSaldoFinalReal(saldoFinalTeorico.toFixed(2));
       }
@@ -84,6 +93,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         "No se pudieron calcular los totales. Verifica las ventas."
       );
 
+      // Datos por defecto en caso de error
       setTotales({
         total_ventas: 0,
         total_efectivo: 0,
@@ -115,7 +125,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     }
   }, [saldoFinalReal, totales]);
 
-  // ✅ MANEJAR CIERRE MEJORADO CON ACTUALIZACIÓN AUTOMÁTICA
+  // ✅ MANEJAR CIERRE CON NUEVOS CONTROLADORES
   const handleCerrarSesion = async () => {
     const saldoFinalNumero = parseFloat(saldoFinalReal);
 
@@ -164,10 +174,11 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       let result;
 
       if (isOnline && sesion.id) {
-        // ✅ MODO ONLINE
+        // ✅ MODO ONLINE - Usar actions de Redux
         result = await dispatch(createClosure(closureData));
 
         if (result && result.success !== false) {
+          // Cerrar sesión en servidor
           await dispatch(
             closeSesionCaja(sesion.id, {
               saldo_final: saldoFinalNumero,
@@ -180,43 +191,42 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           );
         }
       } else {
-        // ✅ MODO OFFLINE - GUARDAR Y CERRAR LOCALMENTE
-        result = await OfflineClosureService.createOfflineClosure(closureData);
+        // ✅ MODO OFFLINE - Usar controladores offline
+        console.log("📱 Creando cierre offline...");
 
-        if (!result.success) {
-          throw new Error(result.error);
+        // 1. Crear cierre offline
+        const closureResult = await ClosuresOfflineController.createClosure(
+          closureData
+        );
+
+        if (!closureResult.success) {
+          throw new Error(closureResult.error);
         }
 
-        // ✅ CERRAR SESIÓN LOCALMENTE INMEDIATAMENTE
-        if (sesion.id_local || sesionId) {
-          const sesionActualizada = {
-            ...sesion,
-            estado: "cerrada",
-            fecha_cierre: new Date().toISOString(),
+        // 2. Cerrar sesión offline
+        const closeSessionResult = await SessionsOfflineController.closeSession(
+          sesionId,
+          {
             saldo_final: saldoFinalNumero,
             observaciones: observaciones.trim() || null,
-            sincronizado: false,
-          };
+          }
+        );
 
-          await IndexedDBService.put(
-            "sesiones_caja_offline",
-            sesionActualizada
-          );
-          console.log("✅ Sesión marcada como cerrada localmente");
-
-          // ✅ ACTUALIZAR ESTADO GLOBAL INMEDIATAMENTE
-          dispatch({
-            type: "SESIONES_CAJA_UPDATE_LOCAL",
-            payload: {
-              id: sesionId,
-              estado: "cerrada",
-              fecha_cierre: new Date().toISOString(),
-            },
-          });
+        if (!closeSessionResult.success) {
+          throw new Error(closeSessionResult.error);
         }
+
+        result = {
+          success: true,
+          cierre: closureResult.cierre,
+          message:
+            "Cierre guardado localmente. Se sincronizará cuando haya conexión.",
+        };
+
+        console.log("✅ Cierre y sesión cerrados localmente");
       }
 
-      // ✅ MOSTRAR CONFIRMACIÓN Y CERRAR MODAL
+      // ✅ MOSTRAR CONFIRMACIÓN
       await Swal.fire({
         icon: "success",
         title: isOnline ? "Cierre Completado" : "Cierre Guardado (Offline)",
@@ -248,7 +258,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     }
   };
 
-  // ✅ CERRAR MODAL MEJORADO
+  // ✅ CERRAR MODAL
   const handleCloseModal = () => {
     setSaldoFinalReal("");
     setObservaciones("");
@@ -262,60 +272,85 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     calcularTotalesCompletos();
   };
 
-  // ✅ NUEVO: FUNCIÓN DE DIAGNÓSTICO DETALLADO
+  // ✅ FUNCIÓN DE DIAGNÓSTICO MEJORADA
   const handleDiagnosticar = async () => {
     if (!sesion) return;
 
     const sesionId = sesion.id_local || sesion.id;
-    console.log("🔍 Ejecutando diagnóstico detallado para sesión:", sesionId);
+    console.log("🔍 Ejecutando diagnóstico para sesión:", sesionId);
 
-    const diagnostico = await OfflineClosureService.diagnosticarProblema(
-      sesionId
-    );
-    console.log("📊 Resultado diagnóstico:", diagnostico);
+    try {
+      // Obtener ventas de la sesión
+      const ventasSesion = await SalesOfflineController.getSalesBySession(
+        sesionId
+      );
 
-    // Mostrar resultado en alerta detallada
-    const ventasEnSesion = diagnostico.ventasSesion || [];
+      // Obtener todas las ventas pendientes
+      const todasVentas = await SalesOfflineController.getPendingSales();
 
-    await Swal.fire({
-      title: "🔍 Diagnóstico Offline",
-      html: `
-        <div style="text-align: left; font-size: 14px;">
-          <h4>📋 Sesión:</h4>
-          <pre>${JSON.stringify(diagnostico.sesion, null, 2)}</pre>
-          
-          <h4>📊 Resumen:</h4>
-          <ul>
-            <li>Total ventas en DB: ${
-              diagnostico.resumen?.totalVentas || 0
-            }</li>
-            <li>Ventas en esta sesión: <strong>${
-              diagnostico.resumen?.ventasEnSesion || 0
-            }</strong></li>
-            <li>Total detalles en DB: ${
-              diagnostico.resumen?.totalDetalles || 0
-            }</li>
-          </ul>
-          
-          <h4>🎯 Ventas de esta sesión (${ventasEnSesion.length}):</h4>
-          ${
-            ventasEnSesion.length > 0
-              ? `<pre>${JSON.stringify(ventasEnSesion, null, 2)}</pre>`
-              : '<p style="color: red;">❌ NO SE ENCONTRARON VENTAS PARA ESTA SESIÓN</p>'
-          }
-          
-          <h4>📦 Todas las ventas (${
-            diagnostico.todasVentas?.length || 0
-          }):</h4>
-          <details>
-            <summary>Ver todas las ventas</summary>
-            <pre>${JSON.stringify(diagnostico.todasVentas, null, 2)}</pre>
-          </details>
-        </div>
-      `,
-      width: 1000,
-      confirmButtonText: "Entendido",
-    });
+      // Obtener sesión actual
+      const sesionActual = await SessionsOfflineController.getSessionById(
+        sesionId
+      );
+
+      const diagnostico = {
+        sesion: sesionActual,
+        ventasSesion: ventasSesion,
+        todasVentas: todasVentas,
+        resumen: {
+          totalVentas: todasVentas.length,
+          ventasEnSesion: ventasSesion.length,
+          totalDetalles: ventasSesion.reduce((acc, venta) => {
+            return acc + (venta.productos ? venta.productos.length : 0);
+          }, 0),
+        },
+      };
+
+      console.log("📊 Resultado diagnóstico:", diagnostico);
+
+      // Mostrar resultado en alerta detallada
+      await Swal.fire({
+        title: "🔍 Diagnóstico Offline",
+        html: `
+          <div style="text-align: left; font-size: 14px;">
+            <h4>📋 Sesión:</h4>
+            <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; max-height: 200px; overflow: auto;">
+${JSON.stringify(diagnostico.sesion, null, 2)}</pre>
+            
+            <h4>📊 Resumen:</h4>
+            <ul>
+              <li>Total ventas pendientes: ${
+                diagnostico.resumen.totalVentas
+              }</li>
+              <li>Ventas en esta sesión: <strong>${
+                diagnostico.resumen.ventasEnSesion
+              }</strong></li>
+              <li>Total productos vendidos: ${
+                diagnostico.resumen.totalDetalles
+              }</li>
+            </ul>
+            
+            <h4>🎯 Ventas de esta sesión (${ventasSesion.length}):</h4>
+            ${
+              ventasSesion.length > 0
+                ? `<pre style="background: #f0f9ff; padding: 10px; border-radius: 5px; max-height: 300px; overflow: auto;">
+${JSON.stringify(ventasSesion, null, 2)}</pre>`
+                : '<p style="color: red; background: #fee2e2; padding: 10px; border-radius: 5px;">❌ NO SE ENCONTRARON VENTAS PARA ESTA SESIÓN</p>'
+            }
+          </div>
+        `,
+        width: 900,
+        confirmButtonText: "Entendido",
+      });
+    } catch (error) {
+      console.error("Error en diagnóstico:", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Error en diagnóstico",
+        text: error.message,
+        confirmButtonText: "Entendido",
+      });
+    }
   };
 
   if (!sesion) {
@@ -414,6 +449,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
               <p>{errorCalculo}</p>
               <Button variant="secondary" onClick={handleRetryCalculation}>
                 Reintentar Cálculo
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDiagnosticar}
+                style={{ marginLeft: "8px" }}
+              >
+                Diagnosticar
               </Button>
             </div>
           ) : (

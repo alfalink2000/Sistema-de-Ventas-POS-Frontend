@@ -1,4 +1,4 @@
-// pages/Sales/Sales.jsx - CON VENTAS OFFLINE COMPLETAS
+// pages/Sales/Sales.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ProductGridSales from "../../components/features/sales/ProductGridSales/ProductGridSales";
@@ -8,7 +8,6 @@ import SesionCajaModal from "../../components/features/caja/SesionCajaModal/Sesi
 import { loadProducts } from "../../actions/productsActions";
 import { clearCart } from "../../actions/cartActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
-import { useOfflineSync } from "../../hooks/useOfflineSync";
 import {
   FiFilter,
   FiSearch,
@@ -17,6 +16,8 @@ import {
   FiWifiOff,
 } from "react-icons/fi";
 import styles from "./Sales.module.css";
+import IndexedDBService from "../../services/IndexedDBService";
+import SyncController from "../../controllers/offline/SyncController/SyncController";
 
 const Sales = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -24,15 +25,52 @@ const Sales = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [categories, setCategories] = useState([]);
   const [showSesionModal, setShowSesionModal] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncStatus, setSyncStatus] = useState({
+    pendingSales: 0,
+    pendingSessions: 0,
+    pendingClosures: 0,
+  });
 
   const dispatch = useDispatch();
-  const { isOnline, syncStatus, getProductsOffline, createSaleOffline } =
-    useOfflineSync();
 
   const { products, loading, error } = useSelector((state) => state.products);
   const { items } = useSelector((state) => state.cart);
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
   const { user } = useSelector((state) => state.auth);
+
+  // Cargar estado de sincronización y detectar conexión
+  useEffect(() => {
+    const loadSyncStatus = async () => {
+      try {
+        const status = await SyncController.getSyncStatus();
+        setSyncStatus({
+          pendingSales: status.pendingSales,
+          pendingSessions: status.pendingSessions,
+          pendingClosures: status.pendingClosures,
+        });
+      } catch (error) {
+        console.error("Error cargando estado de sincronización:", error);
+      }
+    };
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    loadSyncStatus();
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Actualizar estado cada 30 segundos
+    const interval = setInterval(loadSyncStatus, 30000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Cargar productos (online u offline)
   useEffect(() => {
@@ -43,14 +81,18 @@ const Sales = () => {
       } else {
         // Offline: cargar desde IndexedDB
         try {
-          const offlineProducts = await getProductsOffline();
+          const offlineProducts = await IndexedDBService.getAll("productos");
           // Dispatch manual para actualizar estado
           dispatch({
             type: "PRODUCTS_LOAD_OFFLINE",
-            payload: offlineProducts,
+            payload: offlineProducts || [],
           });
         } catch (error) {
           console.error("Error cargando productos offline:", error);
+          dispatch({
+            type: "PRODUCTS_LOAD_OFFLINE",
+            payload: [],
+          });
         }
       }
     };
@@ -60,7 +102,7 @@ const Sales = () => {
     if (user) {
       dispatch(loadOpenSesion(user.id));
     }
-  }, [dispatch, user, isOnline, getProductsOffline]);
+  }, [dispatch, user, isOnline]);
 
   // Extraer categorías únicas de los productos
   useEffect(() => {
@@ -100,6 +142,15 @@ const Sales = () => {
   const handleSaleSuccess = (saleData) => {
     console.log("Venta exitosa:", saleData);
     dispatch(clearCart());
+
+    // Actualizar estado de sincronización
+    SyncController.getSyncStatus().then((status) => {
+      setSyncStatus({
+        pendingSales: status.pendingSales,
+        pendingSessions: status.pendingSessions,
+        pendingClosures: status.pendingClosures,
+      });
+    });
 
     // Mostrar mensaje según el modo
     if (!isOnline) {

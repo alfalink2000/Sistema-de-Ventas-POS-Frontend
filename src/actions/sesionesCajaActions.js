@@ -1,9 +1,10 @@
-// actions/sesionesCajaActions.js - VERSIÓN CORREGIDA
+// actions/sesionesCajaActions.js - VERSIÓN CORREGIDA CON NUEVOS CONTROLADORES
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
-import SyncService from "../services/SyncService";
+import SessionsOfflineController from "../controllers/offline/SessionsOfflineController/SessionsOfflineController";
+import SyncController from "../controllers/offline//SyncController/SyncController";
 
 export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
   return async (dispatch) => {
@@ -125,14 +126,9 @@ export const loadOpenSesion = (vendedorId) => {
 
       // ✅ SEGUNDO: Buscar localmente SOLO si el servidor no tiene sesión
       if (!existe) {
-        const sesionesLocales = await IndexedDBService.safeGetAll(
-          "sesiones_caja_offline"
-        );
-
-        // ✅ FILTRAR SOLO SESIONES ABIERTAS DEL VENDEDOR ACTUAL
-        const sesionAbiertaLocal = sesionesLocales.find(
-          (s) => s.estado === "abierta" && s.vendedor_id === vendedorId
-        );
+        // ✅ CORREGIDO: Usar SessionsOfflineController para buscar sesión abierta
+        const sesionAbiertaLocal =
+          await SessionsOfflineController.getOpenSessionByVendedor(vendedorId);
 
         if (sesionAbiertaLocal) {
           // ✅ VERIFICAR QUE NO SEA UNA SESIÓN MUY ANTIGUA (más de 24 horas)
@@ -227,16 +223,20 @@ async function limpiarSesionesLocalesAbiertas(vendedorId) {
 // ✅ CERRAR SESIÓN ANTIGUA AUTOMÁTICAMENTE
 async function cerrarSesionAntigua(sesion) {
   try {
-    const sesionActualizada = {
-      ...sesion,
-      estado: "cerrada",
-      fecha_cierre: new Date().toISOString(),
-      observaciones: "Sesión cerrada automáticamente por antigüedad",
-      sincronizado: false,
-    };
+    // ✅ CORREGIDO: Usar SessionsOfflineController para cerrar sesión
+    const result = await SessionsOfflineController.closeSession(
+      sesion.id_local,
+      {
+        saldo_final: sesion.saldo_inicial || 0,
+        observaciones: "Sesión cerrada automáticamente por antigüedad",
+      }
+    );
 
-    await IndexedDBService.put("sesiones_caja_offline", sesionActualizada);
-    console.log(`✅ Sesión antigua cerrada: ${sesion.id_local}`);
+    if (result.success) {
+      console.log(`✅ Sesión antigua cerrada: ${sesion.id_local}`);
+    } else {
+      throw new Error(result.error);
+    }
   } catch (error) {
     console.error("Error cerrando sesión antigua:", error);
   }
@@ -279,30 +279,27 @@ export const openSesionCaja = (sesionData) => {
           throw new Error(response.error || "Error al abrir sesión");
         }
       } else {
-        // ✅ CORREGIDO: En offline, generar ID local único
-        const idLocal = `sesion_local_${Date.now()}_${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
-        resultado = {
-          ...sesionData,
-          id: idLocal, // Para compatibilidad
-          id_local: idLocal,
-          fecha_apertura: new Date().toISOString(),
-          estado: "abierta",
-          sincronizado: false,
-          vendedor_nombre: sesionData.vendedor_nombre || "Vendedor Offline",
-        };
+        // ✅ CORREGIDO: Usar SessionsOfflineController para abrir sesión offline
+        const openResult = await SessionsOfflineController.openSession(
+          sesionData
+        );
 
-        await IndexedDBService.add("sesiones_caja_offline", resultado);
+        if (openResult.success) {
+          resultado = openResult.sesion;
+          console.log(
+            "✅ [SESIONES] Sesión abierta localmente:",
+            resultado.id_local
+          );
 
-        console.log("✅ [SESIONES] Sesión abierta localmente:", idLocal);
-
-        await Swal.fire({
-          icon: "info",
-          title: "Modo Offline",
-          text: "Sesión abierta localmente. Se sincronizará cuando recuperes la conexión.",
-          confirmButtonText: "Entendido",
-        });
+          await Swal.fire({
+            icon: "info",
+            title: "Modo Offline",
+            text: "Sesión abierta localmente. Se sincronizará cuando recuperes la conexión.",
+            confirmButtonText: "Entendido",
+          });
+        } else {
+          throw new Error(openResult.error);
+        }
       }
 
       // ✅ CORREGIDO: Esperar y recargar la sesión abierta
@@ -372,24 +369,14 @@ export const closeSesionCaja = (sesionId, closeData) => {
           throw new Error(response.error || "Error al cerrar sesión");
         }
       } else {
-        // ✅ CORREGIDO: En offline, marcar como cerrada localmente
-        const sesiones = await IndexedDBService.getAll("sesiones_caja_offline");
-        const sesionLocal = sesiones.find(
-          (s) => s.id === sesionId || s.id_local === sesionId
+        // ✅ CORREGIDO: Usar SessionsOfflineController para cerrar sesión offline
+        const closeResult = await SessionsOfflineController.closeSession(
+          sesionId,
+          closeData
         );
 
-        if (sesionLocal) {
-          resultado = {
-            ...sesionLocal,
-            estado: "cerrada",
-            fecha_cierre: new Date().toISOString(),
-            saldo_final: closeData.saldo_final,
-            observaciones: closeData.observaciones,
-            sincronizado: false,
-          };
-
-          await IndexedDBService.put("sesiones_caja_offline", resultado);
-
+        if (closeResult.success) {
+          resultado = closeResult.sesion;
           console.log("✅ Sesión de caja cerrada localmente");
 
           await Swal.fire({
@@ -399,7 +386,7 @@ export const closeSesionCaja = (sesionId, closeData) => {
             confirmButtonText: "Entendido",
           });
         } else {
-          throw new Error("Sesión no encontrada localmente");
+          throw new Error(closeResult.error);
         }
       }
 
@@ -447,7 +434,7 @@ export const closeSesionCaja = (sesionId, closeData) => {
   };
 };
 
-// ✅ NUEVA ACCIÓN: Sincronizar sesiones pendientes mejorada
+// ✅ CORREGIDO: Sincronizar sesiones pendientes mejorada
 export const syncPendingSessions = () => {
   return async (dispatch) => {
     try {
@@ -470,8 +457,8 @@ export const syncPendingSessions = () => {
         },
       });
 
-      // ✅ USAR EL SYNC SERVICE MEJORADO
-      await SyncService.forceSync();
+      // ✅ CORREGIDO: Usar SyncController en lugar de SyncService
+      const syncResult = await SyncController.fullSync();
 
       // ✅ RECARGAR DATOS DESPUÉS DE SINCRONIZAR
       const user = JSON.parse(localStorage.getItem("user"));
@@ -482,13 +469,17 @@ export const syncPendingSessions = () => {
 
       Swal.close();
 
-      await Swal.fire({
-        icon: "success",
-        title: "Sincronización completada",
-        text: "Todas las sesiones pendientes se han sincronizado",
-        timer: 2000,
-        showConfirmButton: false,
-      });
+      if (syncResult.success) {
+        await Swal.fire({
+          icon: "success",
+          title: "Sincronización completada",
+          text: "Todas las sesiones pendientes se han sincronizado",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } else {
+        throw new Error(syncResult.error || "Error en sincronización");
+      }
 
       return true;
     } catch (error) {

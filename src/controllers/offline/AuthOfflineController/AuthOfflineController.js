@@ -1,6 +1,6 @@
 // src/controllers/offline/AuthOfflineController/AuthOfflineController.js - COMPLETO
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
-import IndexedDBService from "../../../../services/IndexedDBService";
+import IndexedDBService from "../../../services/IndexedDBService";
 
 class AuthOfflineController extends BaseOfflineController {
   constructor() {

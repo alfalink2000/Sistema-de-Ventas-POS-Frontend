@@ -1,10 +1,10 @@
-// components/features/auth/LoginForm/LoginForm.jsx - CON AUTENTICACIÓN OFFLINE
+// components/features/auth/LoginForm/LoginForm.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { startLogin } from "../../../../actions/authActions";
-import { useOfflineSync } from "../../../../hooks/useOfflineSync";
 import Input from "../../../ui/Input/Input";
 import styles from "./LoginForm.module.css";
+import AuthOfflineController from "../../../../controllers/offline/AuthOfflineController/AuthOfflineController";
 
 const LoginForm = () => {
   const [formData, setFormData] = useState({
@@ -13,18 +13,34 @@ const LoginForm = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
-  const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(!navigator.onLine);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   const dispatch = useDispatch();
-  const { loginOffline, isOnline } = useOfflineSync();
   const { loading, error, isAuthenticated } = useSelector(
     (state) => state.auth
   );
 
-  // Detectar modo offline
+  // Detectar cambios de conexión
   useEffect(() => {
-    setOfflineMode(!isOnline);
-  }, [isOnline]);
+    const handleOnline = () => {
+      setIsOnline(true);
+      setOfflineMode(false);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setOfflineMode(true);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Sincronizar loading local con el del estado global
   useEffect(() => {
@@ -47,7 +63,7 @@ const LoginForm = () => {
       if (offlineMode) {
         // ✅ MODO OFFLINE: Usar controlador offline
         console.log("📱 Intentando login offline...");
-        result = await loginOffline(
+        result = await AuthOfflineController.verifyCredentials(
           formData.username.trim(),
           formData.password
         );

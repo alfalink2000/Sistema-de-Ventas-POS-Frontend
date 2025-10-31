@@ -1,9 +1,10 @@
+// src/actions/closuresActions.js - VERSIÓN CORREGIDA
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
-import OfflineClosureService from "../services/OfflineClosureService";
-import SyncService from "../services/SyncService";
+import ClosuresOfflineController from "../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
+import SyncController from "../controllers/offline/SyncController/SyncController";
 
 export const loadClosures = (limite = 100, pagina = 1) => {
   return async (dispatch) => {
@@ -257,20 +258,16 @@ export const calculateClosureTotals = (sesionCajaId) => {
 
         const sesionIdLocal = sesion.id_local || sesionCajaId;
 
-        // Calcular totales usando el servicio offline
+        // ✅ CORREGIDO: Usar ClosuresOfflineController en lugar de OfflineClosureService
         const totalesCalculados =
-          await OfflineClosureService.calculateClosureTotals(sesionIdLocal);
+          await ClosuresOfflineController.calculateSessionTotals(sesionIdLocal);
 
         // Obtener saldo inicial
-        const saldoInicial =
-          await OfflineClosureService.getSessionInitialBalance(sesionIdLocal);
+        const saldoInicial = sesion.saldo_inicial || 0;
 
         // Calcular saldo final teórico
         const saldoFinalTeorico =
-          OfflineClosureService.calculateTheoreticalFinalBalance(
-            saldoInicial,
-            totalesCalculados.total_efectivo
-          );
+          saldoInicial + (totalesCalculados.total_efectivo || 0);
 
         totales = {
           ...totalesCalculados,
@@ -307,7 +304,7 @@ export const createClosure = (closureData) => {
       console.log("🔄 [CLOSURES] Creando cierre de caja...", closureData);
 
       // Validaciones
-      if (!closureData.sesion_caja_id) {
+      if (!closureData.sesion_caja_id && !closureData.sesion_caja_id_local) {
         throw new Error("ID de sesión de caja es requerido");
       }
 
@@ -321,10 +318,8 @@ export const createClosure = (closureData) => {
       const isOnline = navigator.onLine;
       let resultado;
 
-      if (isOnline) {
-        // Si hay conexión, crear en servidor
-
-        // ✅ CORREGIDO: Calcular diferencia automáticamente según el backend
+      if (isOnline && closureData.sesion_caja_id) {
+        // ✅ MODO ONLINE - Sesión del servidor
         const datosCompletos = {
           sesion_caja_id: closureData.sesion_caja_id,
           total_ventas: closureData.total_ventas || 0,
@@ -359,52 +354,42 @@ export const createClosure = (closureData) => {
           throw new Error(response?.error || "Error al crear cierre");
         }
       } else {
-        // Si no hay conexión, crear localmente
+        // ✅ MODO OFFLINE - Crear localmente
         console.log("📱 [CLOSURES] Creando cierre localmente...");
 
         const { sesionesCaja } = getState();
         const sesion = sesionesCaja.sesiones.find(
           (s) =>
             s.id === closureData.sesion_caja_id ||
-            s.id_local === closureData.sesion_caja_id
+            s.id_local === closureData.sesion_caja_id_local
         );
 
         if (!sesion) {
           throw new Error("Sesión no encontrada");
         }
 
-        const sesionIdLocal = sesion.id_local || closureData.sesion_caja_id;
+        const sesionIdLocal =
+          sesion.id_local || closureData.sesion_caja_id_local;
         const saldoFinalReal = parseFloat(closureData.saldo_final_real);
 
-        // Calcular resumen completo usando servicio offline
-        const resumen = await OfflineClosureService.getClosureSummary(
-          sesionIdLocal,
-          saldoFinalReal
-        );
-
-        const closureDataCompleto = {
+        // ✅ CORREGIDO: Usar ClosuresOfflineController
+        const closureResult = await ClosuresOfflineController.createClosure({
           ...closureData,
-          ...resumen,
           sesion_caja_id_local: sesionIdLocal,
-          vendedor_id: closureData.vendedor_id,
-          observaciones: closureData.observaciones || "",
-        };
+          saldo_final_real: saldoFinalReal,
+        });
 
-        // Crear cierre local
-        const resultadoLocal = await OfflineClosureService.createOfflineClosure(
-          closureDataCompleto
-        );
-
-        if (resultadoLocal.success) {
+        if (closureResult.success) {
           resultado = {
             ok: true,
-            cierre: resultadoLocal.cierre,
-            message: resultadoLocal.message,
+            cierre: closureResult.cierre,
+            message:
+              "Cierre guardado localmente. Se sincronizará cuando haya conexión.",
             resumen: {
               estado_caja:
-                resumen.estado_diferencia === "exacto"
+                closureResult.cierre.diferencia === 0
                   ? "Exacto"
-                  : resumen.estado_diferencia === "sobrante"
+                  : closureResult.cierre.diferencia > 0
                   ? "Sobrante"
                   : "Faltante",
             },
@@ -413,15 +398,15 @@ export const createClosure = (closureData) => {
           await Swal.fire({
             icon: "info",
             title: "Modo Offline",
-            text: resultadoLocal.message,
+            text: "El cierre se guardó localmente y se sincronizará cuando recuperes la conexión",
             confirmButtonText: "Entendido",
           });
         } else {
-          throw new Error(resultadoLocal.error);
+          throw new Error(closureResult.error);
         }
       }
 
-      // ✅ DISPATCH CORRECTO PARA TU REDUCER
+      // ✅ DISPATCH CORRECTO PARA EL REDUCER
       if (resultado.cierre) {
         const cierreEnriquecido = {
           ...resultado.cierre,
@@ -604,7 +589,7 @@ export const loadClosuresStats = () => {
   };
 };
 
-// ✅ NUEVO: Sincronizar cierres pendientes manualmente
+// ✅ CORREGIDO: Sincronizar cierres pendientes manualmente
 export const syncPendingClosures = () => {
   return async (dispatch) => {
     try {
@@ -627,20 +612,25 @@ export const syncPendingClosures = () => {
         },
       });
 
-      await SyncService.forceSync();
+      // ✅ CORREGIDO: Usar fullSync en lugar de forceSync
+      const syncResult = await SyncController.fullSync();
 
       // Recargar cierres después de sincronizar
       await dispatch(loadClosures());
 
       Swal.close();
 
-      await Swal.fire({
-        icon: "success",
-        title: "Sincronización completada",
-        text: "Todos los cierres pendientes se han sincronizado",
-        timer: 2000,
-        showConfirmButton: false,
-      });
+      if (syncResult.success) {
+        await Swal.fire({
+          icon: "success",
+          title: "Sincronización completada",
+          text: "Todos los cierres pendientes se han sincronizado",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } else {
+        throw new Error(syncResult.error || "Error en sincronización");
+      }
 
       return true;
     } catch (error) {

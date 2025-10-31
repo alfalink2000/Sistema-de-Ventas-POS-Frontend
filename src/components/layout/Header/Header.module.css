@@ -593,3 +593,92 @@
   outline: 2px solid white;
   outline-offset: 2px;
 }
+/* AGREGAR ESTOS NUEVOS ESTILOS AL FINAL DE TU HEADER.MODULE.CSS EXISTENTE */
+
+/* ✅ NUEVOS ESTILOS PARA SINCRONIZACIÓN MEJORADA */
+.syncIconContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.syncIcon.syncing {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.syncWarning {
+  color: #fbbf24;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.syncWarning svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ✅ NUEVO BADGE OFFLINE EN EL HEADER */
+.offlineHeaderBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.offlineHeaderBadge svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* ✅ BADGE PARA GANANCIAS OFFLINE */
+.offlineEarningBadge {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 7px;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+/* ✅ MEJORAS RESPONSIVE ADICIONALES */
+@media (max-width: 768px) {
+  .offlineHeaderBadge {
+    margin-left: 4px;
+    padding: 1px 4px;
+    font-size: 9px;
+  }
+
+  .syncWarning {
+    display: none; /* Ocultar en móviles para ahorrar espacio */
+  }
+}
+
+@media (max-width: 640px) {
+  .offlineHeaderBadge {
+    display: none; /* Ocultar en pantallas muy pequeñas */
+  }
+
+  .offlineEarningBadge {
+    display: none;
+  }
+}

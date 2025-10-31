@@ -1,7 +1,5 @@
 // src/components/features/offline/OfflineDataStatus/OfflineDataStatus.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
-import { useOfflineAuth } from "../../../hook/useOfflineAuth";
-import { useOfflineData } from "../../../hook/useOfflineData";
 import {
   FiWifi,
   FiWifiOff,
@@ -13,20 +11,75 @@ import {
   FiDatabase,
 } from "react-icons/fi";
 import styles from "./OfflineDataStatus.module.css";
+import IndexedDBService from "../../../services/IndexedDBService";
+import AuthOfflineController from "../../../controllers/offline/AuthOfflineController/AuthOfflineController";
+import ProductsOfflineController from "../../../controllers/offline/ProductsOfflineController/ProductsOfflineController";
 
 const OfflineDataStatus = () => {
-  const {
-    hasOfflineData,
-    offlineUsers,
-    syncUsers,
-    isLoading,
-    usersStats,
-    cleanupDuplicates,
-  } = useOfflineAuth();
-
-  const { productos, categorias, lastUpdate } = useOfflineData();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showStats, setShowStats] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [offlineUsers, setOfflineUsers] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [usersStats, setUsersStats] = useState(null);
+
+  // Cargar datos offline
+  useEffect(() => {
+    loadOfflineData();
+  }, []);
+
+  const loadOfflineData = async () => {
+    try {
+      // Cargar usuarios offline
+      const users = await AuthOfflineController.getAllOfflineUsers();
+      setOfflineUsers(users);
+
+      // Cargar productos
+      const products = await ProductsOfflineController.getProducts();
+      setProductos(products);
+
+      // Cargar categorías
+      const categories = await IndexedDBService.getAll("categorias");
+      setCategorias(categories || []);
+
+      // Calcular estadísticas de usuarios
+      calculateUsersStats(users);
+
+      // Obtener última actualización
+      const cache = await IndexedDBService.get("cache_maestros", "productos");
+      if (cache?.ultima_actualizacion) {
+        setLastUpdate(cache.ultima_actualizacion);
+      }
+    } catch (error) {
+      console.error("Error cargando datos offline:", error);
+    }
+  };
+
+  const calculateUsersStats = (users) => {
+    if (!users || users.length === 0) {
+      setUsersStats({
+        totalRecords: 0,
+        uniqueUsers: 0,
+        duplicates: 0,
+      });
+      return;
+    }
+
+    const uniqueIds = new Set();
+    const duplicates = users.length - new Set(users.map((u) => u.id)).size;
+
+    users.forEach((user) => {
+      if (user.id) uniqueIds.add(user.id);
+    });
+
+    setUsersStats({
+      totalRecords: users.length,
+      uniqueUsers: uniqueIds.size,
+      duplicates: duplicates,
+    });
+  };
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -42,13 +95,35 @@ const OfflineDataStatus = () => {
   }, []);
 
   const handleSync = async () => {
-    await syncUsers();
+    if (!isOnline) return;
+
+    setIsLoading(true);
+    try {
+      // Sincronizar usuarios
+      await AuthOfflineController.syncUsersFromServer();
+
+      // Sincronizar productos
+      await ProductsOfflineController.syncProductsFromServer();
+
+      // Recargar datos
+      await loadOfflineData();
+    } catch (error) {
+      console.error("Error en sincronización:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCleanup = async () => {
-    await cleanupDuplicates();
-    // Recargar usuarios después de limpiar
-    window.location.reload(); // O usar tu función de recarga
+    try {
+      const result = await AuthOfflineController.cleanupDuplicateUsers();
+      if (result.success) {
+        console.log(`🧹 Limpiados ${result.removed} usuarios duplicados`);
+        await loadOfflineData(); // Recargar datos
+      }
+    } catch (error) {
+      console.error("Error limpiando duplicados:", error);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -80,8 +155,6 @@ const OfflineDataStatus = () => {
   };
 
   const dataStatus = getDataStatus();
-
-  // ✅ MOSTRAR INFORMACIÓN DE DEBUG SI HAY DUPLICADOS
   const hasDuplicates = usersStats && usersStats.duplicates > 0;
 
   return (
@@ -145,6 +218,11 @@ const OfflineDataStatus = () => {
         <div className={styles.dataItem}>
           <FiPackage className={styles.dataIcon} />
           <span>{productos.length} productos disponibles offline</span>
+        </div>
+
+        <div className={styles.dataItem}>
+          <FiPackage className={styles.dataIcon} />
+          <span>{categorias.length} categorías disponibles offline</span>
         </div>
 
         {lastUpdate && (

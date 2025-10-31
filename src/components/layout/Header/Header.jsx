@@ -1,4 +1,4 @@
-// components/layout/Header/Header.jsx - VERSIÓN MEJORADA
+// components/layout/Header/Header.jsx - VERSIÓN CORREGIDA CON TUS ESTILOS
 import { useDispatch, useSelector } from "react-redux";
 import { startLogout } from "../../../actions/authActions";
 import {
@@ -10,9 +10,11 @@ import {
   FiWifi,
   FiWifiOff,
   FiRefreshCw,
+  FiAlertCircle,
 } from "react-icons/fi";
 import styles from "./Header.module.css";
-import { useSyncStatus } from "../../../hook/useSyncStatus";
+import { useState, useEffect } from "react";
+import SyncController from "../../../controllers/offline/SyncController/SyncController";
 
 const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   const dispatch = useDispatch();
@@ -20,9 +22,85 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   const { sales } = useSelector((state) => state.sales);
   const { products } = useSelector((state) => state.products);
 
-  // ✅ HOOK DE SINCRONIZACIÓN
-  const { isOnline, isSyncing, pendingCount, forceSync, health } =
-    useSyncStatus();
+  // ✅ ESTADO DE SINCRONIZACIÓN MEJORADO
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncStatus, setSyncStatus] = useState({
+    pendingSessions: 0,
+    pendingSales: 0,
+    pendingClosures: 0,
+  });
+
+  // ✅ CARGA DE DATOS PENDIENTES
+  useEffect(() => {
+    const loadPendingData = async () => {
+      try {
+        const syncStatus = await SyncController.getSyncStatus();
+        setPendingCount(syncStatus.totalPending);
+        setSyncStatus({
+          pendingSessions: syncStatus.pendingSessions,
+          pendingSales: syncStatus.pendingSales,
+          pendingClosures: syncStatus.pendingClosures,
+        });
+      } catch (error) {
+        console.error("Error cargando estado de sincronización:", error);
+      }
+    };
+
+    loadPendingData();
+
+    // Actualizar cada 30 segundos
+    const interval = setInterval(loadPendingData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ✅ MANEJO DE CONEXIÓN
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log("🌐 Conexión restaurada - Header");
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log("📴 Conexión perdida - Header");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // ✅ SINCRONIZACIÓN MANUAL
+  const handleForceSync = async () => {
+    if (!isOnline) {
+      alert("No hay conexión a internet para sincronizar");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      await SyncController.fullSync();
+
+      // Actualizar contador después de sincronizar
+      const newStatus = await SyncController.getSyncStatus();
+      setPendingCount(newStatus.totalPending);
+      setSyncStatus({
+        pendingSessions: newStatus.pendingSessions,
+        pendingSales: newStatus.pendingSales,
+        pendingClosures: newStatus.pendingClosures,
+      });
+    } catch (error) {
+      console.error("Error en sincronización manual:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleLogout = () => {
     dispatch(startLogout());
@@ -35,7 +113,9 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     }
 
     const ventasSesionActual = sales.filter(
-      (venta) => venta.sesion_caja_id === sesionAbierta.id
+      (venta) =>
+        venta.sesion_caja_id === sesionAbierta.id ||
+        venta.sesion_caja_id_local === sesionAbierta.id_local
     );
 
     if (ventasSesionActual.length === 0) {
@@ -61,6 +141,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
           }
         });
       } else {
+        // Estimación del 30% si no hay datos detallados
         gananciaBruta += (venta.total || 0) * 0.3;
       }
     });
@@ -98,26 +179,42 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
           <span className={styles.appName}>KioskoFlow</span>
           <span className={styles.welcomeText}>
             Sistema POS - Control de Ventas
+            {!isOnline && (
+              <span className={styles.offlineHeaderBadge}>
+                <FiWifiOff />
+                Modo Offline
+              </span>
+            )}
           </span>
         </div>
       </div>
 
       <div className={styles.headerRight}>
-        {/* ✅ INDICADOR DE SINCRONIZACIÓN COMPACTO */}
+        {/* ✅ INDICADOR DE SINCRONIZACIÓN MEJORADO */}
         <div className={styles.syncIndicator}>
-          <div
-            className={`${styles.syncIcon} ${
-              isOnline ? styles.online : styles.offline
-            }`}
-          >
-            {isSyncing ? (
-              <FiRefreshCw className={styles.syncSpinner} />
-            ) : isOnline ? (
-              <FiWifi className={styles.wifiIcon} />
-            ) : (
-              <FiWifiOff className={styles.wifiOffIcon} />
-            )}
+          <div className={styles.syncIconContainer}>
+            <div
+              className={`${styles.syncIcon} ${
+                isOnline ? styles.online : styles.offline
+              } ${isSyncing ? styles.syncing : ""}`}
+              title={
+                isSyncing
+                  ? "Sincronizando datos..."
+                  : isOnline
+                  ? "Conectado al servidor"
+                  : "Modo offline - Datos locales"
+              }
+            >
+              {isSyncing ? (
+                <FiRefreshCw className={styles.syncSpinner} />
+              ) : isOnline ? (
+                <FiWifi className={styles.wifiIcon} />
+              ) : (
+                <FiWifiOff className={styles.wifiOffIcon} />
+              )}
+            </div>
           </div>
+
           <div className={styles.syncInfo}>
             <span className={styles.syncStatus}>
               {isSyncing
@@ -132,14 +229,26 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </span>
             )}
           </div>
+
+          {/* Botón de sincronización */}
           {pendingCount > 0 && isOnline && !isSyncing && (
             <button
               className={styles.syncButton}
-              onClick={forceSync}
-              title="Sincronizar ahora"
+              onClick={handleForceSync}
+              title="Sincronizar datos pendientes"
             >
               <FiRefreshCw className={styles.syncButtonIcon} />
             </button>
+          )}
+
+          {/* Indicador de advertencia si hay muchos pendientes */}
+          {pendingCount > 10 && (
+            <div
+              className={styles.syncWarning}
+              title="Muchos datos pendientes de sincronización"
+            >
+              <FiAlertCircle />
+            </div>
           )}
         </div>
 
@@ -156,8 +265,11 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </span>
               <div className={styles.earningsDetails}>
                 <span className={styles.salesCount}>
-                  {cantidadVentas} ventas
+                  {cantidadVentas} venta{cantidadVentas !== 1 ? "s" : ""}
                 </span>
+                {!isOnline && (
+                  <span className={styles.offlineEarningBadge}>local</span>
+                )}
               </div>
             </div>
           </div>

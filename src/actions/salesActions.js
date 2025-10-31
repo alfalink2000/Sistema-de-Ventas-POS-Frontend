@@ -2,7 +2,7 @@
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
-import { useOfflineOperations } from "../hooks/useOfflineOperations";
+import { useOfflineOperations } from "../hook/useOfflineOperations";
 
 export const loadSales = (limite = 50, pagina = 1) => {
   return async (dispatch) => {

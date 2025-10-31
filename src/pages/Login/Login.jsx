@@ -1,17 +1,16 @@
-// pages/Login/Login.jsx - VERSIÓN COMPLETA Y CORREGIDA
+// pages/Login/Login.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import LoginForm from "../../components/features/auth/LoginForm/LoginForm";
 import OfflineDataStatus from "../../components/offline/OfflineDataStatus/OfflineDataStatus";
-import { useOfflineSync } from "../../hooks/useOfflineSync";
 import { syncOfflineUsers } from "../../actions/authActions";
 import styles from "./Login.module.css";
 
 const Login = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth);
-  const { isSyncing } = useOfflineSync();
 
   useEffect(() => {
     const handleOnline = () => {
@@ -20,8 +19,11 @@ const Login = () => {
 
       // Sincronizar usuarios automáticamente cuando hay conexión
       if (!isSyncing) {
+        setIsSyncing(true);
         setTimeout(() => {
-          dispatch(syncOfflineUsers());
+          dispatch(syncOfflineUsers()).finally(() => {
+            setIsSyncing(false);
+          });
         }, 2000);
       }
     };
@@ -29,6 +31,7 @@ const Login = () => {
     const handleOffline = () => {
       console.log("📴 Conexión perdida - Modo offline");
       setIsOnline(false);
+      setIsSyncing(false);
     };
 
     window.addEventListener("online", handleOnline);
@@ -52,7 +55,7 @@ const Login = () => {
 
   return (
     <div className={styles.loginContainer}>
-      {/* ✅ HEADER MEJORADO CON ESTADO OFFLINO */}
+      {/* ✅ HEADER MEJORADO CON ESTADO OFFLINE */}
       <div className={styles.offlineHeader}>
         <OfflineDataStatus />
 
@@ -99,19 +102,13 @@ const Login = () => {
             <div className={styles.logoText}>
               <h1>KioskoFlow</h1>
               <p>Sistema de Punto de Venta {!isOnline && "(Offline)"}</p>
-              {isOnline && (
-                <div className={styles.onlineStatus}>
-                  <span className={styles.statusDot}></span>
-                  Conectado
-                </div>
-              )}
             </div>
           </div>
         </div>
 
         <LoginForm />
 
-        {/* ✅ INFORMACIÓN ADICIONAL PARA MODO OFFLINO */}
+        {/* ✅ INFORMACIÓN ADICIONAL PARA MODO OFFLINE */}
         {!isOnline && (
           <div className={styles.offlineInfo}>
             <h4>💡 Información sobre Modo Offline</h4>

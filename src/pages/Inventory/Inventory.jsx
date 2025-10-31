@@ -2,7 +2,10 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import DashboardLayout from "../../components/layout/DashboardLayout/DashboardLayout";
-import { loadProducts, updateStock } from "../../actions/productsActions";
+import {
+  loadProducts,
+  updateProductStock,
+} from "../../actions/productsActions";
 import {
   FiPackage,
   FiAlertTriangle,
@@ -84,7 +87,7 @@ const Inventory = () => {
       ...(currentUser.rol !== "admin" && { adminPassword }),
     };
 
-    const success = await dispatch(updateStock(productId, stockData));
+    const success = await dispatch(updateProductStock(productId, stockData));
 
     if (success) {
       setEditingStock(null);
