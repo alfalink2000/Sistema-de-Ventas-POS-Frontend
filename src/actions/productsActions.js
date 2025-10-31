@@ -283,7 +283,7 @@ export const updateProduct = (productId, productData) => {
 
       // Actualizar estado global
       dispatch({
-        type: types.productUpdate,
+        type: types.productUpdated,
         payload: resultado,
       });
 
@@ -369,7 +369,7 @@ export const deleteProduct = (productId) => {
 
       // Actualizar estado global
       dispatch({
-        type: types.productDelete,
+        type: types.productDeleted,
         payload: productId,
       });
 

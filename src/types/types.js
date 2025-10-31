@@ -1,8 +1,9 @@
-// types/types.js - VERSIÓN COMPLETAMENTE CONSISTENTE
+// types/types.js - VERSIÓN COMPLETAMENTE CONSISTENTE Y CORREGIDA
 export const types = {
+  // Connection Types
   connectionStatusUpdate: "[connection] Status Update",
 
-  // Auth Types - ✅ CORRECTOS
+  // Auth Types
   authStartLoading: "[auth] Start Loading",
   authFinishLoading: "[auth] Finish Loading",
   authLogin: "[auth] Login",
@@ -13,88 +14,103 @@ export const types = {
   authSyncComplete: "[auth] Sync Complete",
   authStatsLoaded: "[auth] Stats Loaded",
 
-  // Users - ✅ CORRECTOS
-  usersStartLoading: "[Users] Start loading",
-  usersFinishLoading: "[Users] Finish loading",
-  usersLoad: "[Users] Load users",
-  userAddNew: "[Users] Add new user",
-  userUpdated: "[Users] Update user",
-  userDeleted: "[Users] Delete user",
+  // Users Types
+  usersStartLoading: "[users] Start Loading",
+  usersFinishLoading: "[users] Finish Loading",
+  usersLoad: "[users] Load Users",
+  userAddNew: "[users] Add New",
+  userUpdated: "[users] Update User",
+  userDeleted: "[users] Delete User",
+  userSetActive: "[users] Set Active",
+  userClearActive: "[users] Clear Active",
 
-  // Product Types - ✅ CORREGIR: AGREGAR LOS QUE FALTAN
+  // Product Types - ✅ COMPLETAMENTE CONSISTENTES
   productsStartLoading: "[products] Start Loading",
   productsFinishLoading: "[products] Finish Loading",
   productsLoad: "[products] Load Products",
   productAddNew: "[products] Add New",
-  productUpdated: "[products] Updated",
-  productDeleted: "[products] Deleted",
+  productUpdated: "[products] Update Product",
+  productDeleted: "[products] Delete Product",
   productSetActive: "[products] Set Active",
+  productClearActive: "[products] Clear Active",
   productUpdateStock: "[products] Update Stock",
-  // ✅ AGREGAR ESTOS TYPES QUE USAS EN LAS ACTIONS:
   productsSearch: "[products] Search Products",
   productsLoadLowStock: "[products] Load Low Stock",
   productsLoadStats: "[products] Load Stats",
-  productClearActive: "[products] Clear Active",
 
-  // Category Types - ✅ CORREGIR: CAMBIAR A categoriesStartLoading (CON "s")
+  // Category Types - ✅ CORREGIDOS (CONSISTENCIA EN SINGULAR/PLURAL)
   categoriesStartLoading: "[categories] Start Loading",
   categoriesFinishLoading: "[categories] Finish Loading",
   categoriesLoad: "[categories] Load Categories",
   categoryAddNew: "[categories] Add New",
-  categoryUpdated: "[categories] Updated",
-  categoryDeleted: "[categories] Deleted",
+  categoryUpdated: "[categories] Update Category",
+  categoryDeleted: "[categories] Delete Category",
   categorySetActive: "[categories] Set Active",
+  categoryClearActive: "[categories] Clear Active",
 
-  // Sales Types - ✅ CORRECTOS
+  // Sales Types
   salesStartLoading: "[sales] Start Loading",
   salesFinishLoading: "[sales] Finish Loading",
   salesLoad: "[sales] Load Sales",
   saleAddNew: "[sales] Add New",
-  saleUpdated: "[sales] Updated",
+  saleUpdated: "[sales] Update Sale",
+  saleDeleted: "[sales] Delete Sale",
   saleSetActive: "[sales] Set Active",
+  saleClearActive: "[sales] Clear Active",
   salesLoadByDate: "[sales] Load By Date",
 
-  // Inventory Types - ✅ CORRECTOS
+  // Inventory Types
   inventoryStartLoading: "[inventory] Start Loading",
   inventoryFinishLoading: "[inventory] Finish Loading",
   inventoryLoad: "[inventory] Load Inventory",
   inventoryUpdateStock: "[inventory] Update Stock",
   inventoryLoadLowStock: "[inventory] Load Low Stock",
 
-  // Cash Closures Types - ✅ CORRECTOS
+  // Cash Closures Types
   closuresStartLoading: "[closures] Start Loading",
   closuresFinishLoading: "[closures] Finish Loading",
   closuresLoad: "[closures] Load Closures",
   closureAddNew: "[closures] Add New",
+  closureUpdated: "[closures] Update Closure",
+  closureDeleted: "[closures] Delete Closure",
   closureSetActive: "[closures] Set Active",
+  closureClearActive: "[closures] Clear Active",
   closureLoadToday: "[closures] Load Today",
-  closuresLoadToday: "[Cierres] Load today closure",
 
-  // Cart Types - ✅ CORRECTOS
+  // Cart Types
   cartAddItem: "[cart] Add Item",
   cartRemoveItem: "[cart] Remove Item",
   cartUpdateQuantity: "[cart] Update Quantity",
   cartClear: "[cart] Clear",
+  cartSetActive: "[cart] Set Active",
 
-  // DetallesVenta Types - ✅ CORRECTOS
+  // DetallesVenta Types
   detallesVentaStartLoading: "[detallesVenta] Start Loading",
   detallesVentaFinishLoading: "[detallesVenta] Finish Loading",
   detallesVentaLoad: "[detallesVenta] Load Detalles",
   detallesVentaAddNew: "[detallesVenta] Add New",
 
-  // SesionesCaja Types - ✅ CORRECTOS
+  // SesionesCaja Types
   sesionesCajaStartLoading: "[sesionesCaja] Start Loading",
   sesionesCajaFinishLoading: "[sesionesCaja] Finish Loading",
   sesionesCajaLoad: "[sesionesCaja] Load Sesiones",
   sesionesCajaAddNew: "[sesionesCaja] Add New",
-  sesionesCajaUpdate: "[sesionesCaja] Update Sesion",
+  sesionesCajaUpdated: "[sesionesCaja] Update Sesion",
+  sesionesCajaDeleted: "[sesionesCaja] Delete Sesion",
   sesionesCajaSetActive: "[sesionesCaja] Set Active",
+  sesionesCajaClearActive: "[sesionesCaja] Clear Active",
   sesionesCajaLoadOpen: "[sesionesCaja] Load Open Sesion",
 
-  // Sync Types - ✅ CORRECTOS
+  // Sync Types
   syncStart: "[sync] Start",
   syncFinish: "[sync] Finish",
   syncError: "[sync] Error",
+  syncProgress: "[sync] Progress",
 
-  statsLoadDashboard: "[Stats] Load dashboard stats",
+  // Stats Types
+  statsStartLoading: "[stats] Start Loading",
+  statsFinishLoading: "[stats] Finish Loading",
+  statsLoadDashboard: "[stats] Load Dashboard Stats",
+  statsLoadSales: "[stats] Load Sales Stats",
+  statsLoadProducts: "[stats] Load Products Stats",
 };

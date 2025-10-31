@@ -1,4 +1,4 @@
-// reducers/categoriesReducer.js
+// reducers/categoriesReducer.js - CORREGIDO
 import { types } from "../types/types";
 
 const initialState = {
@@ -17,18 +17,18 @@ export const categoriesReducer = (state = initialState, action) => {
         error: null,
       };
 
+    case types.categoriesFinishLoading:
+      return {
+        ...state,
+        loading: false,
+      };
+
     case types.categoriesLoad:
       return {
         ...state,
         categories: Array.isArray(action.payload) ? action.payload : [],
         loading: false,
         error: null,
-      };
-
-    case types.categoriesFinishLoading:
-      return {
-        ...state,
-        loading: false,
       };
 
     case types.categoryAddNew:
@@ -57,6 +57,12 @@ export const categoriesReducer = (state = initialState, action) => {
       return {
         ...state,
         activeCategory: action.payload,
+      };
+
+    case types.categoryClearActive:
+      return {
+        ...state,
+        activeCategory: null,
       };
 
     default:

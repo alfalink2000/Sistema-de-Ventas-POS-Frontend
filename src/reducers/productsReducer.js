@@ -6,6 +6,9 @@ const initialState = {
   loading: false,
   error: null,
   activeProduct: null,
+  searchResults: [],
+  lowStockProducts: [],
+  stats: null,
 };
 
 export const productsReducer = (state = initialState, action) => {
@@ -17,18 +20,18 @@ export const productsReducer = (state = initialState, action) => {
         error: null,
       };
 
+    case types.productsFinishLoading:
+      return {
+        ...state,
+        loading: false,
+      };
+
     case types.productsLoad:
       return {
         ...state,
         products: Array.isArray(action.payload) ? action.payload : [],
         loading: false,
         error: null,
-      };
-
-    case types.productFinishLoading:
-      return {
-        ...state,
-        loading: false,
       };
 
     case types.productAddNew:
@@ -42,7 +45,7 @@ export const productsReducer = (state = initialState, action) => {
         ...state,
         products: state.products.map((product) =>
           product.id === action.payload.id
-            ? { ...product, ...action.payload } // ✅ CORREGIDO: Merge de propiedades
+            ? { ...product, ...action.payload }
             : product
         ),
       };
@@ -59,6 +62,44 @@ export const productsReducer = (state = initialState, action) => {
       return {
         ...state,
         activeProduct: action.payload,
+      };
+
+    case types.productClearActive:
+      return {
+        ...state,
+        activeProduct: null,
+      };
+
+    case types.productUpdateStock:
+      return {
+        ...state,
+        products: state.products.map((product) =>
+          product.id === action.payload.productoId
+            ? {
+                ...product,
+                stock: action.payload.stock_nuevo,
+                ...action.payload.producto,
+              }
+            : product
+        ),
+      };
+
+    case types.productsSearch:
+      return {
+        ...state,
+        searchResults: Array.isArray(action.payload) ? action.payload : [],
+      };
+
+    case types.productsLoadLowStock:
+      return {
+        ...state,
+        lowStockProducts: Array.isArray(action.payload) ? action.payload : [],
+      };
+
+    case types.productsLoadStats:
+      return {
+        ...state,
+        stats: action.payload,
       };
 
     default:
