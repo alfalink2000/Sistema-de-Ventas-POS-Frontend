@@ -22,8 +22,8 @@ export const types = {
   userDeleted: "[Users] Delete user",
 
   // Product Types - ✅ CORREGIDOS (SIN "s")
-  productStartLoading: "[products] Start Loading",
-  productFinishLoading: "[products] Finish Loading",
+  productsStartLoading: "[products] Start Loading",
+  productsFinishLoading: "[products] Finish Loading",
   productsLoad: "[products] Load Products",
   productAddNew: "[products] Add New",
   productUpdated: "[products] Updated",
