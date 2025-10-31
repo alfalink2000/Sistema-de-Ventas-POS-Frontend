@@ -1,8 +1,8 @@
-// types/types.js - VERSIÓN CORREGIDA
+// types/types.js - VERSIÓN COMPLETAMENTE CONSISTENTE
 export const types = {
   connectionStatusUpdate: "[connection] Status Update",
 
-  // Auth Types - ✅ CORREGIDOS
+  // Auth Types - ✅ CORRECTOS
   authStartLoading: "[auth] Start Loading",
   authFinishLoading: "[auth] Finish Loading",
   authLogin: "[auth] Login",
@@ -13,7 +13,7 @@ export const types = {
   authSyncComplete: "[auth] Sync Complete",
   authStatsLoaded: "[auth] Stats Loaded",
 
-  // Users - ✅ CORREGIDOS
+  // Users - ✅ CORRECTOS
   usersStartLoading: "[Users] Start loading",
   usersFinishLoading: "[Users] Finish loading",
   usersLoad: "[Users] Load users",
@@ -21,7 +21,7 @@ export const types = {
   userUpdated: "[Users] Update user",
   userDeleted: "[Users] Delete user",
 
-  // Product Types - ✅ CORREGIDOS (SIN "s")
+  // Product Types - ✅ CORREGIR: AGREGAR LOS QUE FALTAN
   productsStartLoading: "[products] Start Loading",
   productsFinishLoading: "[products] Finish Loading",
   productsLoad: "[products] Load Products",
@@ -30,17 +30,22 @@ export const types = {
   productDeleted: "[products] Deleted",
   productSetActive: "[products] Set Active",
   productUpdateStock: "[products] Update Stock",
+  // ✅ AGREGAR ESTOS TYPES QUE USAS EN LAS ACTIONS:
+  productsSearch: "[products] Search Products",
+  productsLoadLowStock: "[products] Load Low Stock",
+  productsLoadStats: "[products] Load Stats",
+  productClearActive: "[products] Clear Active",
 
-  // Category Types - ✅ CORREGIDOS (SIN "s")
-  categoryStartLoading: "[categories] Start Loading",
-  categoryFinishLoading: "[categories] Finish Loading",
+  // Category Types - ✅ CORREGIR: CAMBIAR A categoriesStartLoading (CON "s")
+  categoriesStartLoading: "[categories] Start Loading",
+  categoriesFinishLoading: "[categories] Finish Loading",
   categoriesLoad: "[categories] Load Categories",
   categoryAddNew: "[categories] Add New",
   categoryUpdated: "[categories] Updated",
   categoryDeleted: "[categories] Deleted",
   categorySetActive: "[categories] Set Active",
 
-  // Sales Types - ✅ CORREGIDOS
+  // Sales Types - ✅ CORRECTOS
   salesStartLoading: "[sales] Start Loading",
   salesFinishLoading: "[sales] Finish Loading",
   salesLoad: "[sales] Load Sales",
@@ -49,14 +54,14 @@ export const types = {
   saleSetActive: "[sales] Set Active",
   salesLoadByDate: "[sales] Load By Date",
 
-  // Inventory Types - ✅ CORREGIDOS
+  // Inventory Types - ✅ CORRECTOS
   inventoryStartLoading: "[inventory] Start Loading",
   inventoryFinishLoading: "[inventory] Finish Loading",
   inventoryLoad: "[inventory] Load Inventory",
   inventoryUpdateStock: "[inventory] Update Stock",
   inventoryLoadLowStock: "[inventory] Load Low Stock",
 
-  // Cash Closures Types - ✅ CORREGIDOS
+  // Cash Closures Types - ✅ CORRECTOS
   closuresStartLoading: "[closures] Start Loading",
   closuresFinishLoading: "[closures] Finish Loading",
   closuresLoad: "[closures] Load Closures",
@@ -65,19 +70,19 @@ export const types = {
   closureLoadToday: "[closures] Load Today",
   closuresLoadToday: "[Cierres] Load today closure",
 
-  // Cart Types - ✅ CORREGIDOS
+  // Cart Types - ✅ CORRECTOS
   cartAddItem: "[cart] Add Item",
   cartRemoveItem: "[cart] Remove Item",
   cartUpdateQuantity: "[cart] Update Quantity",
   cartClear: "[cart] Clear",
 
-  // DetallesVenta Types - ✅ CORREGIDOS
+  // DetallesVenta Types - ✅ CORRECTOS
   detallesVentaStartLoading: "[detallesVenta] Start Loading",
   detallesVentaFinishLoading: "[detallesVenta] Finish Loading",
   detallesVentaLoad: "[detallesVenta] Load Detalles",
   detallesVentaAddNew: "[detallesVenta] Add New",
 
-  // SesionesCaja Types - ✅ CORREGIDOS
+  // SesionesCaja Types - ✅ CORRECTOS
   sesionesCajaStartLoading: "[sesionesCaja] Start Loading",
   sesionesCajaFinishLoading: "[sesionesCaja] Finish Loading",
   sesionesCajaLoad: "[sesionesCaja] Load Sesiones",
@@ -86,7 +91,7 @@ export const types = {
   sesionesCajaSetActive: "[sesionesCaja] Set Active",
   sesionesCajaLoadOpen: "[sesionesCaja] Load Open Sesion",
 
-  // Sync Types - ✅ CORREGIDOS
+  // Sync Types - ✅ CORRECTOS
   syncStart: "[sync] Start",
   syncFinish: "[sync] Finish",
   syncError: "[sync] Error",
