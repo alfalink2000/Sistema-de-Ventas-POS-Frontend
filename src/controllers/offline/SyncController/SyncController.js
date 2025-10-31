@@ -1,9 +1,11 @@
-// src/controllers/offline/SyncController.js
+// src/controllers/offline/SyncController.js - VERSIÓN CORREGIDA
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
 import AuthOfflineController from "../AuthOfflineController/AuthOfflineController";
 import SalesOfflineController from "../SalesOfflineController/SalesOfflineController";
 import SessionsOfflineController from "../SessionsOfflineController/SessionsOfflineController";
 import ClosuresOfflineController from "../ClosuresOfflineController/ClosuresOfflineController";
+import { fetchConToken, fetchSinToken } from "../../../helpers/fetch";
+import IndexedDBService from "../../../services/IndexedDBService";
 
 class SyncController extends BaseOfflineController {
   constructor() {
@@ -12,7 +14,7 @@ class SyncController extends BaseOfflineController {
     this.isSyncing = false;
   }
 
-  // ✅ SINCRONIZACIÓN COMPLETA
+  // ✅ SINCRONIZACIÓN COMPLETA - CORREGIDA
   async fullSync() {
     if (!this.isOnline) {
       this.notifyListeners("sync_skipped", { reason: "offline" });
@@ -48,7 +50,7 @@ class SyncController extends BaseOfflineController {
       // 3. Sincronizar ventas pendientes
       syncResults.sales = await SalesOfflineController.syncPendingSales();
 
-      // 4. Sincronizar sesiones y cierres (en orden correcto)
+      // 4. Sincronizar sesiones y cierres
       const sessionResults = await this.syncSessionsAndClosures();
       syncResults.sessions = sessionResults.sessions;
       syncResults.closures = sessionResults.closures;
@@ -74,7 +76,62 @@ class SyncController extends BaseOfflineController {
     }
   }
 
-  // ✅ SINCRONIZAR SESIONES Y CIERRES (ORDEN CRÍTICO)
+  // ✅ SINCRONIZAR DATOS MAESTROS - CORREGIDO
+  async syncMasterData() {
+    try {
+      console.log("📦 Sincronizando datos maestros...");
+
+      // ✅ USAR fetchConToken EN LUGAR DE fetch DIRECTAMENTE
+      const [productosResponse, categoriasResponse] = await Promise.all([
+        fetchConToken("productos"),
+        fetchConToken("categorias"),
+      ]);
+
+      console.log("📥 Respuesta productos:", productosResponse);
+      console.log("📥 Respuesta categorías:", categoriasResponse);
+
+      if (
+        productosResponse &&
+        productosResponse.ok &&
+        categoriasResponse &&
+        categoriasResponse.ok
+      ) {
+        const productos = productosResponse.productos || [];
+        const categorias = categoriasResponse.categorias || [];
+
+        // Guardar en IndexedDB
+        await IndexedDBService.clear("productos");
+        await IndexedDBService.clear("categorias");
+
+        for (const producto of productos) {
+          await IndexedDBService.add("productos", producto);
+        }
+
+        for (const categoria of categorias) {
+          await IndexedDBService.add("categorias", categoria);
+        }
+
+        console.log(
+          `✅ Datos maestros sincronizados: ${productos.length} productos, ${categorias.length} categorías`
+        );
+
+        return {
+          success: true,
+          productos: productos.length,
+          categorias: categorias.length,
+        };
+      } else {
+        const errorMsg = "Error obteniendo datos maestros del servidor";
+        console.error(errorMsg, { productosResponse, categoriasResponse });
+        return { success: false, error: errorMsg };
+      }
+    } catch (error) {
+      console.error("❌ Error sincronizando datos maestros:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ SINCRONIZAR SESIONES Y CIERRES - CORREGIDO
   async syncSessionsAndClosures() {
     const results = {
       sessions: { success: 0, failed: 0, total: 0 },
@@ -82,167 +139,183 @@ class SyncController extends BaseOfflineController {
     };
 
     try {
-      // 1. Primero sincronizar sesiones ABIERTAS
+      // Obtener sesiones pendientes
       const pendingSessions =
         await SessionsOfflineController.getPendingSessions();
-      const openSessions = pendingSessions.filter(
-        (s) => s.estado === "abierta"
+      results.sessions.total = pendingSessions.length;
+
+      console.log(
+        `🔄 Sincronizando ${pendingSessions.length} sesiones pendientes...`
       );
 
-      for (const session of openSessions) {
+      for (const session of pendingSessions) {
         try {
-          // Sincronizar sesión abierta
-          await this.syncOpenSession(session);
+          if (session.estado === "abierta") {
+            await this.syncOpenSession(session);
+          } else if (session.estado === "cerrada") {
+            await this.syncClosedSession(session);
+          }
           results.sessions.success++;
         } catch (error) {
           console.error(
-            `Error sincronizando sesión abierta ${session.id_local}:`,
+            `❌ Error sincronizando sesión ${session.id_local}:`,
             error
           );
           results.sessions.failed++;
         }
       }
 
-      // 2. Luego sincronizar sesiones CERRADAS con sus cierres
-      const closedSessions = pendingSessions.filter(
-        (s) => s.estado === "cerrada"
+      // Sincronizar cierres pendientes
+      const pendingClosures =
+        await ClosuresOfflineController.getPendingClosures();
+      results.closures.total = pendingClosures.length;
+
+      console.log(
+        `🔄 Sincronizando ${pendingClosures.length} cierres pendientes...`
       );
 
-      for (const session of closedSessions) {
+      for (const closure of pendingClosures) {
         try {
-          await this.syncClosedSessionWithClosure(session);
-          results.sessions.success++;
+          await this.syncClosure(closure);
           results.closures.success++;
         } catch (error) {
           console.error(
-            `Error sincronizando sesión cerrada ${session.id_local}:`,
+            `❌ Error sincronizando cierre ${closure.id_local}:`,
             error
           );
-          results.sessions.failed++;
           results.closures.failed++;
         }
       }
 
-      results.sessions.total = pendingSessions.length;
-      results.closures.total = closedSessions.length;
+      return results;
     } catch (error) {
-      console.error("Error en syncSessionsAndClosures:", error);
+      console.error("❌ Error en syncSessionsAndClosures:", error);
       throw error;
     }
-
-    return results;
   }
 
+  // ✅ SINCRONIZAR SESIÓN ABIERTA - CORREGIDO
   async syncOpenSession(session) {
-    // Lógica para sincronizar sesión abierta
-    const response = await fetch(
-      `${process.env.VITE_API_URL}/sesiones-caja/abrir`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-token": localStorage.getItem("token"),
-        },
-        body: JSON.stringify(session),
-      }
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      await SessionsOfflineController.markAsSynced(
-        "sesiones_caja_offline",
-        session.id_local,
-        data.sesion
-      );
-    } else {
-      throw new Error("Error sincronizando sesión abierta");
-    }
-  }
-
-  async syncClosedSessionWithClosure(session) {
-    // 1. Buscar cierre asociado
-    const closure = await ClosuresOfflineController.getClosureBySession(
-      session.id_local
-    );
-
-    if (!closure) {
-      throw new Error(
-        `No se encontró cierre para la sesión ${session.id_local}`
-      );
-    }
-
-    // 2. Sincronizar sesión y cierre juntos
-    // Esta es una operación atómica que debe manejarse en el backend
-    const syncData = {
-      sesion: session,
-      cierre: closure,
-    };
-
-    const response = await fetch(
-      `${process.env.VITE_API_URL}/sync/sesion-cierre`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-token": localStorage.getItem("token"),
-        },
-        body: JSON.stringify(syncData),
-      }
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-
-      // Marcar ambos como sincronizados
-      await SessionsOfflineController.markAsSynced(
-        "sesiones_caja_offline",
-        session.id_local,
-        data.sesion
-      );
-
-      await ClosuresOfflineController.markAsSynced(
-        "cierres_pendientes",
-        closure.id_local,
-        data.cierre
-      );
-    } else {
-      throw new Error("Error sincronizando sesión cerrada con cierre");
-    }
-  }
-
-  async syncMasterData() {
     try {
-      const [productosResponse, categoriasResponse] = await Promise.all([
-        fetch(`${process.env.VITE_API_URL}/productos`),
-        fetch(`${process.env.VITE_API_URL}/categorias`),
-      ]);
+      console.log(`🔄 Sincronizando sesión abierta: ${session.id_local}`);
 
-      if (productosResponse.ok && categoriasResponse.ok) {
-        const productosData = await productosResponse.json();
-        const categoriasData = await categoriasResponse.json();
+      // ✅ USAR fetchConToken CON LA RUTA CORRECTA
+      const response = await fetchConToken(
+        "sesiones-caja/abrir",
+        {
+          vendedor_id: session.vendedor_id,
+          saldo_inicial: session.saldo_inicial,
+        },
+        "POST"
+      );
 
-        // Guardar en IndexedDB
-        await IndexedDBService.clear("productos");
-        await IndexedDBService.clear("categorias");
+      if (response && response.ok) {
+        await SessionsOfflineController.markAsSynced(
+          session.id_local,
+          response.sesion
+        );
+        console.log(`✅ Sesión abierta sincronizada: ${session.id_local}`);
+      } else {
+        throw new Error(response?.error || "Error del servidor");
+      }
+    } catch (error) {
+      console.error(
+        `❌ Error sincronizando sesión abierta ${session.id_local}:`,
+        error
+      );
+      throw error;
+    }
+  }
 
-        for (const producto of productosData.productos || []) {
-          await IndexedDBService.add("productos", producto);
-        }
+  // ✅ SINCRONIZAR SESIÓN CERRADA - CORREGIDO
+  async syncClosedSession(session) {
+    try {
+      console.log(`🔄 Sincronizando sesión cerrada: ${session.id_local}`);
 
-        for (const categoria of categoriasData.categorias || []) {
-          await IndexedDBService.add("categorias", categoria);
-        }
+      // ✅ USAR fetchConToken CON LA RUTA CORRECTA
+      const response = await fetchConToken(
+        `sesiones-caja/cerrar/${session.id_local}`,
+        {
+          saldo_final: session.saldo_final,
+          observaciones: session.observaciones,
+        },
+        "PUT"
+      );
 
+      if (response && response.ok) {
+        await SessionsOfflineController.markAsSynced(
+          session.id_local,
+          response.sesion
+        );
+        console.log(`✅ Sesión cerrada sincronizada: ${session.id_local}`);
+      } else {
+        throw new Error(response?.error || "Error del servidor");
+      }
+    } catch (error) {
+      console.error(
+        `❌ Error sincronizando sesión cerrada ${session.id_local}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  // ✅ SINCRONIZAR CIERRE - CORREGIDO
+  async syncClosure(closure) {
+    try {
+      console.log(`🔄 Sincronizando cierre: ${closure.id_local}`);
+
+      // ✅ USAR fetchConToken CON LA RUTA CORRECTA
+      const response = await fetchConToken("cierres", closure, "POST");
+
+      if (response && response.ok) {
+        await ClosuresOfflineController.markAsSynced(
+          closure.id_local,
+          response.cierre
+        );
+        console.log(`✅ Cierre sincronizado: ${closure.id_local}`);
+      } else {
+        throw new Error(response?.error || "Error del servidor");
+      }
+    } catch (error) {
+      console.error(
+        `❌ Error sincronizando cierre ${closure.id_local}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  // ✅ SINCRONIZACIÓN MANUAL DESDE UI
+  async manualSync() {
+    try {
+      console.log("👤 Sincronización manual iniciada...");
+
+      const status = await this.getSyncStatus();
+
+      if (status.totalPending === 0) {
         return {
           success: true,
-          productos: productosData.productos?.length || 0,
-          categorias: categoriasData.categorias?.length || 0,
+          message: "No hay datos pendientes por sincronizar",
         };
       }
 
-      return { success: false, error: "Error obteniendo datos maestros" };
+      const result = await this.fullSync();
+
+      if (result.success) {
+        return {
+          success: true,
+          message: `Sincronización completada: ${
+            result.sales?.success || 0
+          } ventas, ${result.sessions?.success || 0} sesiones, ${
+            result.closures?.success || 0
+          } cierres`,
+        };
+      } else {
+        throw new Error(result.error || "Error en sincronización");
+      }
     } catch (error) {
-      console.error("Error sincronizando datos maestros:", error);
+      console.error("❌ Error en sincronización manual:", error);
       return { success: false, error: error.message };
     }
   }
@@ -264,23 +337,64 @@ class SyncController extends BaseOfflineController {
     });
   }
 
-  // ✅ OBTENER ESTADO DE SINCRONIZACIÓN
+  // ✅ OBTENER ESTADO DE SINCRONIZACIÓN - CORREGIDO
   async getSyncStatus() {
-    const [pendingSessions, pendingSales, pendingClosures] = await Promise.all([
-      SessionsOfflineController.getPendingSessions(),
-      SalesOfflineController.getPendingSales(),
-      ClosuresOfflineController.getPendingClosures(),
-    ]);
+    try {
+      const [pendingSessions, pendingSales, pendingClosures] =
+        await Promise.all([
+          SessionsOfflineController.getPendingSessions().catch(() => []),
+          SalesOfflineController.getPendingSales().catch(() => []),
+          ClosuresOfflineController.getPendingClosures().catch(() => []),
+        ]);
 
-    return {
-      isOnline: this.isOnline,
-      isSyncing: this.isSyncing,
-      pendingSessions: pendingSessions.length,
-      pendingSales: pendingSales.length,
-      pendingClosures: pendingClosures.length,
-      totalPending:
-        pendingSessions.length + pendingSales.length + pendingClosures.length,
-    };
+      return {
+        isOnline: this.isOnline,
+        isSyncing: this.isSyncing,
+        pendingSessions: pendingSessions.length,
+        pendingSales: pendingSales.length,
+        pendingClosures: pendingClosures.length,
+        totalPending:
+          pendingSessions.length + pendingSales.length + pendingClosures.length,
+        lastSync: localStorage.getItem("lastSync") || null,
+      };
+    } catch (error) {
+      console.error("❌ Error obteniendo estado de sincronización:", error);
+      return {
+        isOnline: this.isOnline,
+        isSyncing: false,
+        pendingSessions: 0,
+        pendingSales: 0,
+        pendingClosures: 0,
+        totalPending: 0,
+        error: error.message,
+      };
+    }
+  }
+
+  // ✅ NUEVO: SINCRONIZACIÓN RÁPIDA (SOLO DATOS MAESTROS)
+  async quickSync() {
+    if (!this.isOnline) {
+      return { success: false, error: "Sin conexión" };
+    }
+
+    try {
+      console.log("⚡ Sincronización rápida iniciada...");
+
+      const masterData = await this.syncMasterData();
+
+      if (masterData.success) {
+        localStorage.setItem("lastSync", new Date().toISOString());
+        return {
+          success: true,
+          message: `Datos actualizados: ${masterData.productos} productos, ${masterData.categorias} categorías`,
+        };
+      } else {
+        throw new Error(masterData.error);
+      }
+    } catch (error) {
+      console.error("❌ Error en sincronización rápida:", error);
+      return { success: false, error: error.message };
+    }
   }
 }
 
