@@ -2,7 +2,7 @@
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
-import { IndexedDBService } from "../services/IndexedDBService";
+import IndexedDBService from "../services/IndexedDBService";
 
 // Servicio para operaciones offline (reemplaza el hook)
 class OfflineProductsService {
