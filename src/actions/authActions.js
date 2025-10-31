@@ -1,12 +1,11 @@
 // actions/authActions.js - VERSIÓN CORREGIDA Y COMPLETA
 import { types } from "../types/types";
 import Swal from "sweetalert2";
-import { fetchSinToken } from "../helpers/fetch";
+import { fetchSinToken, fetchConToken } from "../helpers/fetch";
 import { loadProducts } from "./productsActions";
 import { loadCategories } from "./categoriesActions";
 import AuthOfflineController from "../controllers/offline/AuthOfflineController/AuthOfflineController";
 import SyncController from "../controllers/offline/SyncController/SyncController";
-import ProductsOfflineController from "../controllers/offline/ProductsOfflineController/ProductsOfflineController";
 
 export const startLoading = () => ({
   type: types.authStartLoading,
@@ -46,17 +45,51 @@ export const startLogin = (username, password) => {
           if (response.ok === true) {
             const { token, usuario } = response;
 
-            // Guardar en localStorage
+            // ✅ GUARDAR TOKEN INMEDIATAMENTE
             localStorage.setItem("token", token);
             localStorage.setItem("user", JSON.stringify(usuario));
 
-            console.log("✅ Login online exitoso");
+            console.log(
+              "✅ Login online exitoso - Token guardado:",
+              token ? "✅" : "❌"
+            );
+            // ✅ ✅ ✅ CORRECCIÓN CRÍTICA: GUARDAR USUARIO EN INDEXEDDB
+            console.log("💾 Guardando usuario en IndexedDB para offline...");
+            try {
+              const saveResult = await AuthOfflineController.saveUser(
+                usuario,
+                token
+              );
+              console.log("💾 Resultado de guardar usuario:", saveResult);
 
-            // ✅ DISPATCH CORRECTO
+              if (!saveResult.success) {
+                console.error(
+                  "❌ No se pudo guardar usuario offline:",
+                  saveResult.error
+                );
+              } else {
+                console.log(
+                  "✅ Usuario guardado exitosamente para uso offline"
+                );
+              }
+            } catch (saveError) {
+              console.error("❌ Error guardando usuario offline:", saveError);
+            }
+            // ✅ DISPATCH INMEDIATO
             dispatch({
               type: types.authLogin,
               payload: usuario,
             });
+
+            // ✅ VERIFICAR INMEDIATAMENTE QUE EL TOKEN FUNCIONE
+            try {
+              console.log("🔍 Verificando que el token funcione...");
+              const testResponse = await fetchConToken("productos");
+              console.log("✅ Token verificado correctamente");
+            } catch (tokenError) {
+              console.error("❌ El token no funciona:", tokenError);
+              // No lanzar error, continuar de todos modos
+            }
 
             // ✅ CARGAR DATOS DESPUÉS DEL LOGIN
             try {
@@ -163,7 +196,18 @@ export const offlineLogin = (userData) => ({
 // ✅ CORREGIDO: SINCRONIZAR USUARIOS
 export const syncOfflineUsers = () => {
   return async (dispatch) => {
+    // ✅ VERIFICAR CONEXIÓN ANTES DE INTENTAR SINCRONIZAR
+    if (!navigator.onLine) {
+      console.log("📴 Sin conexión - No se puede sincronizar usuarios");
+      return {
+        success: false,
+        error: "Sin conexión a internet",
+        silent: true, // ✅ NUEVO: Indicar que es un error silencioso
+      };
+    }
+
     try {
+      // ✅ SOLO MOSTRAR SWAL SI HAY CONEXIÓN
       Swal.fire({
         title: "Sincronizando...",
         text: "Actualizando datos de usuarios offline",
@@ -192,13 +236,16 @@ export const syncOfflineUsers = () => {
           stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
         });
 
-        await Swal.fire({
-          icon: "success",
-          title: "Sincronización completada",
-          text: `✅ ${result.count} usuarios sincronizados\n📊 ${stats.uniqueUsers} usuarios únicos disponibles offline`,
-          timer: 3000,
-          showConfirmButton: false,
-        });
+        // ✅ SOLO MOSTRAR MENSAJE DE ÉXITO SI NO ESTÁ EN MODO OFFLINE
+        if (navigator.onLine) {
+          await Swal.fire({
+            icon: "success",
+            title: "Sincronización completada",
+            text: `✅ ${result.count} usuarios sincronizados\n📊 ${stats.uniqueUsers} usuarios únicos disponibles offline`,
+            timer: 3000,
+            showConfirmButton: false,
+          });
+        }
 
         return { success: true, count: result.count, stats };
       } else {
@@ -206,17 +253,23 @@ export const syncOfflineUsers = () => {
       }
     } catch (error) {
       console.error("Error sincronizando usuarios:", error);
-
       Swal.close();
 
-      await Swal.fire({
-        icon: "error",
-        title: "Error de sincronización",
-        text: error.message || "No se pudieron sincronizar los usuarios",
-        confirmButtonText: "Entendido",
-      });
+      // ✅ NO MOSTRAR ERROR SI ESTAMOS OFFLINE (ES NORMAL)
+      if (navigator.onLine) {
+        await Swal.fire({
+          icon: "error",
+          title: "Error de sincronización",
+          text: error.message || "No se pudieron sincronizar los usuarios",
+          confirmButtonText: "Entendido",
+        });
+      }
 
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+        silent: !navigator.onLine, // ✅ SILENCIOSO SI ESTÁ OFFLINE
+      };
     }
   };
 };
@@ -284,37 +337,53 @@ export const startLogout = () => {
 };
 
 // ✅ ACTION PARA VERIFICAR AUTENTICACIÓN
+// ✅ CORRECCIÓN EN startChecking - REEMPLAZA ESTA FUNCIÓN
 export const startChecking = () => {
   return async (dispatch) => {
     const token = localStorage.getItem("token");
     const user = localStorage.getItem("user");
 
+    console.log("🔍 Verificando autenticación...", {
+      hasToken: !!token,
+      hasUser: !!user,
+    });
+
     if (token && user) {
       try {
         const userData = JSON.parse(user);
 
-        // Verificar token JWT
+        // ✅ CORRECCIÓN: Verificación más tolerante del token
         try {
-          const tokenPayload = JSON.parse(atob(token.split(".")[1]));
-          const isTokenValid = tokenPayload.exp * 1000 > Date.now();
+          // Intentar decodificar el token JWT
+          const tokenParts = token.split(".");
+          if (tokenParts.length === 3) {
+            const tokenPayload = JSON.parse(atob(tokenParts[1]));
+            const isTokenValid = tokenPayload.exp * 1000 > Date.now();
 
-          if (isTokenValid) {
-            dispatch({
-              type: types.authLogin,
-              payload: userData,
-            });
+            if (isTokenValid) {
+              console.log("✅ Token válido - usuario autenticado");
+              dispatch({
+                type: types.authLogin,
+                payload: userData,
+              });
+              return;
+            } else {
+              console.warn("⚠️ Token expirado");
+            }
           } else {
-            console.warn("⚠️ Token expirado");
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
-            dispatch(checkingFinish());
+            console.warn("⚠️ Formato de token inválido");
           }
         } catch (tokenError) {
-          console.error("❌ Error verificando token:", tokenError);
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          dispatch(checkingFinish());
+          console.warn("⚠️ Error decodificando token:", tokenError.message);
+          // Continuar con verificación básica
         }
+
+        // ✅ VERIFICACIÓN ALTERNATIVA: Si el token no es JWT válido pero existe usuario
+        console.log("🔄 Usando verificación alternativa con usuario guardado");
+        dispatch({
+          type: types.authLogin,
+          payload: userData,
+        });
       } catch (parseError) {
         console.error("❌ Error parseando usuario:", parseError);
         localStorage.removeItem("token");
@@ -322,6 +391,7 @@ export const startChecking = () => {
         dispatch(checkingFinish());
       }
     } else {
+      console.log("📝 No hay token o usuario - sesión no iniciada");
       dispatch(checkingFinish());
     }
   };

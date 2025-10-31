@@ -3,7 +3,7 @@ import { openDB } from "idb";
 class IndexedDBService {
   constructor() {
     this.dbName = "OfflinePOS";
-    this.dbVersion = 1;
+    this.dbVersion = 2;
     this.db = null;
     this.initialized = false;
   }
@@ -15,7 +15,16 @@ class IndexedDBService {
       this.db = await openDB(this.dbName, this.dbVersion, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`📊 Actualizando BD de v${oldVersion} a v${newVersion}`);
-
+          // ✅ AGREGAR OBJECT STORE PARA USUARIOS OFFLINE (NUEVO)
+          if (!db.objectStoreNames.contains("offline_users")) {
+            const userStore = db.createObjectStore("offline_users", {
+              keyPath: "id",
+            });
+            userStore.createIndex("username", "username");
+            userStore.createIndex("activo", "activo");
+            userStore.createIndex("lastLogin", "lastLogin");
+            console.log('✅ Object store "offline_users" creado');
+          }
           // ✅ CREAR OBJECT STORES SI NO EXISTEN
           if (!db.objectStoreNames.contains("productos")) {
             const productStore = db.createObjectStore("productos", {
@@ -277,15 +286,32 @@ class IndexedDBService {
       const store = this.db
         .transaction(storeName, "readwrite")
         .objectStore(storeName);
+
+      // ✅ VERIFICACIÓN CRÍTICA: Asegurar que los datos tengan la clave primaria
+      const storeInfo = this.getStoreKeyPath(storeName);
+
+      if (storeInfo.keyPath && !data[storeInfo.keyPath]) {
+        console.error(
+          `❌ Datos sin clave primaria (${storeInfo.keyPath}):`,
+          data
+        );
+        throw new Error(
+          `Los datos deben tener el campo '${storeInfo.keyPath}'`
+        );
+      }
+
+      console.log(`💾 Agregando a ${storeName}:`, data);
       await store.add(data);
+      console.log(`✅ ${storeName} agregado exitosamente`);
       return true;
     } catch (error) {
       console.error(`❌ Error en add(${storeName}):`, error);
+      console.error(`📋 Datos que causaron el error:`, data);
       return false;
     }
   }
 
-  // ✅ MÉTODO PARA ACTUALIZAR UN REGISTRO
+  // ✅ MÉTODO PARA ACTUALIZAR UN REGISTRO - CORREGIDO
   async put(storeName, data) {
     try {
       if (!this.initialized) {
@@ -300,14 +326,47 @@ class IndexedDBService {
       const store = this.db
         .transaction(storeName, "readwrite")
         .objectStore(storeName);
+
+      // ✅ VERIFICACIÓN CRÍTICA: Asegurar que los datos tengan la clave primaria
+      const storeInfo = this.getStoreKeyPath(storeName);
+
+      if (storeInfo.keyPath && !data[storeInfo.keyPath]) {
+        console.error(
+          `❌ Datos sin clave primaria (${storeInfo.keyPath}):`,
+          data
+        );
+        throw new Error(
+          `Los datos deben tener el campo '${storeInfo.keyPath}'`
+        );
+      }
+
+      console.log(`💾 Actualizando en ${storeName}:`, data);
       await store.put(data);
+      console.log(`✅ ${storeName} actualizado exitosamente`);
       return true;
     } catch (error) {
       console.error(`❌ Error en put(${storeName}):`, error);
+      console.error(`📋 Datos que causaron el error:`, data);
       return false;
     }
   }
+  // ✅ NUEVO MÉTODO: Obtener información del objectStore
+  getStoreKeyPath(storeName) {
+    const storeConfigs = {
+      sesiones_caja_offline: { keyPath: "id_local", autoIncrement: false },
+      ventas_pendientes: { keyPath: "id_local", autoIncrement: false },
+      detalles_venta_pendientes: { keyPath: "id_local", autoIncrement: false },
+      cierres_pendientes: { keyPath: "id_local", autoIncrement: false },
+      productos: { keyPath: "id", autoIncrement: false },
+      categorias: { keyPath: "id", autoIncrement: false },
+      cierres: { keyPath: "id", autoIncrement: false },
+      cache_maestros: { keyPath: "tipo", autoIncrement: false },
+      sync_metrics: { keyPath: "id", autoIncrement: true },
+      offline_users: { keyPath: "id", autoIncrement: false },
+    };
 
+    return storeConfigs[storeName] || { keyPath: null, autoIncrement: false };
+  }
   // ✅ MÉTODO PARA ELIMINAR UN REGISTRO
   async delete(storeName, key) {
     try {

@@ -649,3 +649,108 @@ export const syncPendingClosures = () => {
     }
   };
 };
+// ✅ ACTUALIZAR ESTADO DE CONEXIÓN EN REDUX
+export const updateConnectionStatus = (isOnline) => ({
+  type: types.connectionStatusUpdate,
+  payload: isOnline,
+});
+
+// ✅ VERIFICAR ESTADO DE SINCRONIZACIÓN
+export const checkSyncStatus = () => {
+  return async (dispatch) => {
+    try {
+      const pendingClosures = await IndexedDBService.getPendingRecords(
+        "cierres"
+      );
+
+      dispatch({
+        type: types.syncProgress,
+        payload: {
+          pendingClosures: pendingClosures.length,
+          lastChecked: new Date().toISOString(),
+        },
+      });
+
+      return pendingClosures.length;
+    } catch (error) {
+      console.error("❌ Error verificando estado de sync:", error);
+      return 0;
+    }
+  };
+};
+
+// ✅ SINCRONIZACIÓN MEJORADA CON ESTADO EN REDUX
+export const enhancedSyncPendingClosures = () => {
+  return async (dispatch) => {
+    try {
+      if (!navigator.onLine) {
+        dispatch({
+          type: types.syncError,
+          payload: "Sin conexión a internet",
+        });
+        return false;
+      }
+
+      dispatch({ type: types.syncStart });
+
+      await Swal.fire({
+        title: "Sincronizando...",
+        text: "Sincronizando cierres pendientes con el servidor",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const syncResult = await SyncController.fullSync();
+
+      // Actualizar progreso
+      dispatch({
+        type: types.syncProgress,
+        payload: {
+          pendingClosures: 0,
+          lastSync: new Date().toISOString(),
+        },
+      });
+
+      // Recargar cierres
+      await dispatch(loadClosures());
+
+      Swal.close();
+
+      if (syncResult.success) {
+        dispatch({ type: types.syncFinish });
+
+        await Swal.fire({
+          icon: "success",
+          title: "Sincronización completada",
+          text: `Se sincronizaron ${syncResult.results?.success || 0} cierres`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+
+        return true;
+      } else {
+        throw new Error(syncResult.error || "Error en sincronización");
+      }
+    } catch (error) {
+      console.error("❌ Error sincronizando cierres:", error);
+
+      Swal.close();
+      dispatch({
+        type: types.syncError,
+        payload: error.message,
+      });
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error de sincronización",
+        text:
+          error.message || "No se pudieron sincronizar los cierres pendientes",
+        confirmButtonText: "Entendido",
+      });
+
+      return false;
+    }
+  };
+};

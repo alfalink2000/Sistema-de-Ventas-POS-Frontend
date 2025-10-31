@@ -10,15 +10,14 @@ const Login = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const dispatch = useDispatch();
-  const { isAuthenticated } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const handleOnline = () => {
       console.log("🌐 Conexión restaurada");
       setIsOnline(true);
 
-      // Sincronizar usuarios automáticamente cuando hay conexión
-      if (!isSyncing) {
+      // ✅ SOLO SINCRONIZAR SI HAY CONEXIÓN Y NO ESTÁ YA SINCRONIZANDO
+      if (!isSyncing && navigator.onLine) {
         setIsSyncing(true);
         setTimeout(() => {
           dispatch(syncOfflineUsers()).finally(() => {
@@ -42,16 +41,6 @@ const Login = () => {
       window.removeEventListener("offline", handleOffline);
     };
   }, [dispatch, isSyncing]);
-
-  // Redirigir si ya está autenticado
-  useEffect(() => {
-    if (isAuthenticated) {
-      console.log("✅ Usuario autenticado, redirigiendo...");
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 500);
-    }
-  }, [isAuthenticated]);
 
   return (
     <div className={styles.loginContainer}>
@@ -109,20 +98,6 @@ const Login = () => {
         <LoginForm />
 
         {/* ✅ INFORMACIÓN ADICIONAL PARA MODO OFFLINE */}
-        {!isOnline && (
-          <div className={styles.offlineInfo}>
-            <h4>💡 Información sobre Modo Offline</h4>
-            <ul>
-              <li>• Solo usuarios previamente sincronizados pueden acceder</li>
-              <li>• Las ventas se guardarán localmente</li>
-              <li>
-                • Los datos se sincronizarán automáticamente al recuperar
-                conexión
-              </li>
-              <li>• Algunas funciones pueden estar limitadas</li>
-            </ul>
-          </div>
-        )}
       </div>
     </div>
   );

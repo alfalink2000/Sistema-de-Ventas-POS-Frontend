@@ -1,4 +1,4 @@
-// reducers/sesionesCajaReducer.js
+// reducers/sesionesCajaReducer.js - VERSIÓN CORREGIDA
 import { types } from "../types/types";
 
 const initialState = {
@@ -81,6 +81,73 @@ export const sesionesCajaReducer = (state = initialState, action) => {
       return {
         ...state,
         activeSesion: action.payload,
+      };
+
+    // ✅ NUEVO CASE PARA MANEJAR CIERRE OFFLINE
+    case types.sesionCajaClosedOffline:
+      const sesionCerrada = action.payload;
+
+      // Actualizar la sesión en el array de sesiones
+      const sesionesActualizadasOffline = state.sesiones.map((sesion) =>
+        sesion.id === sesionCerrada.id ||
+        sesion.id_local === sesionCerrada.id_local
+          ? {
+              ...sesion,
+              ...sesionCerrada,
+              estado: "cerrada",
+              fecha_cierre:
+                sesionCerrada.fecha_cierre || new Date().toISOString(),
+              saldo_final: sesionCerrada.saldo_final,
+              observaciones: sesionCerrada.observaciones,
+              sincronizado: false, // Marcar como no sincronizado
+            }
+          : sesion
+      );
+
+      return {
+        ...state,
+        sesiones: sesionesActualizadasOffline,
+        // Limpiar sesión abierta si era esta
+        sesionAbierta:
+          state.sesionAbierta &&
+          (state.sesionAbierta.id === sesionCerrada.id ||
+            state.sesionAbierta.id_local === sesionCerrada.id_local)
+            ? null
+            : state.sesionAbierta,
+        // Limpiar sesión activa si era esta
+        activeSesion:
+          state.activeSesion &&
+          (state.activeSesion.id === sesionCerrada.id ||
+            state.activeSesion.id_local === sesionCerrada.id_local)
+            ? null
+            : state.activeSesion,
+      };
+
+    // ✅ NUEVO CASE PARA AGREGAR SESIÓN OFFLINE
+    case types.sesionCajaAddNewOffline:
+      const nuevaSesionOffline = {
+        ...action.payload,
+        sincronizado: false,
+        es_local: true,
+      };
+
+      return {
+        ...state,
+        sesiones: [nuevaSesionOffline, ...state.sesiones],
+        sesionAbierta:
+          nuevaSesionOffline.estado === "abierta"
+            ? nuevaSesionOffline
+            : state.sesionAbierta,
+      };
+
+    // ✅ NUEVO CASE PARA ACTUALIZAR DESDE OFFLINE
+    case types.sesionesCajaUpdateFromOffline:
+      return {
+        ...state,
+        sesiones: action.payload,
+        // Recalcular sesión abierta
+        sesionAbierta:
+          action.payload.find((s) => s.estado === "abierta") || null,
       };
 
     default:

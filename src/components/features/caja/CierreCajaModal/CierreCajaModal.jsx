@@ -179,12 +179,18 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
         if (result && result.success !== false) {
           // Cerrar sesión en servidor
-          await dispatch(
+          const closeResult = await dispatch(
             closeSesionCaja(sesion.id, {
               saldo_final: saldoFinalNumero,
               observaciones: observaciones.trim() || null,
             })
           );
+
+          if (!closeResult || closeResult.success === false) {
+            throw new Error(
+              closeResult?.error || "Error al cerrar sesión online"
+            );
+          }
         } else {
           throw new Error(
             result?.error || "Error al crear cierre de caja online"
@@ -222,6 +228,18 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           message:
             "Cierre guardado localmente. Se sincronizará cuando haya conexión.",
         };
+
+        // ✅ DISPATCH PARA ACTUALIZAR ESTADO LOCAL - SESIÓN
+        dispatch({
+          type: types.sesionCajaClosedOffline,
+          payload: closeSessionResult.sesion,
+        });
+
+        // ✅ DISPATCH PARA ACTUALIZAR ESTADO LOCAL - CIERRE (NUEVO)
+        dispatch({
+          type: types.closureAddNewOffline,
+          payload: closureResult.cierre,
+        });
 
         console.log("✅ Cierre y sesión cerrados localmente");
       }

@@ -11,31 +11,117 @@ class AuthOfflineController extends BaseOfflineController {
   // ✅ GUARDAR USUARIO PARA OFFLINE
   async saveUser(userData, token) {
     try {
-      await this.validateRequiredFields(userData, [
-        "id",
-        "username",
-        "nombre",
-        "rol",
-      ]);
+      console.log(
+        "💾 Intentando guardar usuario para offline:",
+        userData.username
+      );
 
+      // ✅ VERIFICAR QUE INDEXEDDB ESTÉ INICIALIZADO
+      if (!IndexedDBService.initialized) {
+        await IndexedDBService.init();
+      }
+
+      // ✅ VERIFICAR QUE EL OBJECT STORE EXISTA
+      const storeExists = await IndexedDBService.storeExists(this.storeName);
+      if (!storeExists) {
+        console.error(`❌ Object store "${this.storeName}" no existe`);
+        throw new Error(`Object store "${this.storeName}" no está disponible`);
+      }
+
+      // ✅ VALIDACIONES BÁSICAS
+      if (!userData || !userData.id || !userData.username) {
+        console.error("❌ Datos de usuario incompletos:", userData);
+        throw new Error("Datos de usuario incompletos");
+      }
+
+      // ✅ PREPARAR DATOS PARA OFFLINE
       const offlineUser = {
         ...userData,
-        token,
+        token: token,
         lastLogin: new Date().toISOString(),
-        loginCount: (userData.loginCount || 0) + 1,
+        loginCount: 1,
         savedAt: new Date().toISOString(),
+        lastSync: new Date().toISOString(),
+        isActive: true,
       };
 
-      await IndexedDBService.put(this.storeName, offlineUser);
+      console.log("📦 Datos preparados para guardar:", {
+        id: offlineUser.id,
+        username: offlineUser.username,
+        hasToken: !!offlineUser.token,
+        storeName: this.storeName,
+      });
 
-      console.log("✅ Usuario guardado para offline:", userData.username);
-      return { success: true, user: offlineUser };
+      // ✅ VERIFICAR SI EL USUARIO YA EXISTE
+      const existingUser = await IndexedDBService.get(
+        this.storeName,
+        userData.id
+      );
+
+      if (existingUser) {
+        console.log("🔄 Usuario ya existe, actualizando...", userData.username);
+        // Actualizar usuario existente
+        const updatedUser = {
+          ...existingUser,
+          ...offlineUser,
+          loginCount: (existingUser.loginCount || 0) + 1,
+        };
+
+        const updateResult = await IndexedDBService.put(
+          this.storeName,
+          updatedUser
+        );
+        console.log("✅ Usuario actualizado para offline:", updateResult);
+
+        return {
+          success: true,
+          user: updatedUser,
+          action: "updated",
+        };
+      } else {
+        // ✅ CREAR NUEVO USUARIO OFFLINE
+        console.log("🆕 Creando nuevo usuario offline...");
+        const addResult = await IndexedDBService.add(
+          this.storeName,
+          offlineUser
+        );
+        console.log("✅ Nuevo usuario guardado para offline:", addResult);
+
+        // ✅ VERIFICAR QUE REALMENTE SE GUARDÓ
+        const verifyUser = await IndexedDBService.get(
+          this.storeName,
+          userData.id
+        );
+        console.log(
+          "🔍 Usuario verificado después de guardar:",
+          verifyUser ? "✅" : "❌"
+        );
+
+        return {
+          success: true,
+          user: offlineUser,
+          action: "created",
+        };
+      }
     } catch (error) {
       console.error("❌ Error guardando usuario offline:", error);
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   }
-
+  // controllers/offline/AuthOfflineController/AuthOfflineController.js - AGREGAR MÉTODO
+  async getOfflineUsersCount() {
+    try {
+      const users = await IndexedDBService.getAll(this.storeName);
+      const activeUsers = users.filter((user) => user.isActive !== false);
+      return activeUsers.length;
+    } catch (error) {
+      console.error("Error contando usuarios offline:", error);
+      return 0;
+    }
+  }
   // ✅ VERIFICAR CREDENCIALES OFFLINE
   async verifyCredentials(username, password) {
     try {
@@ -119,14 +205,26 @@ class AuthOfflineController extends BaseOfflineController {
 
   // ✅ SINCRONIZAR USUARIOS DESDE SERVIDOR
   async syncUsersFromServer() {
-    if (!this.isOnline) {
-      return { success: false, error: "Sin conexión a internet" };
+    // ✅ VERIFICAR CONEXIÓN AL INICIO
+    if (!navigator.onLine) {
+      console.log(
+        "📴 syncUsersFromServer: Sin conexión, cancelando sincronización"
+      );
+      return {
+        success: false,
+        error: "Sin conexión a internet",
+        silent: true,
+      };
     }
 
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        return { success: false, error: "No hay token disponible" };
+        return {
+          success: false,
+          error: "No hay token disponible",
+          silent: true,
+        };
       }
 
       const response = await fetch(`${process.env.VITE_API_URL}/users`, {
@@ -158,7 +256,20 @@ class AuthOfflineController extends BaseOfflineController {
       };
     } catch (error) {
       console.error("Error sincronizando usuarios:", error);
-      return { success: false, error: error.message };
+
+      // ✅ DIFERENCIAR ENTRE ERROR DE RED Y OTROS ERRORES
+      if (error.message.includes("Failed to fetch") || !navigator.onLine) {
+        return {
+          success: false,
+          error: "Sin conexión a internet",
+          silent: true,
+        };
+      }
+
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   }
 

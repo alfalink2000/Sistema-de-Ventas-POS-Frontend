@@ -2,7 +2,8 @@
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
-import { useOfflineOperations } from "../hook/useOfflineOperations";
+import SalesOfflineController from "../controllers/offline/SalesOfflineController/SalesOfflineController";
+import ProductsOfflineController from "../controllers/offline/ProductsOfflineController/ProductsOfflineController";
 
 export const loadSales = (limite = 50, pagina = 1) => {
   return async (dispatch) => {
@@ -34,8 +35,8 @@ export const loadSales = (limite = 50, pagina = 1) => {
       }
 
       // ✅ EN OFFLINE O COMO FALLBACK: Cargar ventas pendientes locales
-      const { getPendingSales } = useOfflineOperations();
-      const ventasPendientes = await getPendingSales();
+
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
 
       if (ventasPendientes.length > 0) {
         console.log(
@@ -72,8 +73,7 @@ export const loadSales = (limite = 50, pagina = 1) => {
 
       // ✅ FALLBACK: Cargar solo ventas pendientes locales
       try {
-        const { getPendingSales } = useOfflineOperations();
-        const ventasPendientes = await getPendingSales();
+        const ventasPendientes = await SalesOfflineController.getPendingSales();
 
         dispatch({
           type: types.salesLoad,
@@ -104,10 +104,11 @@ export const createSale = (saleData) => {
       });
 
       // ✅ VALIDAR STOCK ANTES DE PROCESAR
-      const { validateStockForSale, processSaleStockUpdate } =
-        useOfflineOperations();
 
-      const validacionStock = await validateStockForSale(saleData.productos);
+      const validacionStock =
+        await ProductsOfflineController.validateStockForSale(
+          saleData.productos
+        );
 
       if (!validacionStock.valido) {
         const mensajeError = validacionStock.errores.join("\n");
@@ -136,9 +137,10 @@ export const createSale = (saleData) => {
         }
       } else {
         // ✅ SIN CONEXIÓN: Crear localmente
-        const { createSaleOffline } = useOfflineOperations();
 
-        const resultadoOffline = await createSaleOffline(saleData);
+        const resultadoOffline = await SalesOfflineController.createSaleOffline(
+          saleData
+        );
 
         if (resultadoOffline.success) {
           resultado = resultadoOffline.venta;
@@ -220,8 +222,7 @@ export const loadPendingSales = () => {
     try {
       console.log("🔄 [SALES] Cargando ventas pendientes...");
 
-      const { getPendingSales } = useOfflineOperations();
-      const ventasPendientes = await getPendingSales();
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
 
       console.log(
         `⏳ [SALES] ${ventasPendientes.length} ventas pendientes de sincronizar`
@@ -263,8 +264,7 @@ export const syncPendingSales = () => {
         },
       });
 
-      const { getPendingSales, fullSync } = useOfflineOperations();
-      const ventasPendientes = await getPendingSales();
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
 
       if (ventasPendientes.length === 0) {
         Swal.close();
@@ -283,7 +283,7 @@ export const syncPendingSales = () => {
       );
 
       // ✅ USAR SINCRONIZACIÓN COMPLETA
-      const syncResult = await fullSync();
+      const syncResult = await SalesOfflineController.fullSync();
 
       Swal.close();
 
@@ -350,8 +350,8 @@ export const getSaleById = (saleId) => {
         }
       } else {
         // Buscar en ventas locales
-        const { getPendingSales } = useOfflineOperations();
-        const ventasPendientes = await getPendingSales();
+
+        const ventasPendientes = await SalesOfflineController.getPendingSales();
         venta = ventasPendientes.find((v) => v.id_local === saleId);
 
         if (!venta) {

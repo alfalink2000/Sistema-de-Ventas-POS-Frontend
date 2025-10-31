@@ -70,15 +70,20 @@ const LoginForm = () => {
 
         if (result.success) {
           console.log("✅ Login offline exitoso");
-          // Dispatch manual para autenticación offline
+
+          // ✅ CORRECCIÓN: Usar el type correcto del reducer
           dispatch({
-            type: "AUTH_LOGIN_OFFLINE",
-            payload: {
-              user: result.user,
-              token: result.token,
-              isOffline: true,
-            },
+            type: types.authLogin, // ✅ USAR EL TYPE DEFINIDO
+            payload: result.user, // ✅ SOLO ENVIAR EL USER (como hace el login online)
           });
+
+          // ✅ GUARDAR EN LOCALSTORAGE (igual que el login online)
+          localStorage.setItem("token", result.token);
+          localStorage.setItem("user", JSON.stringify(result.user));
+
+          console.log(
+            "🔐 Token y usuario guardados en localStorage para offline"
+          );
         } else {
           throw new Error(result.error || "Error en autenticación offline");
         }
@@ -169,7 +174,7 @@ const LoginForm = () => {
   return (
     <form onSubmit={handleSubmit} className={styles.loginForm}>
       <div className={styles.formHeader}>
-        <p>
+        {/* <p>
           {offlineMode
             ? "Ingresa tus credenciales sincronizadas previamente"
             : "Ingresa tus credenciales para acceder al sistema"}
@@ -179,7 +184,8 @@ const LoginForm = () => {
             <OfflineIcon />
             <span>Modo Offline Activado</span>
           </div>
-        )}
+        )} */}
+        <p>Ingresa tus credenciales para acceder al sistema</p>
       </div>
 
       <div className={styles.formContent}>

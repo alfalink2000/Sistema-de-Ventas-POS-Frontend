@@ -1,4 +1,4 @@
-// types/types.js - VERSIÓN COMPLETAMENTE CONSISTENTE Y CORREGIDA
+// types/types.js - VERSIÓN CORREGIDA Y LIMPIA
 export const types = {
   // Connection Types
   connectionStatusUpdate: "[connection] Status Update",
@@ -24,7 +24,7 @@ export const types = {
   userSetActive: "[users] Set Active",
   userClearActive: "[users] Clear Active",
 
-  // Product Types - ✅ COMPLETAMENTE CONSISTENTES
+  // Product Types
   productsStartLoading: "[products] Start Loading",
   productsFinishLoading: "[products] Finish Loading",
   productsLoad: "[products] Load Products",
@@ -38,7 +38,7 @@ export const types = {
   productsLoadLowStock: "[products] Load Low Stock",
   productsLoadStats: "[products] Load Stats",
 
-  // Category Types - ✅ CORREGIDOS (CONSISTENCIA EN SINGULAR/PLURAL)
+  // Category Types
   categoriesStartLoading: "[categories] Start Loading",
   categoriesFinishLoading: "[categories] Finish Loading",
   categoriesLoad: "[categories] Load Categories",
@@ -113,4 +113,14 @@ export const types = {
   statsLoadDashboard: "[stats] Load Dashboard Stats",
   statsLoadSales: "[stats] Load Sales Stats",
   statsLoadProducts: "[stats] Load Products Stats",
+
+  // ✅ TYPES PARA OPERACIONES OFFLINE (NUEVOS)
+  sesionCajaClosedOffline: "[SESION_CAJA] Sesión cerrada offline",
+  sesionCajaAddNewOffline: "[SESION_CAJA] Sesión agregada offline",
+  closureAddNewOffline: "[CLOSURE] Cierre agregado offline",
+  sesionesCajaUpdateFromOffline: "[SESIONES_CAJA] Actualizar desde offline",
+  closuresUpdateFromOffline: "[CLOSURES] Actualizar desde offline",
+
+  // ✅ PARA ACTUALIZAR CONTADORES DE PENDIENTES
+  updatePendingCounts: "[sync] Update Pending Counts",
 };
