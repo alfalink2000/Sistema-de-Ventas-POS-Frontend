@@ -46,9 +46,6 @@ const CartItem = ({ item }) => {
       <div className={styles.itemInfo}>
         <h4 className={styles.itemName}>{item.nombre}</h4>
         <div className={styles.itemDetails}>
-          <span className={styles.itemPrice}>
-            <FiTag className={styles.priceIcon} />${item.precio.toFixed(2)} c/u
-          </span>
           <span className={styles.itemSubtotal}>
             ${(item.precio * item.quantity).toFixed(2)}
           </span>

@@ -175,7 +175,7 @@ const Reports = () => {
             </div>
           </div>
 
-          <div className={styles.statCard}>
+          {/* <div className={styles.statCard}>
             <div className={styles.statIconWrapper}>
               <FiDollarSign className={styles.statIcon} />
             </div>
@@ -193,7 +193,7 @@ const Reports = () => {
               <h3>{formatCurrency(stats.totalGanancia)}</h3>
               <p>Ganancia Bruta</p>
             </div>
-          </div>
+          </div> */}
 
           <div className={styles.statCard}>
             <div className={styles.statIconWrapper}>

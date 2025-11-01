@@ -523,6 +523,80 @@ class ProductsOfflineController extends BaseOfflineController {
       };
     }
   }
+  // ✅ VALIDACIÓN DE STOCK MEJORADA CON BLOQUEO TEMPORAL
+  async validateStockWithLock(productosVenta, ventaId = null) {
+    const lockKey = `stock_validation_${Date.now()}`;
+
+    try {
+      // Bloquear validación para esta venta
+      sessionStorage.setItem(lockKey, "locked");
+
+      const resultados = await this.validateStockForSale(productosVenta);
+
+      // Si es válido, reservar stock temporalmente
+      if (resultados.valido && resultados.productosValidos.length > 0) {
+        await this.reserveStock(resultados.productosValidos, ventaId);
+      }
+
+      return resultados;
+    } finally {
+      // Liberar bloqueo
+      sessionStorage.removeItem(lockKey);
+    }
+  }
+
+  // ✅ RESERVAR STOCK TEMPORALMENTE
+  async reserveStock(productosValidos, ventaId = null) {
+    const reservation = {
+      ventaId: ventaId || `temp_${Date.now()}`,
+      productos: productosValidos,
+      timestamp: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutos
+    };
+
+    await IndexedDBService.add("stock_reservations", reservation);
+    return reservation;
+  }
+
+  // ✅ LIBERAR RESERVA DE STOCK
+  async releaseStockReservation(ventaId) {
+    try {
+      const reservations = await IndexedDBService.getAll("stock_reservations");
+      const reservation = reservations.find((r) => r.ventaId === ventaId);
+
+      if (reservation) {
+        await IndexedDBService.delete("stock_reservations", ventaId);
+
+        // Revertir stock reservado
+        for (const item of reservation.productos) {
+          await this.increaseStock(
+            item.producto_id,
+            item.cantidad,
+            "liberacion_reserva"
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error liberando reserva:", error);
+    }
+  }
+
+  // ✅ LIMPIAR RESERVAS EXPIRADAS
+  async cleanupExpiredReservations() {
+    try {
+      const reservations = await IndexedDBService.getAll("stock_reservations");
+      const now = new Date();
+
+      for (const reservation of reservations) {
+        if (new Date(reservation.expiresAt) < now) {
+          console.log(`🧹 Limpiando reserva expirada: ${reservation.ventaId}`);
+          await this.releaseStockReservation(reservation.ventaId);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error limpiando reservas:", error);
+    }
+  }
 
   // ✅ NUEVO: OBTENER PRODUCTOS CON INFORMACIÓN COMPLETA
   async getProductsWithDetails() {

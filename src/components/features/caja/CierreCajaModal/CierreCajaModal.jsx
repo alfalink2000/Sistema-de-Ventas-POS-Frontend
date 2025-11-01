@@ -155,7 +155,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     try {
       const sesionId = sesion.id || sesion.id_local;
       const closureData = {
-        sesion_caja_id: sesion.id,
+        sesion_caja_id: sesion.id || sesion.id_local,
         sesion_caja_id_local: sesion.id_local || sesionId,
         vendedor_id: user.id,
         vendedor_nombre: user.nombre || user.username,

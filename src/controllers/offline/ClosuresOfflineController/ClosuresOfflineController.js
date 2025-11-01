@@ -49,7 +49,34 @@ class ClosuresOfflineController extends BaseOfflineController {
       return { success: false, error: error.message };
     }
   }
+  // En ClosuresOfflineController.js - AGREGAR ESTE MÉTODO
+  async markAsSynced(localId, serverData) {
+    try {
+      const closure = await IndexedDBService.get(this.storeName, localId);
+      if (!closure) {
+        console.warn(`⚠️ Cierre no encontrado: ${localId}`);
+        return false;
+      }
 
+      const updatedClosure = {
+        ...closure,
+        ...serverData,
+        id: serverData.id, // Guardar ID del servidor
+        sincronizado: true,
+        fecha_sincronizacion: new Date().toISOString(),
+      };
+
+      await IndexedDBService.put(this.storeName, updatedClosure);
+
+      console.log(
+        `✅ Cierre marcado como sincronizado: ${localId} -> ${serverData.id}`
+      );
+      return true;
+    } catch (error) {
+      console.error(`❌ Error marcando cierre como sincronizado:`, error);
+      return false;
+    }
+  }
   // ✅ CALCULAR TOTALES DE SESIÓN
   async calculateSessionTotals(sesionId) {
     try {

@@ -312,20 +312,19 @@ const OfflineDataStatus = () => {
     }
   };
 
-  // Calcular estado de datos
   const getDataStatus = () => {
     const hasUsers = offlineUsers.length > 0;
     const hasProducts = productos.length > 0;
     const hasCategories = categorias.length > 0;
 
     if (hasUsers && hasProducts && hasCategories) {
-      return "optimal";
+      return { type: "optimal", text: "Datos completos" };
     } else if (hasUsers && hasProducts) {
-      return "good";
+      return { type: "good", text: "Datos básicos listos" };
     } else if (hasUsers) {
-      return "minimal";
+      return { type: "warning", text: "Datos mínimos" };
     } else {
-      return "critical";
+      return { type: "critical", text: "Datos insuficientes" };
     }
   };
 
@@ -335,9 +334,11 @@ const OfflineDataStatus = () => {
   if (!dbInitialized) {
     return (
       <div className={styles.container}>
-        <div className={styles.statusOffline}>
-          <FiDatabase />
-          <span>Inicializando base de datos offline...</span>
+        <div className={styles.statusHeader}>
+          <div className={`${styles.connectionStatus} ${styles.statusOffline}`}>
+            <FiDatabase className={styles.statusIcon} />
+            <span>Inicializando base de datos...</span>
+          </div>
         </div>
       </div>
     );
@@ -345,42 +346,132 @@ const OfflineDataStatus = () => {
 
   return (
     <div className={styles.container}>
-      {/* ✅ ESTADO DE CONEXIÓN */}
-      <div className={isOnline ? styles.statusOnline : styles.statusOffline}>
-        {isOnline ? (
-          <FiWifi className={styles.onlineIcon} />
-        ) : (
-          <FiWifiOff className={styles.offlineIcon} />
-        )}
-        <span>{isOnline ? "Conexión activa" : "Modo Offline"}</span>
+      {/* HEADER PRINCIPAL - TODO EN UNA LÍNEA */}
+      <div className={styles.statusHeader}>
+        {/* GRUPO DE ESTADO Y DATOS */}
+        <div className={styles.statusGroup}>
+          {/* ESTADO DE CONEXIÓN */}
+          <div
+            className={`${styles.connectionStatus} ${
+              isOnline ? styles.statusOnline : styles.statusOffline
+            }`}
+          >
+            {isOnline ? (
+              <FiWifi className={`${styles.statusIcon} ${styles.onlineIcon}`} />
+            ) : (
+              <FiWifiOff
+                className={`${styles.statusIcon} ${styles.offlineIcon}`}
+              />
+            )}
+            <span>{isOnline ? "En línea" : "Sin conexión"}</span>
+          </div>
 
-        {/* ✅ BOTONES DE DEBUG */}
-        <div className={styles.debugButtons}>
+          {/* DATOS EN LÍNEA */}
+          <div className={styles.dataStatusRow}>
+            {/* Usuarios */}
+            <div className={styles.dataItem}>
+              <FiUsers className={styles.dataIcon} />
+              <span className={styles.dataText}>
+                {offlineUsers.length} user{offlineUsers.length !== 1 ? "s" : ""}
+                {hasDuplicates && (
+                  <span className={styles.duplicateBadge}>!</span>
+                )}
+              </span>
+            </div>
+
+            {/* Productos */}
+            <div className={styles.dataItem}>
+              <FiPackage className={styles.dataIcon} />
+              <span className={styles.dataText}>
+                {productos.length} prod{productos.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {/* Categorías */}
+            <div className={styles.dataItem}>
+              <FiPackage className={styles.dataIcon} />
+              <span className={styles.dataText}>
+                {categorias.length} cat{categorias.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {/* Indicador de estado */}
+            <div
+              className={`${styles.statusIndicator} ${
+                dataStatus.type === "optimal"
+                  ? styles.statusOptimal
+                  : dataStatus.type === "critical"
+                  ? styles.statusCritical
+                  : styles.statusWarning
+              }`}
+            >
+              {dataStatus.type === "optimal" && <FiCheckCircle size={10} />}
+              {dataStatus.type === "critical" && <FiAlertTriangle size={10} />}
+              {dataStatus.type === "warning" && <FiAlertTriangle size={10} />}
+              <span>{dataStatus.text}</span>
+            </div>
+
+            {/* Última actualización */}
+            {lastUpdate && (
+              <div className={styles.lastUpdate}>
+                <small>Actualizado: {formatDate(lastUpdate)}</small>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* GRUPO DE ACCIONES */}
+        <div className={styles.actionGroup}>
+          {/* Botón de sincronización */}
+          {isOnline && (
+            <button
+              className={styles.syncButton}
+              onClick={handleSync}
+              disabled={isLoading}
+            >
+              <FiRefreshCw className={isLoading ? styles.spinning : ""} />
+              {isLoading ? "Sinc..." : "Sincronizar"}
+            </button>
+          )}
+
+          {/* Botones de utilidad */}
+          {(offlineUsers.length > 0 || hasDuplicates) && (
+            <>
+              <button
+                className={styles.iconButton}
+                onClick={() => setShowStats(!showStats)}
+                title="Estadísticas"
+              >
+                <FiDatabase size={12} />
+              </button>
+
+              {hasDuplicates && (
+                <button
+                  className={styles.iconButton}
+                  onClick={handleCleanup}
+                  title="Limpiar duplicados"
+                >
+                  🧹
+                </button>
+              )}
+            </>
+          )}
+
           <button
-            className={styles.debugButton}
+            className={styles.iconButton}
             onClick={handleDebugUsers}
-            title="Depurar usuarios"
+            title="Depurar"
           >
             🐛
           </button>
-
-          {(offlineUsers.length > 0 || hasDuplicates) && (
-            <button
-              className={styles.debugButton}
-              onClick={() => setShowStats(!showStats)}
-              title="Mostrar estadísticas"
-            >
-              <FiDatabase />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* ✅ INFORMACIÓN DE DEBUG */}
+      {/* INFORMACIÓN DE DEBUG (se muestra debajo) */}
       {showStats && usersStats && (
         <div className={styles.debugInfo}>
           <div className={styles.debugHeader}>
-            <strong>Información de Depuración</strong>
+            <strong>Estadísticas de Datos Offline</strong>
           </div>
           <div className={styles.debugItem}>
             <span>Registros totales:</span>
@@ -397,90 +488,17 @@ const OfflineDataStatus = () => {
             </span>
           </div>
           <div className={styles.debugActions}>
+            <button className={styles.refreshButton} onClick={loadOfflineData}>
+              🔄 Actualizar datos
+            </button>
             {hasDuplicates && (
-              <button
-                className={styles.cleanupButton}
-                onClick={handleCleanup}
-                title="Eliminar usuarios duplicados"
-              >
-                🧹 Limpiar Duplicados
+              <button className={styles.cleanupButton} onClick={handleCleanup}>
+                🧹 Limpiar duplicados
               </button>
             )}
-            <button
-              className={styles.refreshButton}
-              onClick={loadOfflineData}
-              title="Recargar datos"
-            >
-              🔄 Actualizar
-            </button>
           </div>
         </div>
       )}
-
-      {/* ✅ DATOS DISPONIBLES OFFLINE */}
-      <div className={styles.dataStatus}>
-        <div className={styles.dataItem}>
-          <FiUsers className={styles.dataIcon} />
-          <span className={styles.dataText}>
-            {offlineUsers.length} usuario{offlineUsers.length !== 1 ? "s" : ""}{" "}
-            disponible{offlineUsers.length !== 1 ? "s" : ""} offline
-            {hasDuplicates && <span className={styles.duplicateBadge}>!</span>}
-          </span>
-        </div>
-
-        <div className={styles.dataItem}>
-          <FiPackage className={styles.dataIcon} />
-          <span className={styles.dataText}>
-            {productos.length} producto{productos.length !== 1 ? "s" : ""}{" "}
-            disponible{productos.length !== 1 ? "s" : ""} offline
-          </span>
-        </div>
-
-        <div className={styles.dataItem}>
-          <FiPackage className={styles.dataIcon} />
-          <span className={styles.dataText}>
-            {categorias.length} categoría{categorias.length !== 1 ? "s" : ""}{" "}
-            disponible{categorias.length !== 1 ? "s" : ""} offline
-          </span>
-        </div>
-
-        {lastUpdate && (
-          <div className={styles.lastUpdate}>
-            <small>Actualizado: {formatDate(lastUpdate)}</small>
-          </div>
-        )}
-
-        {/* ✅ MENSAJES DE ESTADO */}
-        {dataStatus === "optimal" && (
-          <div className={styles.dataSuccess}>
-            <FiCheckCircle className={styles.successIcon} />
-            <span>Listo para trabajar sin conexión</span>
-          </div>
-        )}
-
-        {dataStatus === "critical" && (
-          <div className={styles.dataWarning}>
-            <FiAlertTriangle className={styles.warningIcon} />
-            <span>
-              {isOnline
-                ? "Datos offline insuficientes. Sincroniza para modo offline."
-                : "Datos insuficientes. Conecta a internet para sincronizar."}
-            </span>
-          </div>
-        )}
-
-        {/* ✅ BOTÓN DE SINCRONIZACIÓN */}
-        {isOnline && (
-          <button
-            className={styles.syncButton}
-            onClick={handleSync}
-            disabled={isLoading}
-          >
-            <FiRefreshCw className={isLoading ? styles.spinning : ""} />
-            {isLoading ? "Sincronizando..." : "Sincronizar Datos Offline"}
-          </button>
-        )}
-      </div>
     </div>
   );
 };

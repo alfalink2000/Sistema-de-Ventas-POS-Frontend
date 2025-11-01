@@ -176,7 +176,7 @@ class SalesOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ SINCRONIZAR VENTAS PENDIENTES
+  // ✅ SINCRONIZAR VENTAS PENDIENTES - VERSIÓN CORREGIDA
   async syncPendingSales() {
     if (!this.isOnline) {
       return {
@@ -212,21 +212,51 @@ class SalesOfflineController extends BaseOfflineController {
 
       for (const venta of pendingSales) {
         try {
-          const response = await this.sendSaleToServer(venta);
+          // ✅ CORREGIR: Usar URL directa en lugar de process.env
+          const apiUrl = window.API_URL || "http://localhost:3000/api";
 
-          if (response.success) {
-            await this.markSaleAsSynced(venta.id_local, response.data);
+          // Preparar datos para el servidor
+          const ventaParaServidor = {
+            sesion_caja_id: venta.sesion_caja_id,
+            vendedor_id: venta.vendedor_id,
+            total: venta.total,
+            metodo_pago: venta.metodo_pago || "efectivo",
+            productos: venta.productos || [],
+          };
+
+          // Agregar campos opcionales si existen
+          if (venta.efectivo_recibido !== undefined) {
+            ventaParaServidor.efectivo_recibido = venta.efectivo_recibido;
+          }
+          if (venta.cambio !== undefined) {
+            ventaParaServidor.cambio = venta.cambio;
+          }
+
+          console.log("🌐 Enviando venta al servidor:", ventaParaServidor);
+
+          const response = await fetch(`${apiUrl}/ventas`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-token": localStorage.getItem("token"),
+            },
+            body: JSON.stringify(ventaParaServidor),
+          });
+
+          let responseData;
+
+          if (response.ok) {
+            responseData = await response.json();
+
+            // ✅ MARCAR COMO SINCRONIZADO
+            await this.markSaleAsSynced(venta.id_local, responseData.venta);
             results.success++;
             console.log(`✅ Venta ${venta.id_local} sincronizada exitosamente`);
           } else {
-            results.failed++;
-            results.errors.push({
-              venta_id: venta.id_local,
-              error: response.error,
-            });
-            console.error(
-              `❌ Error sincronizando venta ${venta.id_local}:`,
-              response.error
+            responseData = await response.json().catch(() => ({}));
+            throw new Error(
+              responseData.error ||
+                `Error ${response.status}: ${response.statusText}`
             );
           }
         } catch (error) {
@@ -237,16 +267,23 @@ class SalesOfflineController extends BaseOfflineController {
           });
           console.error(
             `❌ Error sincronizando venta ${venta.id_local}:`,
-            error
+            error.message
           );
         }
       }
 
-      console.log(`✅ [SALES OFFLINE] Sincronización completada:`, results);
+      console.log(`✅ [SALES OFFLINE] Sincronización completada:`, {
+        total: results.total,
+        success: results.success,
+        failed: results.failed,
+      });
 
       return {
         success: results.failed === 0,
-        ...results,
+        total: results.total,
+        success: results.success,
+        failed: results.failed,
+        errors: results.errors,
       };
     } catch (error) {
       console.error("❌ Error en syncPendingSales:", error);

@@ -32,6 +32,202 @@ class SessionsOfflineController extends BaseOfflineController {
       return fallbackId;
     }
   }
+
+  // ✅ VERIFICAR SI UNA SESIÓN ESTÁ ACTIVA (no muy antigua)
+  isSessionActive(session) {
+    if (session.estado !== "abierta") return false;
+
+    const sessionDate = new Date(session.fecha_apertura);
+    const now = new Date();
+    const hoursDiff = (now - sessionDate) / (1000 * 60 * 60);
+
+    // Considerar sesión activa si tiene menos de 24 horas
+    return hoursDiff < 24;
+  }
+
+  // ✅ VERIFICACIÓN MEJORADA DE SESIONES DUPLICADAS
+  async checkForDuplicateSessions(vendedorId) {
+    try {
+      const allSessions = await this.getAllSessions();
+
+      // Buscar sesiones abiertas para este vendedor
+      const openSessions = allSessions.filter(
+        (s) =>
+          s.vendedor_id === vendedorId &&
+          s.estado === "abierta" &&
+          this.isSessionActive(s)
+      );
+
+      if (openSessions.length > 1) {
+        console.warn(
+          `⚠️ Múltiples sesiones abiertas encontradas: ${openSessions.length}`
+        );
+
+        // Ordenar por fecha de apertura (más reciente primero)
+        openSessions.sort(
+          (a, b) => new Date(b.fecha_apertura) - new Date(a.fecha_apertura)
+        );
+
+        // Mantener solo la más reciente, cerrar las demás
+        const [mostRecent, ...olderSessions] = openSessions;
+
+        for (const oldSession of olderSessions) {
+          console.log(`🔒 Cerrando sesión duplicada: ${oldSession.id_local}`);
+          await this.forceCloseSession(
+            oldSession.id_local,
+            "Sesión duplicada - cerrada automáticamente"
+          );
+        }
+
+        return {
+          hasDuplicates: true,
+          keptSession: mostRecent,
+          closedSessions: olderSessions.length,
+        };
+      }
+
+      return {
+        hasDuplicates: false,
+        openSessions: openSessions.length,
+      };
+    } catch (error) {
+      console.error("❌ Error verificando duplicados:", error);
+      return { hasDuplicates: false, error: error.message };
+    }
+  }
+  // ✅ CERRAR SESIÓN FORZOSAMENTE
+  async forceCloseSession(sessionId, motivo = "Cierre automático") {
+    try {
+      const session = await this.getSessionById(sessionId);
+      if (!session) return { success: false, error: "Sesión no encontrada" };
+
+      const closeData = {
+        saldo_final: session.saldo_inicial || 0,
+        observaciones: motivo,
+      };
+
+      return await this.closeSession(sessionId, closeData);
+    } catch (error) {
+      console.error(`❌ Error forzando cierre de sesión ${sessionId}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ ABRIR SESIÓN CON VERIFICACIÓN MEJORADA
+  async openSessionWithValidation(sessionData) {
+    try {
+      // 1. Verificar duplicados primero
+      const duplicateCheck = await this.checkForDuplicateSessions(
+        sessionData.vendedor_id
+      );
+
+      if (duplicateCheck.hasDuplicates) {
+        console.log(
+          `🔄 Se encontraron duplicados, se mantiene sesión: ${duplicateCheck.keptSession.id_local}`
+        );
+      }
+
+      // 2. Verificar si ya existe una sesión activa
+      const existingSession = await this.getOpenSessionByVendedor(
+        sessionData.vendedor_id
+      );
+
+      if (existingSession && this.isSessionActive(existingSession)) {
+        return {
+          success: false,
+          error: "Ya existe una sesión de caja activa para este vendedor",
+          existingSession: existingSession,
+          duplicateCheck: duplicateCheck,
+        };
+      }
+
+      // 3. Si existe una sesión pero está inactiva (muy antigua), cerrarla
+      if (existingSession && !this.isSessionActive(existingSession)) {
+        console.log(
+          `🕒 Sesión antigua encontrada, cerrando: ${existingSession.id_local}`
+        );
+        await this.forceCloseSession(
+          existingSession.id_local,
+          "Sesión antigua - cerrada automáticamente"
+        );
+      }
+
+      // 4. Abrir nueva sesión
+      return await this.openSession(sessionData);
+    } catch (error) {
+      console.error("❌ Error en openSessionWithValidation:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ SINCRONIZACIÓN MEJORADA CON MANEJO DE CONFLICTOS
+  async syncWithConflictResolution(session) {
+    try {
+      // Verificar si la sesión ya existe en el servidor
+      const serverSession = await this.checkSessionOnServer(session);
+
+      if (serverSession) {
+        // Sesión ya existe en servidor, actualizar localmente
+        await this.updateLocalSessionFromServer(
+          session.id_local,
+          serverSession
+        );
+        return {
+          success: true,
+          action: "updated",
+          message: "Sesión actualizada desde servidor",
+        };
+      } else {
+        // Sesión no existe en servidor, crear nueva
+        return await this.syncOpenSession(session);
+      }
+    } catch (error) {
+      console.error(`❌ Error en syncWithConflictResolution:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ VERIFICAR SESIÓN EN SERVIDOR
+  async checkSessionOnServer(session) {
+    try {
+      if (!session.id_servidor) return null;
+
+      const response = await fetchConToken(
+        `sesiones-caja/${session.id_servidor}`
+      );
+      if (response?.ok && response.sesion) {
+        return response.sesion;
+      }
+      return null;
+    } catch (error) {
+      console.error("❌ Error verificando sesión en servidor:", error);
+      return null;
+    }
+  }
+
+  // ✅ ACTUALIZAR SESIÓN LOCAL DESDE SERVIDOR
+  async updateLocalSessionFromServer(localId, serverSession) {
+    try {
+      const localSession = await this.getSessionById(localId);
+      if (!localSession) return false;
+
+      const updatedSession = {
+        ...localSession,
+        ...serverSession,
+        id_servidor: serverSession.id,
+        sincronizado: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      await IndexedDBService.put(this.storeName, updatedSession);
+      console.log(`✅ Sesión local actualizada desde servidor: ${localId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error actualizando sesión local:`, error);
+      return false;
+    }
+  }
+
   // ✅ ABRIR SESIÓN OFFLINE - CORREGIDO
   // En SessionsOfflineController.js - AGREGAR VERIFICACIÓN TEMPORAL
   async openSession(sessionData) {
@@ -41,50 +237,44 @@ class SessionsOfflineController extends BaseOfflineController {
         "saldo_inicial",
       ]);
 
-      // ✅ VERIFICAR SI YA EXISTE UNA SESIÓN ABIERTA PARA ESTE VENDEDOR
-      const existingSession = await this.getOpenSessionByVendedor(
+      // ✅ VERIFICAR DUPLICADOS MEJORADO
+      const duplicateCheck = await this.checkForDuplicateSessions(
         sessionData.vendedor_id
       );
-      if (existingSession) {
+      if (duplicateCheck.hasDuplicates) {
         return {
           success: false,
-          error: "Ya existe una sesión de caja abierta para este vendedor",
-          existingSession: existingSession,
+          error: "Ya existe una sesión activa para este vendedor",
+          existingSession: duplicateCheck.keptSession,
         };
       }
 
-      // ✅ GENERAR id_local - CORREGIDO
+      // ✅ GENERAR ID LOCAL ROBUSTO
       const localId = `ses_${Date.now()}_${Math.random()
         .toString(36)
         .substr(2, 9)}`;
 
       const sesionCompleta = {
         ...sessionData,
-        id_local: localId, // ✅ ESTE CAMPO ES OBLIGATORIO
-        id: localId, // ✅ También incluir id para consistencia
+        id_local: localId, // ✅ CLAVE PRIMARIA
         fecha_apertura: new Date().toISOString(),
         estado: "abierta",
         sincronizado: false,
         es_local: true,
-        vendedor_nombre: sessionData.vendedor_nombre || "Vendedor Offline",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      console.log("💾 Guardando sesión en IndexedDB:", sesionCompleta);
-
-      // ✅ VERIFICAR QUE id_local ESTÉ PRESENTE
-      if (!sesionCompleta.id_local) {
-        throw new Error("No se pudo generar id_local para la sesión");
-      }
+      console.log("💾 Guardando sesión:", {
+        id_local: localId,
+        vendedor: sessionData.vendedor_id,
+      });
 
       const result = await IndexedDBService.add(this.storeName, sesionCompleta);
 
       if (!result) {
-        throw new Error("No se pudo guardar la sesión en IndexedDB");
+        throw new Error("Error guardando en IndexedDB");
       }
-
-      console.log("✅ Sesión offline abierta:", localId);
 
       return {
         success: true,
@@ -92,7 +282,7 @@ class SessionsOfflineController extends BaseOfflineController {
         id_local: localId,
       };
     } catch (error) {
-      console.error("❌ Error abriendo sesión offline:", error);
+      console.error("❌ Error abriendo sesión:", error);
       return { success: false, error: error.message };
     }
   }
@@ -118,6 +308,8 @@ class SessionsOfflineController extends BaseOfflineController {
 
       const sesionActualizada = {
         ...sesion,
+        // ✅ PRESERVAR id_local SI EXISTE
+        id_local: sesion.id_local || sessionId,
         estado: "cerrada",
         fecha_cierre: new Date().toISOString(),
         saldo_final: closeData.saldo_final,
@@ -141,7 +333,7 @@ class SessionsOfflineController extends BaseOfflineController {
 
       return {
         success: true,
-        sesion: sesionActualizada,
+        sesion: sesionActualizada, // ← ✅ DEVOLVER CON id_local
       };
     } catch (error) {
       console.error("❌ Error cerrando sesión offline:", error);

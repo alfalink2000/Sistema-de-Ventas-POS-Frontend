@@ -185,8 +185,8 @@ const Sales = () => {
             isOnline ? styles.online : styles.offline
           }`}
         >
-          {isOnline ? <FiWifi /> : <FiWifiOff />}
-          <span>{isOnline ? "En línea" : "Offline"}</span>
+          {/* {isOnline ? <FiWifi /> : <FiWifiOff />}
+          <span>{isOnline ? "En línea" : "Offline"}</span> */}
         </div>
 
         <div className={styles.headerStats}>
@@ -216,12 +216,6 @@ const Sales = () => {
           <div className={styles.alertContent}>
             <h3>No hay sesión de caja activa</h3>
             <p>Debes abrir una sesión de caja para realizar ventas</p>
-            <button
-              className={styles.openSessionBtn}
-              onClick={() => setShowSesionModal(true)}
-            >
-              Abrir Sesión
-            </button>
           </div>
         </div>
       )}

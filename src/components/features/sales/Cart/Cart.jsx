@@ -1,9 +1,9 @@
-// components/features/sales/Cart/Cart.jsx - VERSIÓN MEJORADA
+// components/features/sales/Cart/Cart.jsx - VERSIÓN MINIMALISTA
 import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
 import CartItem from "../CartItem/CartItem";
 import Button from "../../../ui/Button/Button";
-import { FiShoppingCart, FiPackage, FiArrowRight } from "react-icons/fi";
+import { FiShoppingCart, FiArrowRight } from "react-icons/fi";
 import styles from "./Cart.module.css";
 
 const Cart = ({ onCheckout, disabled = false }) => {
@@ -24,9 +24,6 @@ const Cart = ({ onCheckout, disabled = false }) => {
         <div className={styles.emptyIllustration}>
           <div className={styles.cartIconWrapper}>
             <FiShoppingCart className={styles.cartIcon} />
-            <div className={styles.packageIcon}>
-              <FiPackage />
-            </div>
           </div>
         </div>
 
@@ -37,7 +34,7 @@ const Cart = ({ onCheckout, disabled = false }) => {
           </p>
           <div className={styles.emptyHint}>
             <FiArrowRight className={styles.hintIcon} />
-            <span>Selecciona productos y aparecerán aquí</span>
+            <span>Selecciona productos para comenzar</span>
           </div>
         </div>
       </div>

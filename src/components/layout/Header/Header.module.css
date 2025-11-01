@@ -1,151 +1,780 @@
-/* components/layout/Header/Header.module.css - VERSIÓN MEJORADA */
+/* components/layout/Header/Header.module.css - VERSIÓN CON COLORES ORIGINALES */
+
+/* ESTILOS BASE DEL HEADER - COLORES ORIGINALES */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 32px;
-  height: 83px;
+  padding: 0.75rem 1.5rem;
   background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
-  border-bottom: none;
-  box-shadow: 0 2px 20px rgba(37, 99, 235, 0.2);
-  color: white;
+  border-bottom: 1px solid #3b82f6;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  min-height: 70px;
   position: relative;
-  min-width: 0;
+  z-index: 1000;
 }
 
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-shrink: 0;
-}
-
-.menuButtonContainer {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.menuButton {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  cursor: pointer;
-  padding: 10px;
-  border-radius: 10px;
-  color: white;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
-  flex-shrink: 0;
-}
-
-.menuButton:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: rotate(90deg);
-}
-
-.menuIcon {
-  font-size: 18px;
-}
-
-.menuButtonPlaceholder {
-  width: 44px;
-  height: 44px;
-  opacity: 0;
-  pointer-events: none;
-  flex-shrink: 0;
-}
-
-.breadcrumb {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex-shrink: 1;
-}
-
-.appName {
-  font-weight: 700;
-  font-size: 20px;
-  letter-spacing: -0.5px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  white-space: nowrap;
-}
-
-.welcomeText {
-  font-size: 12px;
-  opacity: 0.9;
-  font-weight: 500;
-  white-space: nowrap;
+  gap: 1rem;
+  flex: 1;
 }
 
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 12px; /* ✅ Gap reducido para más elementos */
-  min-width: 0;
-  flex-shrink: 1;
+  gap: 1.5rem;
 }
 
-/* ✅ INDICADOR DE SINCRONIZACIÓN COMPACTO */
-.syncIndicator {
+/* BOTÓN DE MENÚ */
+.menuButtonContainer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.menuButton {
+  background: none;
+  border: none;
+  color: #dbeafe;
+  padding: 0.5rem;
   border-radius: 8px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  cursor: default;
-  max-width: 140px;
-  min-width: 0;
-  flex-shrink: 1;
-  overflow: hidden;
-}
-
-.syncIndicator:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-1px);
-}
-
-.syncIcon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+}
+
+.menuButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.menuIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.menuButtonPlaceholder {
+  width: 40px;
+  height: 40px;
+}
+
+/* BREADCRUMB Y NOMBRE DE LA APP */
+.breadcrumb {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.appName {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.025em;
+}
+
+.welcomeText {
+  font-size: 0.875rem;
+  color: #dbeafe;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.offlineHeaderBadge {
+  background: #dc2626;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* INDICADOR DE SINCRONIZACIÓN MEJORADO - COLORES AZULES */
+.syncIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 180px;
+}
+
+.syncIndicator:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.syncIconContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.syncIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
   transition: all 0.3s ease;
 }
 
 .syncIcon.online {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border: 2px solid rgba(34, 197, 94, 0.4);
 }
 
 .syncIcon.offline {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 2px solid rgba(239, 68, 68, 0.4);
+}
+
+.syncIcon.syncing {
+  background: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+  border: 2px solid rgba(59, 130, 246, 0.6);
+  animation: pulse 1.5s infinite;
+}
+
+.syncIcon.hasPending {
+  animation: glow 2s infinite;
+}
+
+.syncSpinner {
+  animation: spin 1s linear infinite;
 }
 
 .wifiIcon,
 .wifiOffIcon {
-  font-size: 14px;
-  color: white;
+  width: 18px;
+  height: 18px;
 }
 
-.syncSpinner {
-  font-size: 14px;
+.pendingBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ef4444;
   color: white;
-  animation: spin 1.5s linear infinite;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #1e40af;
 }
 
+.syncInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+}
+
+.syncStatus {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.pendingCount {
+  font-size: 0.75rem;
+  color: #fef3c7;
+  font-weight: 500;
+}
+
+.syncButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  padding: 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.syncButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.syncButtonIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* INDICADOR DE GANANCIAS - COLORES COMBINABLES CON AZUL */
+.earningsIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 10px;
+  min-width: 200px;
+}
+
+.earningsIcon {
+  width: 40px;
+  height: 40px;
+  background: rgba(34, 197, 94, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #22c55e;
+}
+
+.trendingIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.earningsInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.earningsLabel {
+  font-size: 0.75rem;
+  color: #dbeafe;
+  font-weight: 500;
+}
+
+.earningsAmount {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+.earningsDetails {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+}
+
+.salesCount {
+  color: #bfdbfe;
+}
+
+.offlineEarningBadge {
+  background: #f59e0b;
+  color: white;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+/* INDICADOR SIN SESIÓN */
+.noSessionIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  min-width: 200px;
+}
+
+.noSessionIcon {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bfdbfe;
+}
+
+.dollarIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.noSessionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.noSessionLabel {
+  font-size: 0.75rem;
+  color: #dbeafe;
+  font-weight: 500;
+}
+
+.noSessionText {
+  font-size: 0.875rem;
+  color: #bfdbfe;
+}
+
+/* INFORMACIÓN DEL USUARIO */
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.userAvatar {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.userIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.userDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.userName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.userRole {
+  font-size: 0.75rem;
+  color: #dbeafe;
+  text-transform: capitalize;
+}
+
+/* BOTÓN DE SALIR */
+.logoutButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fecaca;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.logoutButton:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+}
+
+.logoutIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* MODAL DE SINCRONIZACIÓN - FONDO AZUL COHERENTE */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(30, 64, 175, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modalContent {
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+  border-radius: 16px;
+  border: 1px solid #3b82f6;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #3b82f6;
+  background: rgba(30, 64, 175, 0.9);
+}
+
+.modalHeader h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  color: #bfdbfe;
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
+}
+
+.modalBody {
+  padding: 1.5rem;
+  overflow-y: auto;
+  max-height: 60vh;
+  background: rgba(30, 64, 175, 0.1);
+}
+
+/* SECCIÓN DE ESTADO DE SINCRONIZACIÓN */
+.syncStatusSection {
+  margin-bottom: 1.5rem;
+}
+
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.statusIndicator.online {
+  border-left: 4px solid #22c55e;
+}
+
+.statusIndicator.offline {
+  border-left: 4px solid #ef4444;
+}
+
+.statusIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.statusIndicator.online .statusIcon {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.statusIndicator.offline .statusIcon {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.statusText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.statusTitle {
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.statusSubtitle {
+  color: #bfdbfe;
+  font-size: 0.875rem;
+}
+
+/* CONTADORES PENDIENTES */
+.pendingCounters {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.counterItem,
+.counterTotal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.counterTotal {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.counterNumber {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.counterTotal .counterNumber {
+  color: #fecaca;
+}
+
+.counterLabel,
+.totalLabel {
+  font-size: 0.75rem;
+  color: #bfdbfe;
+  text-align: center;
+}
+
+.totalLabel {
+  color: #fecaca;
+  font-weight: 500;
+}
+
+/* DETALLES PENDIENTES */
+.pendingDetails {
+  margin-bottom: 1.5rem;
+}
+
+.pendingDetails h4 {
+  margin: 0 0 1rem 0;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.detailSection {
+  margin-bottom: 1.5rem;
+}
+
+.detailSection h5 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem 0;
+  color: #dbeafe;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.sectionIcon {
+  width: 16px;
+  height: 16px;
+  color: #93c5fd;
+}
+
+.detailItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.detailItem:last-child {
+  margin-bottom: 0;
+}
+
+.itemIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #93c5fd;
+  font-size: 0.875rem;
+}
+
+.itemContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.itemTitle {
+  font-size: 0.875rem;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.itemDate {
+  font-size: 0.75rem;
+  color: #bfdbfe;
+}
+
+.itemStatus {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.itemStatus.pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fef3c7;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+/* SIN DATOS PENDIENTES */
+.noPendingData {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 10px;
+  text-align: center;
+  justify-content: center;
+  color: #bbf7d0;
+  font-weight: 500;
+}
+
+.successIcon {
+  width: 20px;
+  height: 20px;
+  color: #22c55e;
+}
+
+/* SECCIÓN DE ERRORES */
+.errorSection {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  color: #fecaca;
+  font-size: 0.875rem;
+}
+
+.errorIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: #ef4444;
+}
+
+/* PIE DEL MODAL */
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #3b82f6;
+  background: rgba(30, 64, 175, 0.9);
+}
+
+.primaryButton,
+.secondaryButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-size: 0.875rem;
+}
+
+.primaryButton {
+  background: #3b82f6;
+  color: white;
+  border: 1px solid #60a5fa;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #3b82f6;
+}
+
+.primaryButton:disabled {
+  background: #64748b;
+  border-color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.secondaryButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: #dbeafe;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.secondaryButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* ANIMACIONES */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -155,530 +784,95 @@
   }
 }
 
-.syncInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
-}
-
-.syncStatus {
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pendingCount {
-  font-size: 9px;
-  opacity: 0.8;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.syncButton {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  border-radius: 4px;
-  padding: 4px;
-  color: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.syncButton:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.1);
-}
-
-.syncButtonIcon {
-  font-size: 12px;
-}
-
-/* ✅ INDICADOR DE GANANCIAS - MÁS COMPACTO */
-.earningsIndicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(34, 197, 94, 0.15);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  cursor: default;
-  max-width: 160px;
-  min-width: 0;
-  flex-shrink: 1;
-  overflow: hidden;
-}
-
-.earningsIndicator:hover {
-  background: rgba(34, 197, 94, 0.2);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
-}
-
-.earningsIcon {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.trendingIcon {
-  font-size: 14px;
-  color: white;
-}
-
-.earningsInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.earningsLabel {
-  font-size: 9px;
-  opacity: 0.9;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.earningsAmount {
-  font-weight: 700;
-  font-size: 12px;
-  color: #22c55e;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.earningsDetails {
-  display: flex;
-  gap: 4px;
-  font-size: 8px;
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
-.salesCount {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: 500;
-}
-
-/* ✅ INDICADOR SIN SESIÓN - MÁS COMPACTO */
-.noSessionIndicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(148, 163, 184, 0.15);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  cursor: default;
-  max-width: 140px;
-  min-width: 0;
-  flex-shrink: 1;
-  overflow: hidden;
-}
-
-.noSessionIndicator:hover {
-  background: rgba(148, 163, 184, 0.2);
-  transform: translateY(-1px);
-}
-
-.noSessionIcon {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #64748b, #475569);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.dollarIcon {
-  font-size: 14px;
-  color: white;
-}
-
-.noSessionInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.noSessionLabel {
-  font-size: 9px;
-  opacity: 0.9;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.noSessionText {
-  font-size: 10px;
-  opacity: 0.8;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Información del usuario - COMPACTADO */
-.userInfo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.userInfo:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-.userAvatar {
-  width: 28px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.userIcon {
-  font-size: 12px;
-  color: white;
-}
-
-.userDetails {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.userName {
-  font-weight: 600;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100px;
-}
-
-.userRole {
-  font-size: 9px;
-  opacity: 0.8;
-  text-transform: capitalize;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100px;
-}
-
-/* Botón de salir - COMPACTADO */
-.logoutButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  padding: 6px 10px;
-  border-radius: 6px;
-  color: white;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.logoutButton:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
-}
-
-.logoutIcon {
-  font-size: 12px;
-}
-
-/* ✅ RESPONSIVE MEJORADO CON MÁS ELEMENTOS */
-@media (max-width: 1200px) {
-  .header {
-    padding: 0 24px;
-  }
-
-  .syncIndicator {
-    max-width: 120px;
-  }
-
-  .earningsIndicator {
-    max-width: 140px;
-  }
-
-  .earningsDetails {
-    display: none;
-  }
-}
-
-@media (max-width: 1024px) {
-  .header {
-    padding: 0 20px;
-  }
-
-  .syncIndicator,
-  .earningsIndicator,
-  .noSessionIndicator {
-    max-width: 110px;
-  }
-
-  .userName,
-  .userRole {
-    max-width: 80px;
-  }
-}
-
-@media (max-width: 900px) {
-  .earningsAmount,
-  .syncStatus {
-    font-size: 11px;
-  }
-
-  .earningsLabel,
-  .noSessionLabel,
-  .syncStatus {
-    font-size: 8px;
-  }
-}
-
-@media (max-width: 768px) {
-  .header {
-    padding: 0 16px;
-    height: 70px;
-  }
-
-  .welcomeText {
-    display: none;
-  }
-
-  .syncIndicator,
-  .earningsIndicator,
-  .noSessionIndicator {
-    max-width: 100px;
-    padding: 6px 8px;
-  }
-
-  .earningsAmount {
-    font-size: 10px;
-  }
-
-  .earningsIcon,
-  .noSessionIcon,
-  .syncIcon {
-    width: 28px;
-    height: 28px;
-  }
-
-  .trendingIcon,
-  .dollarIcon,
-  .wifiIcon,
-  .wifiOffIcon {
-    font-size: 12px;
-  }
-
-  .userDetails {
-    display: none;
-  }
-
-  .logoutButton span {
-    display: none;
-  }
-
-  .logoutButton {
-    padding: 6px;
-  }
-
-  .headerRight {
-    gap: 8px;
-  }
-}
-
-@media (max-width: 640px) {
-  .syncIndicator .syncInfo,
-  .earningsIndicator .earningsInfo,
-  .noSessionIndicator .noSessionInfo {
-    display: none;
-  }
-
-  .syncIndicator,
-  .earningsIndicator,
-  .noSessionIndicator {
-    max-width: 40px;
-    padding: 6px;
-  }
-
-  .appName {
-    font-size: 16px;
-  }
-}
-
-@media (max-width: 480px) {
-  .header {
-    padding: 0 12px;
-  }
-
-  .headerRight {
-    gap: 6px;
-  }
-
-  .userInfo {
-    padding: 4px 6px;
-  }
-
-  .syncIndicator,
-  .earningsIndicator,
-  .noSessionIndicator {
-    max-width: 36px;
-  }
-}
-
-/* ESTADOS DE FOCUS PARA ACCESIBILIDAD */
-.menuButton:focus-visible,
-.userInfo:focus-visible,
-.logoutButton:focus-visible,
-.syncButton:focus-visible {
-  outline: 2px solid white;
-  outline-offset: 2px;
-}
-/* AGREGAR ESTOS NUEVOS ESTILOS AL FINAL DE TU HEADER.MODULE.CSS EXISTENTE */
-
-/* ✅ NUEVOS ESTILOS PARA SINCRONIZACIÓN MEJORADA */
-.syncIconContainer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.syncIcon.syncing {
-  animation: pulse 1.5s infinite;
-}
-
 @keyframes pulse {
-  0% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
     opacity: 0.7;
   }
+}
+
+@keyframes glow {
+  0%,
   100% {
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.8);
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-.syncWarning {
-  color: #fbbf24;
-  margin-left: 4px;
-  flex-shrink: 0;
-}
-
-.syncWarning svg {
-  width: 12px;
-  height: 12px;
-}
-
-/* ✅ NUEVO BADGE OFFLINE EN EL HEADER */
-.offlineHeaderBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 500;
-  margin-left: 8px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.offlineHeaderBadge svg {
-  width: 10px;
-  height: 10px;
-}
-
-/* ✅ BADGE PARA GANANCIAS OFFLINE */
-.offlineEarningBadge {
-  background: rgba(255, 255, 255, 0.15);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 7px;
-  font-weight: 600;
-  color: #fbbf24;
-}
-
-/* ✅ MEJORAS RESPONSIVE ADICIONALES */
+/* RESPONSIVE */
 @media (max-width: 768px) {
-  .offlineHeaderBadge {
-    margin-left: 4px;
-    padding: 1px 4px;
-    font-size: 9px;
+  .header {
+    padding: 0.5rem 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
 
-  .syncWarning {
-    display: none; /* Ocultar en móviles para ahorrar espacio */
+  .headerRight {
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .syncIndicator {
+    min-width: auto;
+  }
+
+  .earningsIndicator,
+  .noSessionIndicator {
+    min-width: auto;
+    flex: 1;
+  }
+
+  .pendingCounters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modalContent {
+    width: 95%;
+    margin: 1rem;
+  }
+
+  .modalFooter {
+    flex-direction: column;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+    justify-content: center;
   }
 }
 
-@media (max-width: 640px) {
-  .offlineHeaderBadge {
-    display: none; /* Ocultar en pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .appName {
+    font-size: 1.25rem;
   }
 
-  .offlineEarningBadge {
+  .userInfo .userDetails {
     display: none;
+  }
+
+  .syncInfo {
+    display: none;
+  }
+
+  .pendingCounters {
+    grid-template-columns: 1fr;
   }
 }

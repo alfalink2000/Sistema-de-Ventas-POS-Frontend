@@ -102,8 +102,16 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
   const handleProcessSale = async () => {
     console.log("🔍 [PAYMENT] Iniciando proceso de venta...");
 
+    console.log("🔍 Estado de sesión:", {
+      sesionAbierta: !!sesionAbierta,
+      id: sesionAbierta?.id,
+      id_local: sesionAbierta?.id_local,
+      estado: sesionAbierta?.estado,
+      vendedor: sesionAbierta?.vendedor_id,
+    });
+
     // ✅ VERIFICAR SESIÓN DE CAJA PRIMERO
-    if (!sesionAbierta || !sesionAbierta.id) {
+    if (!sesionAbierta || (!sesionAbierta.id && !sesionAbierta.id_local)) {
       await Swal.fire({
         icon: "error",
         title: "Sesión de Caja Requerida",
@@ -195,7 +203,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
 
       // 4. CREAR LA VENTA CON PRODUCTOS INCLUIDOS
       const saleData = {
-        sesion_caja_id: sesionAbierta.id,
+        sesion_caja_id: sesionAbierta.id || sesionAbierta.id_local,
         vendedor_id: user.id,
         total: total,
         metodo_pago: paymentMethod,

@@ -1,68 +1,78 @@
 .container {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 8px 0;
-  margin: 0;
-  box-shadow: none;
-  backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
   width: 100%;
-  max-width: 1200px;
+  max-width: fit-content;
 }
 
-/* Estados de conexión - OPTIMIZADO PARA HEADER */
-.statusOnline {
+/* Header principal - todo en una línea */
+.statusHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: nowrap;
+  min-height: 32px;
+}
+
+/* Grupo de estado de conexión y datos */
+.statusGroup {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+/* Estado de conexión */
+.connectionStatus {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #059669;
+  padding: 6px 12px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 0.85rem;
-  justify-content: center;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.statusOnline {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
 }
 
 .statusOffline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  background: #fef2f2;
   color: #dc2626;
-  font-weight: 600;
-  font-size: 0.85rem;
-  justify-content: center;
-  margin-bottom: 0;
+  border: 1px solid #fecaca;
+}
+
+.statusIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .onlineIcon {
-  width: 14px;
-  height: 14px;
+  color: #059669;
   animation: pulse 2s infinite;
 }
 
 .offlineIcon {
-  width: 14px;
-  height: 14px;
-  opacity: 0.8;
+  color: #dc2626;
+  opacity: 0.9;
 }
 
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-/* Estado de datos - COMPACTO PARA HEADER */
-.dataStatus {
+/* Datos en línea */
+.dataStatusRow {
   display: flex;
-  flex-direction: row;
-  gap: 16px;
-  justify-content: center;
   align-items: center;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -72,26 +82,83 @@
   gap: 6px;
   color: #475569;
   font-size: 0.75rem;
-  padding: 2px 0;
+  padding: 4px 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #f1f5f9;
+  white-space: nowrap;
 }
 
 .dataIcon {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   color: #64748b;
+  flex-shrink: 0;
 }
 
-/* Última actualización */
-.lastUpdate {
-  font-size: 0.65rem;
-  color: #94a3b8;
-  font-style: italic;
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
+.dataText {
+  font-weight: 500;
 }
 
-/* Botón de sincronización */
+/* Indicadores de estado */
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.statusOptimal {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.statusWarning {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.statusCritical {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* Grupo de acciones */
+.actionGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Botones compactos */
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+}
+
+.iconButton:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
 .syncButton {
   display: flex;
   align-items: center;
@@ -100,14 +167,12 @@
   color: white;
   border: none;
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.7rem;
+  padding: 6px 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-top: 0;
-  width: auto;
-  justify-content: center;
+  white-space: nowrap;
 }
 
 .syncButton:hover:not(:disabled) {
@@ -122,7 +187,38 @@
   transform: none;
 }
 
-/* Animación de spinner */
+/* Badge para duplicados */
+.duplicateBadge {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.6rem;
+  margin-left: 4px;
+  border: 1px solid #f59e0b;
+}
+
+/* Última actualización */
+.lastUpdate {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+/* Animaciones */
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 .spinning {
   animation: spin 1s linear infinite;
 }
@@ -136,86 +232,134 @@
   }
 }
 
-/* Estados de advertencia - COMPACTO */
-.dataWarning {
+/* Debug info compacta */
+.debugInfo {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  font-size: 0.75rem;
+}
+
+.debugHeader {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #475569;
+}
+
+.debugItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.debugActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cleanupButton,
+.refreshButton {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cleanupButton {
   background: #fef3c7;
-  border: 1px solid #f59f0b8e;
-  border-radius: 6px;
-  /* padding: 6px 8px; */
-  margin-top: 4px;
-}
-
-.dataWarningContent {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   color: #92400e;
-  font-size: 0.5rem;
 }
 
-.warningIcon {
-  width: 10px;
-  height: 10px;
-  color: #d97706;
-  flex-shrink: 0;
+.cleanupButton:hover {
+  background: #fde68a;
 }
 
-/* Estados de éxito - COMPACTO */
-.dataSuccess {
-  background: #d1fae5;
-  border: 1px solid #10b981;
-  border-radius: 6px;
-  /* padding: 6px 8px; */
-  margin-top: 4px;
+.refreshButton {
+  background: #dbeafe;
+  color: #1e40af;
 }
 
-.dataSuccessContent {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #065f46;
-  font-size: 0.65rem;
+.refreshButton:hover {
+  background: #bfdbfe;
 }
 
-.successIcon {
-  width: 10px;
-  height: 10px;
-  color: #059669;
-  flex-shrink: 0;
+.duplicateWarning {
+  color: #dc2626;
+  font-weight: 600;
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .statusHeader {
+    gap: 12px;
+  }
+
+  .statusGroup {
+    gap: 12px;
+  }
+
+  .dataStatusRow {
+    gap: 12px;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
-    padding: 6px 0;
+    padding: 10px 12px;
   }
 
-  .statusOnline,
-  .statusOffline {
-    font-size: 0.75rem;
+  .statusHeader {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .dataStatus {
-    gap: 12px;
+  .statusGroup {
+    gap: 8px;
+  }
+
+  .dataStatusRow {
+    gap: 8px;
   }
 
   .dataItem {
     font-size: 0.7rem;
+    padding: 3px 6px;
   }
 
-  .syncButton {
-    padding: 4px 8px;
-    font-size: 0.65rem;
+  .actionGroup {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 4px;
   }
 }
 
 @media (max-width: 480px) {
-  .dataStatus {
+  .container {
+    padding: 8px 10px;
+  }
+
+  .statusGroup {
     flex-direction: column;
-    gap: 4px;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .dataStatusRow {
+    gap: 6px;
   }
 
   .dataItem {
-    padding: 1px 0;
+    font-size: 0.65rem;
+  }
+
+  .connectionStatus {
+    font-size: 0.75rem;
   }
 }

@@ -6,6 +6,90 @@ import IndexedDBService from "../services/IndexedDBService";
 import SessionsOfflineController from "../controllers/offline/SessionsOfflineController/SessionsOfflineController";
 import SyncController from "../controllers/offline//SyncController/SyncController";
 
+// export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
+//   return async (dispatch) => {
+//     dispatch({ type: types.sesionesCajaStartLoading });
+
+//     try {
+//       console.log(`🔄 Cargando sesiones para vendedor: ${vendedorId}`);
+
+//       let sesiones = [];
+
+//       if (navigator.onLine) {
+//         // Si hay conexión, cargar desde API
+//         const response = await fetchConToken(
+//           `sesiones-caja/vendedor/${vendedorId}?limite=${limite}`
+//         );
+
+//         if (response.ok && response.sesiones) {
+//           sesiones = response.sesiones;
+//           console.log(`✅ ${sesiones.length} sesiones cargadas desde API`);
+
+//           // ✅ CORREGIDO: Solo guardar sesiones ABIERTAS para offline
+//           await IndexedDBService.clear("sesiones_caja_offline");
+//           const sesionesAbiertas = sesiones.filter(
+//             (s) => s.estado === "abierta"
+//           );
+//           for (const sesion of sesionesAbiertas) {
+//             await IndexedDBService.add("sesiones_caja_offline", {
+//               ...sesion,
+//               sincronizado: true,
+//               id_servidor: sesion.id,
+//             });
+//           }
+//           console.log(
+//             `💾 ${sesionesAbiertas.length} sesiones abiertas guardadas para offline`
+//           );
+//         } else {
+//           throw new Error(response.error || "Error al cargar sesiones");
+//         }
+//       } else {
+//         // ✅ CORREGIDO: En offline, cargar solo sesiones ABIERTAS
+//         const todasSesiones = await IndexedDBService.getAll(
+//           "sesiones_caja_offline"
+//         );
+//         sesiones = todasSesiones.filter((s) => s.estado === "abierta");
+//         console.log(
+//           `📱 ${sesiones.length} sesiones ABIERTAS cargadas desde almacenamiento local`
+//         );
+//       }
+
+//       dispatch({
+//         type: types.sesionesCajaLoad,
+//         payload: sesiones,
+//       });
+
+//       return sesiones;
+//     } catch (error) {
+//       console.error("❌ Error cargando sesiones de caja:", error);
+
+//       // En caso de error, intentar cargar desde local
+//       try {
+//         const todasSesiones = await IndexedDBService.getAll(
+//           "sesiones_caja_offline"
+//         );
+//         const sesionesAbiertas = todasSesiones.filter(
+//           (s) => s.estado === "abierta"
+//         );
+
+//         dispatch({
+//           type: types.sesionesCajaLoad,
+//           payload: sesionesAbiertas,
+//         });
+//         return sesionesAbiertas;
+//       } catch (localError) {
+//         dispatch({
+//           type: types.sesionesCajaLoad,
+//           payload: [],
+//         });
+//         return [];
+//       }
+//     } finally {
+//       dispatch({ type: types.sesionesCajaFinishLoading });
+//     }
+//   };
+// };
+
 export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
   return async (dispatch) => {
     dispatch({ type: types.sesionesCajaStartLoading });
@@ -25,20 +109,28 @@ export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
           sesiones = response.sesiones;
           console.log(`✅ ${sesiones.length} sesiones cargadas desde API`);
 
-          // ✅ CORREGIDO: Solo guardar sesiones ABIERTAS para offline
+          // ✅ CORREGIDO: Convertir sesiones del servidor al formato offline
           await IndexedDBService.clear("sesiones_caja_offline");
-          const sesionesAbiertas = sesiones.filter(
-            (s) => s.estado === "abierta"
-          );
-          for (const sesion of sesionesAbiertas) {
-            await IndexedDBService.add("sesiones_caja_offline", {
-              ...sesion,
-              sincronizado: true,
-              id_servidor: sesion.id,
-            });
+
+          for (const sesion of sesiones) {
+            // Solo guardar sesiones ABIERTAS y convertirlas al formato offline
+            if (sesion.estado === "abierta") {
+              const sesionOffline = {
+                ...sesion,
+                id_local: `ses_${sesion.id}_${Date.now()}`, // ← CREAR id_local ÚNICO
+                sincronizado: true,
+                id_servidor: sesion.id,
+                es_local: false, // ← INDICAR QUE ES DEL SERVIDOR
+              };
+
+              await IndexedDBService.add(
+                "sesiones_caja_offline",
+                sesionOffline
+              );
+            }
           }
           console.log(
-            `💾 ${sesionesAbiertas.length} sesiones abiertas guardadas para offline`
+            `💾 ${sesiones.length} sesiones convertidas para offline`
           );
         } else {
           throw new Error(response.error || "Error al cargar sesiones");
@@ -115,10 +207,12 @@ export const loadOpenSesion = (vendedorId) => {
             await limpiarSesionesLocalesAbiertas(vendedorId);
           } else if (existe && sesion && sesion.estado === "abierta") {
             // ✅ GUARDAR SESIÓN DEL SERVIDOR LOCALMENTE
-            await IndexedDBService.put("sesiones_caja_offline", {
+            await IndexedDBService.add("sesiones_caja_offline", {
               ...sesion,
+              id_local: `ses_${sesion.id}_${Date.now()}`, // ← CREAR id_local
               sincronizado: true,
               id_servidor: sesion.id,
+              es_local: false, // ← INDICAR QUE ES DEL SERVIDOR
             });
           }
         }
