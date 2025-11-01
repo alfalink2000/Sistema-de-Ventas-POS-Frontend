@@ -484,15 +484,21 @@ export const closeSesionCaja = (sesionId, closeData) => {
         }
       }
 
-      // ✅ CORREGIDO: Actualizar estado global inmediatamente
+      // ✅ **CORREGIDO AQUÍ**: Asegurar que el dispatch tenga type definido
       dispatch({
-        type: types.sesionesCajaUpdate,
+        type: types.sesionesCajaUpdate, // ✅ TYPE DEFINIDO
         payload: {
           id: sesionId,
           estado: "cerrada",
           ...closeData,
           ...resultado,
         },
+      });
+
+      // ✅ **CORREGIDO AQUÍ**: Dispatch adicional para limpiar sesión activa
+      dispatch({
+        type: types.sesionCajaClosed, // ✅ TYPE DEFINIDO
+        payload: sesionId,
       });
 
       // ✅ CORREGIDO: Forzar recarga de sesión abierta
@@ -515,6 +521,12 @@ export const closeSesionCaja = (sesionId, closeData) => {
       return true;
     } catch (error) {
       console.error("❌ Error cerrando sesión de caja:", error);
+
+      // ✅ **CORREGIDO AQUÍ**: Dispatch de error con type definido
+      dispatch({
+        type: types.sesionesCajaError, // ✅ TYPE DEFINIDO
+        payload: error.message,
+      });
 
       await Swal.fire({
         icon: "error",
