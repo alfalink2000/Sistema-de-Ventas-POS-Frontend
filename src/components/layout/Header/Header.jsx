@@ -15,6 +15,7 @@ import {
   FiCheck,
   FiAlertTriangle,
   FiInfo,
+  FiPackage,
 } from "react-icons/fi";
 import styles from "./Header.module.css";
 import { useState, useEffect } from "react";
@@ -38,9 +39,11 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     pendingSessions: 0,
     pendingSales: 0,
     pendingClosures: 0,
+    pendingStock: 0,
   });
 
   // ✅ EN Header.jsx - MOVER loadPendingData FUERA DEL useEffect
+  // ✅ CARGAR DATOS PENDIENTES (ACTUALIZADO)
   const loadPendingData = async () => {
     try {
       const status = await SyncController.getSyncStatus();
@@ -49,6 +52,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
         pendingSessions: status.pendingSessions,
         pendingSales: status.pendingSales,
         pendingClosures: status.pendingClosures,
+        pendingStock: status.pendingStock, // ✅ NUEVO
       });
 
       // Si hay datos pendientes, cargar detalles
@@ -61,29 +65,56 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     }
   };
 
-  // Luego en useEffect:
   useEffect(() => {
-    loadPendingData(); // ✅ AHORA ESTÁ DEFINIDA
+    loadPendingData();
 
     const interval = setInterval(loadPendingData, 20000);
 
+    // ✅ ESCUCHAR EVENTOS DE CAMBIO EN STOCK
+    const handleStockUpdatesChanged = () => {
+      loadPendingData();
+    };
+
     const removeListener = SyncController.addSyncListener((event, data) => {
       if (event === "sync_complete" || event === "sync_error") {
-        loadPendingData(); // ✅ RECARGAR DESPUÉS DE SYNC
+        loadPendingData();
       }
     });
+
+    // ✅ AGREGAR LISTENERS PARA STOCK
+    window.addEventListener(
+      "stockPendingUpdatesChanged",
+      handleStockUpdatesChanged
+    );
+    window.addEventListener("pendingUpdatesChanged", handleStockUpdatesChanged);
 
     return () => {
       clearInterval(interval);
       removeListener();
+      window.removeEventListener(
+        "stockPendingUpdatesChanged",
+        handleStockUpdatesChanged
+      );
+      window.removeEventListener(
+        "pendingUpdatesChanged",
+        handleStockUpdatesChanged
+      );
     };
   }, []);
 
-  // ✅ MANEJO DE CONEXIÓN
+  // ✅ MANEJO DE CONEXIÓN (MANTENIDO)
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
       console.log("🌐 Conexión restaurada - Header");
+
+      // ✅ AUTO-SYNC AL RECUPERAR CONEXIÓN (OPCIONAL)
+      setTimeout(() => {
+        if (pendingCount > 0) {
+          console.log(`🔄 Auto-sync iniciado con ${pendingCount} pendientes`);
+          handleForceSync();
+        }
+      }, 3000);
     };
 
     const handleOffline = () => {
@@ -98,7 +129,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [pendingCount]);
 
   // ✅ SINCRONIZACIÓN MANUAL MEJORADA
   const handleForceSync = async () => {
@@ -251,6 +282,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   };
 
   // ✅ COMPONENTE MODAL DE SINCRONIZACIÓN
+  // ✅ COMPONENTE MODAL DE SINCRONIZACIÓN ACTUALIZADO
   const SyncModal = () => {
     if (!showSyncModal) return null;
 
@@ -291,7 +323,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </div>
             </div>
 
-            {/* CONTADORES PENDIENTES */}
+            {/* ✅ CONTADORES PENDIENTES ACTUALIZADOS */}
             <div className={styles.pendingCounters}>
               <div className={styles.counterItem}>
                 <span className={styles.counterNumber}>
@@ -311,13 +343,20 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                 </span>
                 <span className={styles.counterLabel}>Cierres</span>
               </div>
+              {/* ✅ NUEVO CONTADOR DE STOCK */}
+              <div className={styles.counterItem}>
+                <span className={styles.counterNumber}>
+                  {syncStatus.pendingStock}
+                </span>
+                <span className={styles.counterLabel}>Stock</span>
+              </div>
               <div className={styles.counterTotal}>
                 <span className={styles.totalNumber}>{pendingCount}</span>
                 <span className={styles.totalLabel}>Total Pendiente</span>
               </div>
             </div>
 
-            {/* DETALLES DE DATOS PENDIENTES */}
+            {/* ✅ DETALLES DE DATOS PENDIENTES ACTUALIZADOS */}
             {syncDetails && (
               <div className={styles.pendingDetails}>
                 <h4>Detalles de Datos Pendientes</h4>
@@ -370,6 +409,36 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                           </span>
                           <span className={styles.itemDate}>
                             {new Date(sale.fecha).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div
+                          className={`${styles.itemStatus} ${styles.pending}`}
+                        >
+                          Pendiente
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ✅ NUEVA SECCIÓN: STOCK PENDIENTE */}
+                {syncDetails.stock && syncDetails.stock.length > 0 && (
+                  <div className={styles.detailSection}>
+                    <h5>
+                      <FiPackage className={styles.sectionIcon} />
+                      Actualizaciones de Stock ({syncDetails.stock.length})
+                    </h5>
+                    {syncDetails.stock.map((stockUpdate) => (
+                      <div key={stockUpdate.id} className={styles.detailItem}>
+                        <div className={styles.itemIcon}>
+                          <FiPackage />
+                        </div>
+                        <div className={styles.itemContent}>
+                          <span className={styles.itemTitle}>
+                            {stockUpdate.descripcion}
+                          </span>
+                          <span className={styles.itemDate}>
+                            {new Date(stockUpdate.fecha).toLocaleTimeString()}
                           </span>
                         </div>
                         <div
@@ -491,29 +560,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       </div>
 
       <div className={styles.headerRight}>
-        <div style={{ display: "flex", gap: "10px", marginLeft: "10px" }}>
-          <button
-            onClick={runDiagnosis}
-            style={{
-              padding: "5px 10px",
-              background: "#f0f0f0",
-              border: "1px solid #ccc",
-            }}
-          >
-            🔍 Diagnóstico
-          </button>
-          <button
-            onClick={handleForceVerification}
-            style={{
-              padding: "5px 10px",
-              background: "#e0f7fa",
-              border: "1px solid #00bcd4",
-            }}
-          >
-            🔄 Verificar Sync
-          </button>
-        </div>
-
         {/* ✅ INDICADOR DE SINCRONIZACIÓN MEJORADO */}
         <div className={styles.syncIndicator} onClick={handleShowSyncDetails}>
           <div className={styles.syncIconContainer}>

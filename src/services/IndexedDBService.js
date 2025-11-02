@@ -3,7 +3,7 @@ import { openDB } from "idb";
 class IndexedDBService {
   constructor() {
     this.dbName = "OfflinePOS";
-    this.dbVersion = 2;
+    this.dbVersion = 3;
     this.db = null;
     this.initialized = false;
   }
@@ -115,6 +115,16 @@ class IndexedDBService {
             metricsStore.createIndex("timestamp", "timestamp");
             metricsStore.createIndex("success", "success");
             console.log('✅ Object store "sync_metrics" creado');
+          }
+          if (!db.objectStoreNames.contains("stock_pendientes")) {
+            const stockStore = db.createObjectStore("stock_pendientes", {
+              keyPath: "id_local",
+              autoIncrement: true,
+            });
+            stockStore.createIndex("producto_id", "producto_id");
+            stockStore.createIndex("sincronizado", "sincronizado");
+            stockStore.createIndex("timestamp", "timestamp");
+            console.log('✅ Object store "stock_pendientes" creado');
           }
         },
       });

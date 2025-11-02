@@ -3,9 +3,11 @@ import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import DashboardLayout from "../../components/layout/DashboardLayout/DashboardLayout";
 import {
-  loadProducts,
-  updateProductStock,
-} from "../../actions/productsActions";
+  loadInventory,
+  updateStock,
+  getPendingStockCount,
+  syncPendingStock,
+} from "../../actions/inventoryActions";
 import {
   FiPackage,
   FiAlertTriangle,
@@ -14,36 +16,105 @@ import {
   FiEdit,
   FiShield,
   FiEye,
+  FiWifi,
+  FiWifiOff,
 } from "react-icons/fi";
-import Swal from "sweetalert2"; // ✅ IMPORTAR SWEETALERT2
+import Swal from "sweetalert2";
 import styles from "./Inventory.module.css";
 
 const Inventory = () => {
   const dispatch = useDispatch();
-  const { products, loading } = useSelector((state) => state.products);
-  const { user: currentUser } = useSelector((state) => state.auth); // ✅ OBTENER USUARIO ACTUAL
+  const { inventory, loading } = useSelector((state) => state.inventory);
+  const { user: currentUser } = useSelector((state) => state.auth);
   const [editingStock, setEditingStock] = useState(null);
   const [newStockValue, setNewStockValue] = useState("");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [pendingUpdates, setPendingUpdates] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // ✅ EFFECT PARA DETECTAR CONEXIÓN
   useEffect(() => {
-    dispatch(loadProducts());
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log("🌐 Conexión recuperada - Inventory");
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log("📴 Sin conexión - Inventory");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // ✅ EFFECT PARA ACTUALIZAR CONTADOR DE PENDIENTES (CORREGIDO)
+  useEffect(() => {
+    const updatePendingCount = async () => {
+      try {
+        const count = await dispatch(getPendingStockCount());
+        setPendingUpdates(count);
+        console.log(`📦 [INVENTORY] Pendientes actualizados: ${count}`);
+      } catch (error) {
+        console.error("❌ Error obteniendo contador de pendientes:", error);
+        setPendingUpdates(0);
+      }
+    };
+
+    updatePendingCount();
+
+    // ✅ ESCUCHAR EVENTOS DE CAMBIO EN PENDIENTES
+    const handlePendingUpdatesChanged = () => {
+      console.log("🔄 Evento de cambio en pendientes recibido");
+      updatePendingCount();
+    };
+
+    window.addEventListener(
+      "stockPendingUpdatesChanged",
+      handlePendingUpdatesChanged
+    );
+    window.addEventListener(
+      "pendingUpdatesChanged",
+      handlePendingUpdatesChanged
+    );
+
+    return () => {
+      window.removeEventListener(
+        "stockPendingUpdatesChanged",
+        handlePendingUpdatesChanged
+      );
+      window.removeEventListener(
+        "pendingUpdatesChanged",
+        handlePendingUpdatesChanged
+      );
+    };
   }, [dispatch]);
 
+  // ✅ EFFECT PRINCIPAL PARA CARGAR INVENTARIO
+  useEffect(() => {
+    dispatch(loadInventory());
+  }, [dispatch, refreshTrigger]);
+
   // ✅ PROTEGER CONTRA DATOS INVALIDOS
-  const safeProducts = Array.isArray(products) ? products : [];
+  const safeProducts = Array.isArray(inventory) ? inventory : [];
 
   const lowStockProducts = safeProducts.filter(
-    (p) => p.stock <= (p.stock_minimo || 5) && p.stock > 0
+    (p) => p.stock_actual <= (p.stock_minimo || 5) && p.stock_actual > 0
   );
-  const outOfStockProducts = safeProducts.filter((p) => p.stock === 0);
+  const outOfStockProducts = safeProducts.filter((p) => p.stock_actual === 0);
   const healthyStockProducts = safeProducts.filter(
-    (p) => p.stock > (p.stock_minimo || 5)
+    (p) => p.stock_actual > (p.stock_minimo || 5)
   );
 
   // ✅ FUNCIÓN PARA SOLICITAR CONTRASEÑA DE ADMIN
   const requestAdminPassword = async (action = "realizar esta acción") => {
     if (currentUser.rol === "admin") {
-      return true; // Los admins no necesitan validación adicional
+      return true;
     }
 
     const { value: password } = await Swal.fire({
@@ -72,12 +143,55 @@ const Inventory = () => {
     return password;
   };
 
-  const handleUpdateStock = async (productId) => {
+  // ✅ FUNCIÓN PARA SINCRONIZAR STOCK PENDIENTE
+  const handleSyncPendingStock = async () => {
+    if (!isOnline) {
+      Swal.fire({
+        icon: "warning",
+        title: "Sin conexión",
+        text: "No hay conexión a internet para sincronizar",
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: "Sincronizando Stock",
+      text: "Actualizando cambios pendientes...",
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    const result = await dispatch(syncPendingStock());
+
+    Swal.close();
+
+    if (result && result.success > 0) {
+      await Swal.fire({
+        icon: "success",
+        title: "Stock Sincronizado",
+        text: `${result.success} actualizaciones procesadas`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      // Recargar inventario después de sincronizar
+      setTimeout(() => {
+        dispatch(loadInventory());
+        setRefreshTrigger((prev) => prev + 1);
+      }, 1000);
+    }
+  };
+
+  const handleUpdateStock = async (productoId) => {
     if (!newStockValue || isNaN(newStockValue)) return;
 
     // ✅ VERIFICAR PERMISOS PARA ACTUALIZAR STOCK
+    let adminPassword;
     if (currentUser.rol !== "admin") {
-      const adminPassword = await requestAdminPassword("actualizar el stock");
+      adminPassword = await requestAdminPassword("actualizar el stock");
       if (!adminPassword) return; // Usuario canceló
     }
 
@@ -87,12 +201,26 @@ const Inventory = () => {
       ...(currentUser.rol !== "admin" && { adminPassword }),
     };
 
-    const success = await dispatch(updateProductStock(productId, stockData));
+    const success = await dispatch(updateStock(productoId, stockData));
 
     if (success) {
       setEditingStock(null);
       setNewStockValue("");
+
+      // ✅ SOLO RECARGAR SI ESTÁ ONLINE
+      if (isOnline) {
+        setTimeout(() => {
+          dispatch(loadInventory());
+          setRefreshTrigger((prev) => prev + 1);
+        }, 500);
+      }
     }
+  };
+
+  // ✅ FUNCIÓN MEJORADA PARA ACTUALIZAR MANUALMENTE
+  const handleRefreshInventory = () => {
+    dispatch(loadInventory());
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const startEditingStock = async (product) => {
@@ -102,8 +230,8 @@ const Inventory = () => {
       if (!adminPassword) return; // Usuario canceló
     }
 
-    setEditingStock(product.id);
-    setNewStockValue(product.stock.toString());
+    setEditingStock(product.producto_id || product.id);
+    setNewStockValue((product.stock_actual || product.stock).toString());
   };
 
   const cancelEditing = () => {
@@ -112,8 +240,11 @@ const Inventory = () => {
   };
 
   const getStockStatus = (product) => {
-    if (product.stock === 0) return "out-of-stock";
-    if (product.stock <= (product.stock_minimo || 5)) return "low-stock";
+    const stock = product.stock_actual || product.stock;
+    const stockMinimo = product.stock_minimo || 5;
+
+    if (stock === 0) return "out-of-stock";
+    if (stock <= stockMinimo) return "low-stock";
     return "healthy";
   };
 
@@ -152,6 +283,17 @@ const Inventory = () => {
     }
   };
 
+  // ✅ FUNCIÓN PARA OBTENER TEXTO DE ESTADO DE CONEXIÓN
+  const getConnectionText = () => {
+    if (isOnline) {
+      return pendingUpdates > 0
+        ? `${pendingUpdates} actualización(es) pendiente(s)`
+        : "Todo sincronizado";
+    } else {
+      return `${pendingUpdates} cambio(s) guardado(s) localmente`;
+    }
+  };
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -170,6 +312,35 @@ const Inventory = () => {
           <div className={styles.permissionInfo}>
             <FiShield className={styles.permissionIcon} />
             <span>{getPermissionText()}</span>
+
+            {/* ✅ INDICADOR DE CONEXIÓN Y PENDIENTES */}
+            <div
+              className={`${styles.connectionStatus} ${
+                isOnline ? styles.online : styles.offline
+              }`}
+            >
+              <div className={styles.connectionIcon}>
+                {isOnline ? <FiWifi /> : <FiWifiOff />}
+              </div>
+              <div className={styles.connectionText}>
+                <span className={styles.connectionState}>
+                  {isOnline ? "En línea" : "Modo offline"}
+                </span>
+                <span className={styles.pendingText}>
+                  {getConnectionText()}
+                </span>
+              </div>
+              {pendingUpdates > 0 && isOnline && (
+                <button
+                  className={styles.syncButton}
+                  onClick={handleSyncPendingStock}
+                  title="Sincronizar cambios pendientes"
+                >
+                  <FiRefreshCw className={styles.syncIcon} />
+                  Sincronizar
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className={styles.headerStats}>
@@ -256,7 +427,7 @@ const Inventory = () => {
               </span>
               <button
                 className={styles.refreshButton}
-                onClick={() => dispatch(loadProducts())}
+                onClick={handleRefreshInventory}
               >
                 <FiRefreshCw className={styles.refreshIcon} />
                 Actualizar
@@ -276,14 +447,16 @@ const Inventory = () => {
             <div className={styles.tableBody}>
               {safeProducts.map((product) => {
                 const status = getStockStatus(product);
-                const canEditStock = currentUser.rol === "admin"; // ✅ DETERMINAR PERMISOS
+                const canEditStock = currentUser.rol === "admin";
+                const productId = product.producto_id || product.id;
+                const stockActual = product.stock_actual || product.stock;
+                const stockMinimo = product.stock_minimo || 5;
+                const productName = product.producto_nombre || product.nombre;
 
                 return (
-                  <div key={product.id} className={styles.productRow}>
+                  <div key={productId} className={styles.productRow}>
                     <div className={styles.productInfo}>
-                      <span className={styles.productName}>
-                        {product.nombre}
-                      </span>
+                      <span className={styles.productName}>{productName}</span>
                       {product.categoria_nombre && (
                         <span className={styles.productCategory}>
                           {product.categoria_nombre}
@@ -292,23 +465,26 @@ const Inventory = () => {
                     </div>
 
                     <div className={styles.stockInfo}>
-                      {editingStock === product.id ? (
+                      {editingStock === productId ? (
                         <input
                           type="number"
                           value={newStockValue}
                           onChange={(e) => setNewStockValue(e.target.value)}
                           className={styles.stockInput}
                           min="0"
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter") {
+                              handleUpdateStock(productId);
+                            }
+                          }}
                         />
                       ) : (
-                        <span className={styles.stockValue}>
-                          {product.stock}
-                        </span>
+                        <span className={styles.stockValue}>{stockActual}</span>
                       )}
                     </div>
 
                     <div className={styles.minStock}>
-                      <span>{product.stock_minimo || 5}</span>
+                      <span>{stockMinimo}</span>
                     </div>
 
                     <div className={styles.status}>
@@ -326,11 +502,12 @@ const Inventory = () => {
                     </div>
 
                     <div className={styles.actions}>
-                      {editingStock === product.id ? (
+                      {editingStock === productId ? (
                         <div className={styles.editActions}>
                           <button
                             className={styles.saveButton}
-                            onClick={() => handleUpdateStock(product.id)}
+                            onClick={() => handleUpdateStock(productId)}
+                            disabled={!newStockValue || isNaN(newStockValue)}
                           >
                             Guardar
                           </button>
@@ -388,6 +565,10 @@ const Inventory = () => {
                   <li>
                     <strong>Vendedores:</strong> Solo visualización. Para editar
                     stock requieren autorización de administrador
+                  </li>
+                  <li>
+                    <strong>Modo Offline:</strong> Los cambios se guardan
+                    localmente y se sincronizan al recuperar conexión
                   </li>
                 </ul>
               </div>

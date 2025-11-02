@@ -5,6 +5,7 @@ import SalesOfflineController from "../SalesOfflineController/SalesOfflineContro
 import SessionsOfflineController from "../SessionsOfflineController/SessionsOfflineController";
 import ClosuresOfflineController from "../ClosuresOfflineController/ClosuresOfflineController";
 import ProductsOfflineController from "../ProductsOfflineController/ProductsOfflineController";
+import InventoryOfflineController from "../InventoryOfflineController/InventoryOfflineController";
 import { fetchConToken } from "../../../helpers/fetch";
 import IndexedDBService from "../../../services/IndexedDBService";
 
@@ -1105,14 +1106,35 @@ class SyncController extends BaseOfflineController {
   // ✅ OBTENER DETALLES COMPLETOS DE DATOS PENDIENTES
   async getPendingDetails() {
     try {
-      const [pendingSessions, pendingSales, pendingClosures] =
+      console.log("🔍 Obteniendo detalles de datos pendientes...");
+
+      const [pendingSessions, pendingSales, pendingClosures, pendingStock] =
         await Promise.all([
-          SessionsOfflineController.getPendingSessions(),
-          SalesOfflineController.getPendingSales(),
-          ClosuresOfflineController.getPendingClosures(),
+          SessionsOfflineController.getPendingSessions().catch((error) => {
+            console.error("❌ Error obteniendo sesiones pendientes:", error);
+            return [];
+          }),
+          SalesOfflineController.getPendingSales().catch((error) => {
+            console.error("❌ Error obteniendo ventas pendientes:", error);
+            return [];
+          }),
+          ClosuresOfflineController.getPendingClosures().catch((error) => {
+            console.error("❌ Error obteniendo cierres pendientes:", error);
+            return [];
+          }),
+          InventoryOfflineController.getPendingStockUpdates().catch((error) => {
+            console.error("❌ Error obteniendo stock pendiente:", error);
+            return [];
+          }),
         ]);
 
-      return {
+      console.log(`📊 Detalles obtenidos: 
+      Sesiones: ${pendingSessions.length}
+      Ventas: ${pendingSales.length} 
+      Cierres: ${pendingClosures.length}
+      Stock: ${pendingStock.length}`);
+
+      const result = {
         sessions: pendingSessions.map((session) => ({
           id: session.id_local,
           type: "sesion",
@@ -1139,13 +1161,26 @@ class SyncController extends BaseOfflineController {
           fecha: closure.fecha_cierre,
           data: closure,
         })),
+        stock: pendingStock.map((stockUpdate) => ({
+          id: stockUpdate.id_local,
+          type: "stock",
+          descripcion: `Stock - ${
+            stockUpdate.producto_nombre || stockUpdate.producto_id
+          } -> ${stockUpdate.stock_nuevo}`,
+          fecha: stockUpdate.timestamp,
+          data: stockUpdate,
+        })),
       };
+
+      console.log("✅ Detalles de pendientes procesados correctamente");
+      return result;
     } catch (error) {
-      console.error("❌ Error obteniendo detalles pendientes:", error);
+      console.error("❌ Error crítico obteniendo detalles pendientes:", error);
       return {
         sessions: [],
         sales: [],
         closures: [],
+        stock: [],
         error: error.message,
       };
     }
@@ -1331,33 +1366,70 @@ class SyncController extends BaseOfflineController {
     });
   }
 
+  // En SyncController.js - VERSIÓN MÁS SEGURA
   async getSyncStatus() {
     try {
-      const [pendingSessions, pendingSales, pendingClosures] =
-        await Promise.all([
-          SessionsOfflineController.getPendingSessions().catch(() => []),
-          SalesOfflineController.getPendingSales().catch(() => []),
-          ClosuresOfflineController.getPendingClosures().catch(() => []),
-        ]);
+      console.log("🔄 Obteniendo estado de sincronización...");
 
-      return {
+      let pendingSessions = [];
+      let pendingSales = [];
+      let pendingClosures = [];
+      let pendingStock = [];
+
+      try {
+        pendingSessions = await SessionsOfflineController.getPendingSessions();
+      } catch (error) {
+        console.error("❌ Error obteniendo sesiones pendientes:", error);
+      }
+
+      try {
+        pendingSales = await SalesOfflineController.getPendingSales();
+      } catch (error) {
+        console.error("❌ Error obteniendo ventas pendientes:", error);
+      }
+
+      try {
+        pendingClosures = await ClosuresOfflineController.getPendingClosures();
+      } catch (error) {
+        console.error("❌ Error obteniendo cierres pendientes:", error);
+      }
+
+      try {
+        pendingStock =
+          await InventoryOfflineController.getPendingStockUpdates();
+      } catch (error) {
+        console.error("❌ Error obteniendo stock pendiente:", error);
+      }
+
+      const status = {
         isOnline: this.isOnline,
         isSyncing: this.isSyncing,
         pendingSessions: pendingSessions.length,
         pendingSales: pendingSales.length,
         pendingClosures: pendingClosures.length,
+        pendingStock: pendingStock.length,
         totalPending:
-          pendingSessions.length + pendingSales.length + pendingClosures.length,
+          pendingSessions.length +
+          pendingSales.length +
+          pendingClosures.length +
+          pendingStock.length,
         lastSync: localStorage.getItem("lastSuccessfulSync") || null,
       };
+
+      console.log("📊 Estado de sincronización:", status);
+      return status;
     } catch (error) {
-      console.error("❌ Error obteniendo estado de sincronización:", error);
+      console.error(
+        "❌ Error crítico obteniendo estado de sincronización:",
+        error
+      );
       return {
         isOnline: this.isOnline,
         isSyncing: false,
         pendingSessions: 0,
         pendingSales: 0,
         pendingClosures: 0,
+        pendingStock: 0,
         totalPending: 0,
         error: error.message,
       };
@@ -1387,6 +1459,214 @@ class SyncController extends BaseOfflineController {
     };
 
     window.addEventListener("online", handleOnline);
+  }
+
+  // En SyncController.js - agregar estos métodos
+  async syncPendingStockUpdates() {
+    try {
+      const pendingUpdates =
+        await InventoryOfflineController.getPendingStockUpdates();
+
+      const results = {
+        total: pendingUpdates.length,
+        success: 0,
+        failed: 0,
+        details: [],
+      };
+
+      console.log(
+        `🔄 [SYNC] Sincronizando ${pendingUpdates.length} actualizaciones de stock...`
+      );
+
+      // ✅ ORDENAR POR TIMESTAMP (MÁS ANTIGUAS PRIMERO)
+      const sortedUpdates = pendingUpdates.sort(
+        (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+      );
+
+      for (const update of sortedUpdates) {
+        try {
+          console.log(`🔄 Procesando actualización: ${update.id_local}`);
+
+          // ✅ VERIFICAR QUE EL PRODUCTO EXISTA EN EL SERVIDOR
+          const productExists = await this.verifyProductExists(
+            update.producto_id
+          );
+          if (!productExists) {
+            results.details.push({
+              id: update.id_local,
+              type: "stock",
+              status: "failed",
+              message: `Producto no existe: ${update.producto_id}`,
+              data: update,
+            });
+            results.failed++;
+            continue;
+          }
+
+          // ✅ ACTUALIZAR STOCK EN EL SERVIDOR
+          const response = await fetchConToken(
+            `inventario/stock/${update.producto_id}`,
+            {
+              stock: update.stock_nuevo,
+            },
+            "PUT"
+          );
+
+          if (response && response.ok) {
+            // ✅ MARCAR COMO SINCRONIZADO
+            await InventoryOfflineController.markAsSynced(update.id_local, {
+              server_response: response,
+            });
+
+            results.details.push({
+              id: update.id_local,
+              type: "stock",
+              status: "success",
+              message: `Stock actualizado: ${update.producto_id} -> ${update.stock_nuevo}`,
+              data: update,
+            });
+            results.success++;
+
+            console.log(`✅ Stock sincronizado: ${update.id_local}`);
+          } else {
+            throw new Error(response?.error || "Error del servidor");
+          }
+        } catch (error) {
+          // ✅ INCREMENTAR CONTADOR DE INTENTOS
+          await this.recordSyncAttempt(update);
+
+          results.details.push({
+            id: update.id_local,
+            type: "stock",
+            status: "failed",
+            message: error.message,
+            data: update,
+          });
+          results.failed++;
+
+          console.error(
+            `❌ Error sincronizando stock ${update.id_local}:`,
+            error
+          );
+        }
+      }
+
+      console.log(
+        `📊 RESULTADO STOCK: ${results.success}/${results.total} exitosas`
+      );
+      return results;
+    } catch (error) {
+      console.error("❌ Error en syncPendingStockUpdates:", error);
+      return {
+        total: 0,
+        success: 0,
+        failed: 0,
+        details: [],
+        error: error.message,
+      };
+    }
+  }
+
+  // ✅ VERIFICAR QUE EL PRODUCTO EXISTA
+  async verifyProductExists(productoId) {
+    try {
+      const response = await fetchConToken(`productos/${productoId}`);
+      return response && response.ok && response.producto;
+    } catch (error) {
+      console.error(`❌ Error verificando producto ${productoId}:`, error);
+      return false;
+    }
+  }
+
+  // ✅ REGISTRAR INTENTO DE SINCRONIZACIÓN FALLIDO
+  async recordSyncAttempt(update) {
+    try {
+      const currentUpdate = await IndexedDBService.get(
+        "stock_pendientes",
+        update.id_local
+      );
+      if (currentUpdate) {
+        const updated = {
+          ...currentUpdate,
+          intentos: (currentUpdate.intentos || 0) + 1,
+          ultimo_intento: new Date().toISOString(),
+          ultimo_error: "Error de sincronización",
+        };
+        await IndexedDBService.put("stock_pendientes", updated);
+      }
+    } catch (error) {
+      console.error("❌ Error registrando intento:", error);
+    }
+  }
+
+  // ✅ ACTUALIZAR fullSync PARA INCLUIR STOCK
+  async fullSync() {
+    if (!this.isOnline) {
+      return { success: false, error: "Sin conexión a internet" };
+    }
+
+    await this.cleanupDuplicatePendingData();
+
+    if (this.isSyncing) {
+      return { success: false, error: "Sincronización en progreso" };
+    }
+
+    this.isSyncing = true;
+    this.notifyListeners("sync_start");
+
+    const syncResults = {
+      startTime: Date.now(),
+      masterData: null,
+      sessions: null,
+      sales: null,
+      closures: null,
+      stock: null, // ✅ NUEVO
+      errors: [],
+    };
+
+    try {
+      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA...");
+
+      // ✅ ORDEN CORREGIDO:
+      // 1. Datos maestros
+      syncResults.masterData = await this.syncMasterData();
+
+      // 2. Sesiones PRIMERO
+      syncResults.sessions = await this.syncPendingSessionsDetailed();
+
+      // 3. Stock (antes de ventas)
+      syncResults.stock = await this.syncPendingStockUpdates();
+
+      // 4. Ventas
+      syncResults.sales = await this.syncPendingSalesDetailed();
+
+      // 5. Cierres ÚLTIMO
+      syncResults.closures = await this.syncPendingClosuresDetailed();
+
+      syncResults.duration = Date.now() - syncResults.startTime;
+      syncResults.success = syncResults.errors.length === 0;
+
+      if (syncResults.success) {
+        localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
+      }
+
+      console.log("✅ SINCRONIZACIÓN COMPLETADA", syncResults);
+      this.notifyListeners("sync_complete", syncResults);
+
+      return syncResults;
+    } catch (error) {
+      syncResults.duration = Date.now() - syncResults.startTime;
+      syncResults.success = false;
+      syncResults.error = error.message;
+      syncResults.errors.push(error.message);
+
+      console.error("❌ ERROR EN SINCRONIZACIÓN:", error);
+      this.notifyListeners("sync_error", syncResults);
+
+      return syncResults;
+    } finally {
+      this.isSyncing = false;
+    }
   }
 }
 

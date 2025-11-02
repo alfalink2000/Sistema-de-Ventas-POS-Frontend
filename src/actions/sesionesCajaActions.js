@@ -25,20 +25,28 @@ import SyncController from "../controllers/offline//SyncController/SyncControlle
 //           sesiones = response.sesiones;
 //           console.log(`✅ ${sesiones.length} sesiones cargadas desde API`);
 
-//           // ✅ CORREGIDO: Solo guardar sesiones ABIERTAS para offline
+//           // ✅ CORREGIDO: Convertir sesiones del servidor al formato offline
 //           await IndexedDBService.clear("sesiones_caja_offline");
-//           const sesionesAbiertas = sesiones.filter(
-//             (s) => s.estado === "abierta"
-//           );
-//           for (const sesion of sesionesAbiertas) {
-//             await IndexedDBService.add("sesiones_caja_offline", {
-//               ...sesion,
-//               sincronizado: true,
-//               id_servidor: sesion.id,
-//             });
+
+//           for (const sesion of sesiones) {
+//             // Solo guardar sesiones ABIERTAS y convertirlas al formato offline
+//             if (sesion.estado === "abierta") {
+//               const sesionOffline = {
+//                 ...sesion,
+//                 id_local: `ses_${sesion.id}_${Date.now()}`, // ← CREAR id_local ÚNICO
+//                 sincronizado: true,
+//                 id_servidor: sesion.id,
+//                 es_local: false, // ← INDICAR QUE ES DEL SERVIDOR
+//               };
+
+//               await IndexedDBService.add(
+//                 "sesiones_caja_offline",
+//                 sesionOffline
+//               );
+//             }
 //           }
 //           console.log(
-//             `💾 ${sesionesAbiertas.length} sesiones abiertas guardadas para offline`
+//             `💾 ${sesiones.length} sesiones convertidas para offline`
 //           );
 //         } else {
 //           throw new Error(response.error || "Error al cargar sesiones");
@@ -109,7 +117,7 @@ export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
           sesiones = response.sesiones;
           console.log(`✅ ${sesiones.length} sesiones cargadas desde API`);
 
-          // ✅ CORREGIDO: Convertir sesiones del servidor al formato offline
+          // ✅ **CORREGIDO**: Convertir sesiones del servidor al formato offline
           await IndexedDBService.clear("sesiones_caja_offline");
 
           for (const sesion of sesiones) {
@@ -120,7 +128,7 @@ export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
                 id_local: `ses_${sesion.id}_${Date.now()}`, // ← CREAR id_local ÚNICO
                 sincronizado: true,
                 id_servidor: sesion.id,
-                es_local: false, // ← INDICAR QUE ES DEL SERVIDOR
+                es_local: false,
               };
 
               await IndexedDBService.add(
@@ -181,7 +189,6 @@ export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
     }
   };
 };
-
 export const loadOpenSesion = (vendedorId) => {
   return async (dispatch) => {
     try {
@@ -206,14 +213,19 @@ export const loadOpenSesion = (vendedorId) => {
           if (!existe) {
             await limpiarSesionesLocalesAbiertas(vendedorId);
           } else if (existe && sesion && sesion.estado === "abierta") {
-            // ✅ GUARDAR SESIÓN DEL SERVIDOR LOCALMENTE
-            await IndexedDBService.add("sesiones_caja_offline", {
+            // ✅ **CORREGIDO**: Crear id_local para sesión del servidor
+            const sesionParaOffline = {
               ...sesion,
               id_local: `ses_${sesion.id}_${Date.now()}`, // ← CREAR id_local
               sincronizado: true,
               id_servidor: sesion.id,
-              es_local: false, // ← INDICAR QUE ES DEL SERVIDOR
-            });
+              es_local: false,
+            };
+
+            await IndexedDBService.add(
+              "sesiones_caja_offline",
+              sesionParaOffline
+            );
           }
         }
       }
@@ -361,12 +373,21 @@ export const openSesionCaja = (sesionData) => {
         if (response.ok && response.message) {
           resultado = response.sesion;
 
-          // ✅ CORREGIDO: Solo guardar sesiones ABIERTAS
-          await IndexedDBService.add("sesiones_caja_offline", {
+          // ✅ **CORREGIDO**: Crear id_local para sesiones del servidor
+          const sesionParaOffline = {
             ...resultado,
+            id_local: `ses_${resultado.id}_${Date.now()}`, // ← CREAR id_local
             sincronizado: true,
             id_servidor: resultado.id,
-          });
+            es_local: false,
+          };
+
+          console.log("💾 Guardando sesión para offline:", sesionParaOffline);
+
+          await IndexedDBService.add(
+            "sesiones_caja_offline",
+            sesionParaOffline
+          );
 
           console.log("✅ [SESIONES] Sesión abierta exitosamente en servidor");
         } else {
@@ -436,6 +457,8 @@ export const openSesionCaja = (sesionData) => {
   };
 };
 
+// En sesionesCajaActions.js - CORREGIR la acción closeSesionCaja
+// En sesionesCajaActions.js - CORREGIR DEFINITIVAMENTE
 export const closeSesionCaja = (sesionId, closeData) => {
   return async (dispatch) => {
     try {
@@ -456,14 +479,14 @@ export const closeSesionCaja = (sesionId, closeData) => {
           resultado = response.sesion;
           console.log("✅ Sesión de caja cerrada exitosamente en servidor");
 
-          // ✅ CORREGIDO: Eliminar sesión cerrada del almacenamiento local
+          // Eliminar sesión cerrada del almacenamiento local
           await IndexedDBService.delete("sesiones_caja_offline", sesionId);
           console.log("🗑️ Sesión eliminada del almacenamiento local");
         } else {
           throw new Error(response.error || "Error al cerrar sesión");
         }
       } else {
-        // ✅ CORREGIDO: Usar SessionsOfflineController para cerrar sesión offline
+        // Usar SessionsOfflineController para cerrar sesión offline
         const closeResult = await SessionsOfflineController.closeSession(
           sesionId,
           closeData
@@ -484,9 +507,9 @@ export const closeSesionCaja = (sesionId, closeData) => {
         }
       }
 
-      // ✅ **CORREGIDO AQUÍ**: Asegurar que el dispatch tenga type definido
+      // ✅ **SOLUCIÓN DEFINITIVA**: Solo UN dispatch con type que SÍ existe
       dispatch({
-        type: types.sesionesCajaUpdate, // ✅ TYPE DEFINIDO
+        type: types.sesionesCajaUpdated, // ✅ ESTE TYPE SÍ EXISTE
         payload: {
           id: sesionId,
           estado: "cerrada",
@@ -495,13 +518,7 @@ export const closeSesionCaja = (sesionId, closeData) => {
         },
       });
 
-      // ✅ **CORREGIDO AQUÍ**: Dispatch adicional para limpiar sesión activa
-      dispatch({
-        type: types.sesionCajaClosed, // ✅ TYPE DEFINIDO
-        payload: sesionId,
-      });
-
-      // ✅ CORREGIDO: Forzar recarga de sesión abierta
+      // Forzar recarga de sesión abierta
       if (resultado?.vendedor_id) {
         setTimeout(() => {
           dispatch(loadOpenSesion(resultado.vendedor_id));
@@ -522,9 +539,9 @@ export const closeSesionCaja = (sesionId, closeData) => {
     } catch (error) {
       console.error("❌ Error cerrando sesión de caja:", error);
 
-      // ✅ **CORREGIDO AQUÍ**: Dispatch de error con type definido
+      // ✅ Usar type que SÍ existe
       dispatch({
-        type: types.sesionesCajaError, // ✅ TYPE DEFINIDO
+        type: types.sesionesCajaError, // ✅ ESTE TYPE SÍ EXISTE
         payload: error.message,
       });
 
