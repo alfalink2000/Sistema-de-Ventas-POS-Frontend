@@ -486,11 +486,16 @@ export const createProduct = (productData) => {
     }
   };
 };
-
-// ✅ ACTUALIZAR PRODUCTO CON SOPORTE OFFLINE
+// En productsActions.js - SIMPLIFICAR updateProduct
 export const updateProduct = (productId, productData) => {
   return async (dispatch) => {
     try {
+      // ✅ VERIFICAR QUE productId SEA UN STRING VÁLIDO
+      if (!productId || typeof productId !== "string") {
+        console.error("❌ [PRODUCTS] ID de producto inválido:", productId);
+        throw new Error("ID de producto inválido");
+      }
+
       console.log(
         `🔄 [PRODUCTS] Actualizando producto: ${productId}`,
         productData
@@ -500,22 +505,50 @@ export const updateProduct = (productId, productData) => {
 
       if (navigator.onLine) {
         // Online: actualizar en servidor
+        console.log(`🌐 [PRODUCTS] Actualizando en servidor...`);
+
+        // ✅ USAR fetchConToken PARA TODO - ya maneja FormData y JSON automáticamente
         const response = await fetchConToken(
           `productos/${productId}`,
           productData,
           "PUT"
         );
 
-        if (response && response.ok === true && response.producto) {
-          resultado = response.producto;
+        console.log("📥 [PRODUCTS] Respuesta del backend:", response);
+
+        if (response && response.ok === true) {
+          // ✅ BUSCAR PRODUCTO EN DIFERENTES ESTRUCTURAS
+          if (response.producto) {
+            resultado = response.producto;
+          } else if (response.product) {
+            resultado = response.product;
+          } else {
+            console.warn("⚠️ Estructura de respuesta no reconocida:", response);
+            resultado = response;
+          }
+
           console.log(
             "✅ [PRODUCTS] Producto actualizado exitosamente en servidor"
           );
 
           // Actualizar en IndexedDB
-          await IndexedDBService.put("productos", resultado);
+          if (resultado) {
+            await IndexedDBService.put("productos", resultado);
+          }
+
+          await Swal.fire({
+            icon: "success",
+            title: "¡Éxito!",
+            text: response.msg || "Producto actualizado exitosamente",
+            timer: 3000,
+            showConfirmButton: false,
+            position: "top-end",
+            toast: true,
+          });
         } else {
-          throw new Error(response?.error || "Error al actualizar producto");
+          throw new Error(
+            response?.msg || response?.error || "Error al actualizar producto"
+          );
         }
       } else {
         // Offline: actualizar localmente
@@ -529,9 +562,21 @@ export const updateProduct = (productId, productData) => {
           throw new Error("Producto no encontrado localmente");
         }
 
+        // ✅ CONVERTIR FormData A OBJETO SI ES NECESARIO
+        let updateData = productData;
+        if (productData instanceof FormData) {
+          updateData = {};
+          for (let [key, value] of productData.entries()) {
+            // Saltar el campo 'imagen' en modo offline
+            if (key !== "imagen") {
+              updateData[key] = value;
+            }
+          }
+        }
+
         const productoActualizado = {
           ...productoExistente,
-          ...productData,
+          ...updateData,
           sincronizado: false,
           fecha_actualizacion: new Date().toISOString(),
         };

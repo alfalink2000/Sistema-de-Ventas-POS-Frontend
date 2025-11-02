@@ -170,6 +170,56 @@ const ProductModal = ({
   };
 
   // ✅ HandleSubmit igual a tu ejemplo
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+
+  //   if (!canManageProducts) {
+  //     alert("No tienes permisos para realizar esta acción");
+  //     return;
+  //   }
+
+  //   if (!validateForm()) {
+  //     alert("Por favor completa todos los campos requeridos correctamente");
+  //     return;
+  //   }
+
+  //   setLoading(true);
+
+  //   try {
+  //     console.log("📤 Enviando datos del formulario:", formData);
+
+  //     const submitFormData = new FormData();
+
+  //     Object.keys(formData).forEach((key) => {
+  //       submitFormData.append(key, formData[key]);
+  //     });
+
+  //     if (imageFile) {
+  //       submitFormData.append("imagen", imageFile);
+  //     }
+
+  //     if (product) {
+  //       submitFormData.append("id", product.id);
+  //     }
+
+  //     console.log("🚀 Enviando FormData al onSave");
+  //     const result = await onSave(submitFormData);
+
+  //     if (result?.success) {
+  //       console.log("✅ Producto guardado exitosamente");
+  //       handleClose();
+  //     } else {
+  //       console.log("❌ Error al guardar producto:", result?.error);
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ Error en handleSubmit:", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+  // En ProductModal.jsx - CORREGIR handleSubmit
+  // En ProductModal.jsx - CORREGIR handleSubmit
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -187,23 +237,29 @@ const ProductModal = ({
 
     try {
       console.log("📤 Enviando datos del formulario:", formData);
+      console.log("🎯 Producto actual:", product);
 
-      const submitFormData = new FormData();
+      // ✅ SIEMPRE USAR JSON - NUNCA FormData
+      const submitData = {
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        precio: parseFloat(formData.precio),
+        precio_compra: parseFloat(formData.precio_compra),
+        categoria_id: formData.categoria_id,
+        stock: parseInt(formData.stock),
+        stock_minimo: parseInt(formData.stock_minimo),
+        activo: formData.activo,
+        // ✅ NO incluir imagen aquí - se maneja por separado si es necesario
+      };
 
-      Object.keys(formData).forEach((key) => {
-        submitFormData.append(key, formData[key]);
-      });
+      console.log("🚀 Enviando JSON al onSave:", submitData);
 
-      if (imageFile) {
-        submitFormData.append("imagen", imageFile);
-      }
+      // ✅ CRÍTICO: Pasar SOLO el ID del producto
+      const productId = product ? product.id : null;
+      console.log("🎯 ID del producto a actualizar:", productId);
 
-      if (product) {
-        submitFormData.append("id", product.id);
-      }
-
-      console.log("🚀 Enviando FormData al onSave");
-      const result = await onSave(submitFormData);
+      // ✅ Pasar también la imagen por separado si existe
+      const result = await onSave(submitData, productId, imageFile);
 
       if (result?.success) {
         console.log("✅ Producto guardado exitosamente");

@@ -136,40 +136,64 @@ const Products = () => {
   };
 
   // ✅ CORREGIDO: Manejo mejorado de async/await
-  const handleSaveProduct = async (formData) => {
+  // En Products.jsx - ACTUALIZAR handleSaveProduct
+  const handleSaveProduct = async (
+    productData,
+    productId,
+    imageFile = null
+  ) => {
     try {
-      console.log("🔍 VERIFICANDO formData en handleSaveProduct:");
-      console.log("   Tipo:", typeof formData);
-      console.log("   Es FormData?", formData instanceof FormData);
-
-      // Debug: mostrar contenido del FormData
-      if (formData instanceof FormData) {
-        console.log("📋 CONTENIDO DEL FORMDATA:");
-        for (let [key, value] of formData.entries()) {
-          console.log(`   ${key}:`, value);
-        }
-      }
+      console.log("💾 Guardando producto...", {
+        productData,
+        productId,
+        hasImage: !!imageFile,
+        tipoProductId: typeof productId,
+      });
 
       let result;
 
-      if (editingProduct) {
-        console.log("✏️ Editando producto ID:", editingProduct.id);
-        result = await dispatch(updateProduct(formData));
+      if (productId) {
+        console.log(`🔄 Actualizando producto ID: ${productId}`);
+
+        // ✅ SI HAY IMAGEN, crear FormData solo para la imagen
+        if (imageFile) {
+          console.log("🖼️ Hay imagen, creando FormData combinado...");
+          const formData = new FormData();
+
+          // Agregar todos los campos del producto
+          Object.keys(productData).forEach((key) => {
+            formData.append(key, productData[key]);
+          });
+
+          // Agregar la imagen
+          formData.append("imagen", imageFile);
+
+          result = await dispatch(updateProduct(productId, formData));
+        } else {
+          // ✅ SIN IMAGEN, usar JSON normal
+          console.log("📄 Sin imagen, usando JSON normal");
+          result = await dispatch(updateProduct(productId, productData));
+        }
       } else {
         console.log("🆕 Creando nuevo producto");
-        result = await dispatch(createProduct(formData));
+
+        // ✅ PARA CREAR: Similar lógica
+        if (imageFile) {
+          const formData = new FormData();
+          Object.keys(productData).forEach((key) => {
+            formData.append(key, productData[key]);
+          });
+          formData.append("imagen", imageFile);
+          result = await dispatch(createProduct(formData));
+        } else {
+          result = await dispatch(createProduct(productData));
+        }
       }
 
-      if (result?.success) {
-        console.log("✅ Producto guardado exitosamente");
-        setShowProductModal(false);
-        setEditingProduct(null);
-        dispatch(loadProducts());
-      } else {
-        console.log("❌ Error al guardar producto:", result?.error);
-      }
+      return result;
     } catch (error) {
-      console.error("💥 Error en handleSaveProduct:", error);
+      console.error("❌ Error guardando producto:", error);
+      return { success: false, error: error.message };
     }
   };
 
