@@ -4,6 +4,7 @@ import SalesOfflineController from "../SalesOfflineController/SalesOfflineContro
 import SessionsOfflineController from "../SessionsOfflineController/SessionsOfflineController";
 import ClosuresOfflineController from "../ClosuresOfflineController/ClosuresOfflineController";
 import InventoryOfflineController from "../InventoryOfflineController/InventoryOfflineController";
+import ProductsOfflineController from "../ProductsOfflineController/ProductsOfflineController";
 
 import { fetchConToken } from "../../../helpers/fetch";
 import IndexedDBService from "../../../services/IndexedDBService";
@@ -1107,32 +1108,42 @@ class SyncController extends BaseOfflineController {
     try {
       console.log("🔍 Obteniendo detalles de datos pendientes...");
 
-      const [pendingSessions, pendingSales, pendingClosures, pendingStock] =
-        await Promise.all([
-          SessionsOfflineController.getPendingSessions().catch((error) => {
-            console.error("❌ Error obteniendo sesiones pendientes:", error);
-            return [];
-          }),
-          SalesOfflineController.getPendingSales().catch((error) => {
-            console.error("❌ Error obteniendo ventas pendientes:", error);
-            return [];
-          }),
-          ClosuresOfflineController.getPendingClosures().catch((error) => {
-            console.error("❌ Error obteniendo cierres pendientes:", error);
-            return [];
-          }),
-          // ✅ USAR MÉTODO CORREGIDO
-          InventoryOfflineController.getPendingStockUpdates().catch((error) => {
-            console.error("❌ Error obteniendo stock pendiente:", error);
-            return [];
-          }),
-        ]);
+      const [
+        pendingSessions,
+        pendingSales,
+        pendingClosures,
+        pendingStock,
+        pendingProducts,
+      ] = await Promise.all([
+        SessionsOfflineController.getPendingSessions().catch((error) => {
+          console.error("❌ Error obteniendo sesiones pendientes:", error);
+          return [];
+        }),
+        SalesOfflineController.getPendingSales().catch((error) => {
+          console.error("❌ Error obteniendo ventas pendientes:", error);
+          return [];
+        }),
+        ClosuresOfflineController.getPendingClosures().catch((error) => {
+          console.error("❌ Error obteniendo cierres pendientes:", error);
+          return [];
+        }),
+        // ✅ USAR MÉTODO CORREGIDO
+        InventoryOfflineController.getPendingStockUpdates().catch((error) => {
+          console.error("❌ Error obteniendo stock pendiente:", error);
+          return [];
+        }),
+        ProductsOfflineController.getPendingProducts().catch((error) => {
+          console.error("❌ Error obteniendo productos pendientes:", error);
+          return [];
+        }),
+      ]);
 
       console.log(`📊 Detalles obtenidos CORREGIDOS: 
     Sesiones: ${pendingSessions.length}
     Ventas: ${pendingSales.length} 
     Cierres: ${pendingClosures.length}
-    Stock: ${pendingStock.length}`);
+    Stock: ${pendingStock.length}
+    Productos: ${pendingProducts.length}`);
 
       const result = {
         sessions: pendingSessions.map((session) => ({
@@ -1173,6 +1184,15 @@ class SyncController extends BaseOfflineController {
           fecha: stockUpdate.timestamp,
           data: stockUpdate,
         })),
+        // ✅ NUEVA SECCIÓN: Productos
+        products: pendingProducts.map((productOp) => ({
+          id: productOp.id_local,
+          type: "producto",
+          operacion: productOp.operacion,
+          descripcion: this.getProductOperationDescription(productOp),
+          fecha: productOp.timestamp,
+          data: productOp,
+        })),
       };
 
       console.log("✅ Detalles de pendientes PROCESADOS CORRECTAMENTE");
@@ -1184,8 +1204,22 @@ class SyncController extends BaseOfflineController {
         sales: [],
         closures: [],
         stock: [],
+        products: [],
         error: error.message,
       };
+    }
+  }
+  // ✅ NUEVO: Helper para descripciones de operaciones de productos
+  getProductOperationDescription(productOp) {
+    switch (productOp.operacion) {
+      case "crear":
+        return `Crear producto: ${productOp.datos?.nombre || "Nuevo producto"}`;
+      case "actualizar":
+        return `Actualizar producto: ${productOp.producto_id}`;
+      case "eliminar":
+        return `Eliminar producto: ${productOp.producto_id}`;
+      default:
+        return `Operación en producto: ${productOp.operacion}`;
     }
   }
   // En SyncController.js - AGREGAR método de diagnóstico
@@ -1420,42 +1454,26 @@ class SyncController extends BaseOfflineController {
     });
   }
 
+  // ✅ ACTUALIZAR getSyncStatus para incluir productos
   async getSyncStatus() {
     try {
       console.log("🔄 Obteniendo estado de sincronización...");
 
-      let pendingSessions = [];
-      let pendingSales = [];
-      let pendingClosures = [];
-      let pendingStock = [];
+      let pendingSessions = [],
+        pendingSales = [],
+        pendingClosures = [],
+        pendingStock = [],
+        pendingProducts = [];
 
       try {
         pendingSessions = await SessionsOfflineController.getPendingSessions();
-      } catch (error) {
-        console.error("❌ Error obteniendo sesiones pendientes:", error);
-      }
-
-      try {
         pendingSales = await SalesOfflineController.getPendingSales();
-      } catch (error) {
-        console.error("❌ Error obteniendo ventas pendientes:", error);
-      }
-
-      try {
         pendingClosures = await ClosuresOfflineController.getPendingClosures();
-      } catch (error) {
-        console.error("❌ Error obteniendo cierres pendientes:", error);
-      }
-
-      try {
-        // ✅ USAR MÉTODO DE EMERGENCIA TEMPORALMENTE
         pendingStock =
           await InventoryOfflineController.emergencyGetPendingStock();
-        console.log(
-          `📦 [SYNC STATUS] ${pendingStock.length} pendientes de stock encontrados`
-        );
+        pendingProducts = await ProductsOfflineController.getPendingProducts(); // ✅ NUEVO
       } catch (error) {
-        console.error("❌ Error obteniendo stock pendiente:", error);
+        console.error("❌ Error obteniendo pendientes:", error);
       }
 
       const status = {
@@ -1465,11 +1483,13 @@ class SyncController extends BaseOfflineController {
         pendingSales: pendingSales.length,
         pendingClosures: pendingClosures.length,
         pendingStock: pendingStock.length,
+        pendingProducts: pendingProducts.length, // ✅ NUEVO
         totalPending:
           pendingSessions.length +
           pendingSales.length +
           pendingClosures.length +
-          pendingStock.length,
+          pendingStock.length +
+          pendingProducts.length, // ✅ ACTUALIZADO
         lastSync: localStorage.getItem("lastSuccessfulSync") || null,
       };
 
@@ -1487,6 +1507,7 @@ class SyncController extends BaseOfflineController {
         pendingSales: 0,
         pendingClosures: 0,
         pendingStock: 0,
+        pendingProducts: 0,
         totalPending: 0,
         error: error.message,
       };
@@ -1680,6 +1701,7 @@ class SyncController extends BaseOfflineController {
       sales: null,
       closures: null,
       stock: null, // ✅ NUEVO
+      products: null,
       errors: [],
     };
 
@@ -1689,6 +1711,8 @@ class SyncController extends BaseOfflineController {
       // ✅ ORDEN CORREGIDO:
       // 1. Datos maestros
       syncResults.masterData = await this.syncMasterData();
+
+      syncResults.products = await this.syncPendingProductsDetailed();
 
       // 2. Sesiones PRIMERO
       syncResults.sessions = await this.syncPendingSessionsDetailed();
@@ -1725,6 +1749,26 @@ class SyncController extends BaseOfflineController {
       return syncResults;
     } finally {
       this.isSyncing = false;
+    }
+  }
+  // ✅ NUEVO MÉTODO: Sincronización detallada de productos
+  async syncPendingProductsDetailed() {
+    try {
+      const resultados = await ProductsOfflineController.syncPendingProducts();
+
+      console.log(
+        `📊 RESULTADO PRODUCTOS: ${resultados.exitosas}/${resultados.total} exitosas`
+      );
+      return resultados;
+    } catch (error) {
+      console.error("❌ Error en syncPendingProductsDetailed:", error);
+      return {
+        total: 0,
+        exitosas: 0,
+        fallidas: 0,
+        detalles: [],
+        error: error.message,
+      };
     }
   }
 }

@@ -3,7 +3,7 @@ import { openDB } from "idb";
 class IndexedDBService {
   constructor() {
     this.dbName = "OfflinePOS";
-    this.dbVersion = 3;
+    this.dbVersion = 4;
     this.db = null;
     this.initialized = false;
   }
@@ -15,6 +15,20 @@ class IndexedDBService {
       this.db = await openDB(this.dbName, this.dbVersion, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`📊 Actualizando BD de v${oldVersion} a v${newVersion}`);
+          if (!db.objectStoreNames.contains("productos_pendientes")) {
+            const pendingProductsStore = db.createObjectStore(
+              "productos_pendientes",
+              {
+                keyPath: "id_local",
+                autoIncrement: true,
+              }
+            );
+            pendingProductsStore.createIndex("operacion", "operacion");
+            pendingProductsStore.createIndex("sincronizado", "sincronizado");
+            pendingProductsStore.createIndex("producto_id", "producto_id");
+            pendingProductsStore.createIndex("timestamp", "timestamp");
+            console.log('✅ Object store "productos_pendientes" creado');
+          }
           // ✅ AGREGAR OBJECT STORE PARA USUARIOS OFFLINE (NUEVO)
           if (!db.objectStoreNames.contains("offline_users")) {
             const userStore = db.createObjectStore("offline_users", {

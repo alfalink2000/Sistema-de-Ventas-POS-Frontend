@@ -433,34 +433,26 @@ export const createProduct = (productData) => {
           throw new Error(errorMsg);
         }
       } else {
-        // Offline: crear localmente
-        console.log("📱 [PRODUCTS] Creando producto localmente...");
+        // ✅ NUEVO: Usar controller offline
+        console.log(
+          "📱 [PRODUCTS] Creando producto localmente con controller..."
+        );
 
-        const idLocal = `producto_local_${Date.now()}_${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
+        resultado = await ProductsOfflineController.createProductPending(
+          productData
+        );
 
-        const productoLocal = {
-          ...productData,
-          id: idLocal,
-          id_local: idLocal,
-          sincronizado: false,
-          fecha_creacion: new Date().toISOString(),
-        };
-
-        await IndexedDBService.add("productos", productoLocal);
-        resultado = productoLocal;
-
-        console.log("✅ [PRODUCTS] Producto creado localmente:", idLocal);
-
-        await Swal.fire({
-          icon: "info",
-          title: "Modo Offline",
-          text: "Producto guardado localmente. Se sincronizará cuando recuperes la conexión.",
-          confirmButtonText: "Entendido",
-        });
+        if (resultado.success) {
+          await Swal.fire({
+            icon: "info",
+            title: "Modo Offline",
+            text: "Producto guardado localmente. Se sincronizará cuando recuperes la conexión.",
+            confirmButtonText: "Entendido",
+          });
+        } else {
+          throw new Error(resultado.error);
+        }
       }
-
       // ✅ VERIFICAR QUE TENEMOS RESULTADO ANTES DE DISPATCH
       if (resultado) {
         dispatch({
@@ -551,50 +543,71 @@ export const updateProduct = (productId, productData) => {
           );
         }
       } else {
-        // Offline: actualizar localmente
-        console.log("📱 [PRODUCTS] Actualizando producto localmente...");
+        //   // Offline: actualizar localmente
+        //   console.log("📱 [PRODUCTS] Actualizando producto localmente...");
 
-        const productoExistente = await IndexedDBService.get(
-          "productos",
-          productId
-        );
-        if (!productoExistente) {
-          throw new Error("Producto no encontrado localmente");
-        }
+        //   const productoExistente = await IndexedDBService.get(
+        //     "productos",
+        //     productId
+        //   );
+        //   if (!productoExistente) {
+        //     throw new Error("Producto no encontrado localmente");
+        //   }
 
-        // ✅ CONVERTIR FormData A OBJETO SI ES NECESARIO
-        let updateData = productData;
-        if (productData instanceof FormData) {
-          updateData = {};
-          for (let [key, value] of productData.entries()) {
-            // Saltar el campo 'imagen' en modo offline
-            if (key !== "imagen") {
-              updateData[key] = value;
-            }
-          }
-        }
+        //   // ✅ CONVERTIR FormData A OBJETO SI ES NECESARIO
+        //   let updateData = productData;
+        //   if (productData instanceof FormData) {
+        //     updateData = {};
+        //     for (let [key, value] of productData.entries()) {
+        //       // Saltar el campo 'imagen' en modo offline
+        //       if (key !== "imagen") {
+        //         updateData[key] = value;
+        //       }
+        //     }
+        //   }
 
-        const productoActualizado = {
-          ...productoExistente,
-          ...updateData,
-          sincronizado: false,
-          fecha_actualizacion: new Date().toISOString(),
-        };
+        //   const productoActualizado = {
+        //     ...productoExistente,
+        //     ...updateData,
+        //     sincronizado: false,
+        //     fecha_actualizacion: new Date().toISOString(),
+        //   };
 
-        await IndexedDBService.put("productos", productoActualizado);
-        resultado = productoActualizado;
+        //   await IndexedDBService.put("productos", productoActualizado);
+        //   resultado = productoActualizado;
 
+        //   console.log(
+        //     "✅ [PRODUCTS] Producto actualizado localmente:",
+        //     productId
+        //   );
+
+        //   await Swal.fire({
+        //     icon: "info",
+        //     title: "Modo Offline",
+        //     text: "Producto actualizado localmente. Se sincronizará cuando recuperes la conexión.",
+        //     confirmButtonText: "Entendido",
+        //   });
+        // }
+        // ✅ NUEVO: Usar controller offline
         console.log(
-          "✅ [PRODUCTS] Producto actualizado localmente:",
-          productId
+          "📱 [PRODUCTS] Actualizando producto localmente con controller..."
         );
 
-        await Swal.fire({
-          icon: "info",
-          title: "Modo Offline",
-          text: "Producto actualizado localmente. Se sincronizará cuando recuperes la conexión.",
-          confirmButtonText: "Entendido",
-        });
+        resultado = await ProductsOfflineController.updateProductPending(
+          productId,
+          productData
+        );
+
+        if (resultado.success) {
+          await Swal.fire({
+            icon: "info",
+            title: "Modo Offline",
+            text: "Producto actualizado localmente. Se sincronizará cuando recuperes la conexión.",
+            confirmButtonText: "Entendido",
+          });
+        } else {
+          throw new Error(resultado.error);
+        }
       }
 
       // Actualizar estado global
@@ -647,42 +660,61 @@ export const deleteProduct = (productId) => {
           throw new Error(response?.error || "Error al eliminar producto");
         }
       } else {
-        // Offline: marcar como eliminado localmente
+        //   // Offline: marcar como eliminado localmente
+        //   console.log(
+        //     "📱 [PRODUCTS] Marcando producto como eliminado localmente..."
+        //   );
+
+        //   const productoExistente = await IndexedDBService.get(
+        //     "productos",
+        //     productId
+        //   );
+        //   if (!productoExistente) {
+        //     throw new Error("Producto no encontrado localmente");
+        //   }
+
+        //   const productoEliminado = {
+        //     ...productoExistente,
+        //     activo: false,
+        //     eliminado: true,
+        //     sincronizado: false,
+        //     fecha_eliminacion: new Date().toISOString(),
+        //   };
+
+        //   await IndexedDBService.put("productos", productoEliminado);
+
+        //   console.log(
+        //     "✅ [PRODUCTS] Producto marcado como eliminado localmente:",
+        //     productId
+        //   );
+
+        //   await Swal.fire({
+        //     icon: "info",
+        //     title: "Modo Offline",
+        //     text: "Producto marcado como eliminado localmente. Se sincronizará cuando recuperes la conexión.",
+        //     confirmButtonText: "Entendido",
+        //   });
+        // }
+        // ✅ NUEVO: Usar controller offline
         console.log(
-          "📱 [PRODUCTS] Marcando producto como eliminado localmente..."
+          "📱 [PRODUCTS] Eliminando producto localmente con controller..."
         );
 
-        const productoExistente = await IndexedDBService.get(
-          "productos",
+        const resultado = await ProductsOfflineController.deleteProductPending(
           productId
         );
-        if (!productoExistente) {
-          throw new Error("Producto no encontrado localmente");
+
+        if (resultado.success) {
+          await Swal.fire({
+            icon: "info",
+            title: "Modo Offline",
+            text: "Producto marcado como eliminado localmente. Se sincronizará cuando recuperes la conexión.",
+            confirmButtonText: "Entendido",
+          });
+        } else {
+          throw new Error(resultado.error);
         }
-
-        const productoEliminado = {
-          ...productoExistente,
-          activo: false,
-          eliminado: true,
-          sincronizado: false,
-          fecha_eliminacion: new Date().toISOString(),
-        };
-
-        await IndexedDBService.put("productos", productoEliminado);
-
-        console.log(
-          "✅ [PRODUCTS] Producto marcado como eliminado localmente:",
-          productId
-        );
-
-        await Swal.fire({
-          icon: "info",
-          title: "Modo Offline",
-          text: "Producto marcado como eliminado localmente. Se sincronizará cuando recuperes la conexión.",
-          confirmButtonText: "Entendido",
-        });
       }
-
       // Actualizar estado global
       dispatch({
         type: types.productDeleted,
