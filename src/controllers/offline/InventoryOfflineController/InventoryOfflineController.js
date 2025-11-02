@@ -15,16 +15,22 @@ class InventoryOfflineController extends BaseOfflineController {
         `📦 [OFFLINE] Agregando actualización pendiente: ${productoId} -> ${nuevoStock}`
       );
 
+      const productoNombre =
+        productoData.producto_nombre || productoData.nombre || productoId;
+      const stockAnterior =
+        productoData.stock_actual || productoData.stock || 0;
+
       const stockUpdate = {
         id_local: `stock_${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}`,
         producto_id: productoId,
-        stock_anterior: productoData.stock_actual || productoData.stock,
+        stock_anterior: stockAnterior,
         stock_nuevo: parseInt(nuevoStock),
         timestamp: new Date().toISOString(),
         sincronizado: false,
-        producto_nombre: productoData.producto_nombre || productoData.nombre,
+        producto_nombre: productoNombre,
+        descripcion: `Stock actualizado: ${productoNombre} (${stockAnterior} → ${nuevoStock})`,
         usuario_id: this.getCurrentUserId(),
         intentos: 0,
         ultimo_intento: null,
@@ -50,25 +56,65 @@ class InventoryOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ OBTENER TODAS LAS ACTUALIZACIONES PENDIENTES
   async getPendingStockUpdates() {
     try {
-      const updates = await IndexedDBService.safeGetAll(
-        this.storeName,
-        "sincronizado",
-        false
+      console.log(
+        "🔍 [OFFLINE] Buscando actualizaciones pendientes de stock..."
       );
 
+      // ✅ OPCIÓN 1: Obtener TODOS los registros y filtrar manualmente (MÁS SEGURO)
+      const allUpdates = await IndexedDBService.getAll(this.storeName);
       console.log(
-        `📦 [OFFLINE] ${updates.length} actualizaciones pendientes encontradas`
+        `📦 [OFFLINE] ${allUpdates.length} registros totales en ${this.storeName}`
       );
-      return updates;
+
+      // ✅ FILTRAR MANUALMENTE - Evitar problemas con índices booleanos
+      const pendingUpdates = allUpdates.filter((update) => {
+        const isPending =
+          update.sincronizado === false ||
+          update.sincronizado === undefined ||
+          update.sincronizado === null;
+        return isPending;
+      });
+
+      console.log(
+        `📦 [OFFLINE] ${pendingUpdates.length} actualizaciones pendientes encontradas (filtro manual)`
+      );
+
+      // ✅ LOG DETALLADO PARA DEBUG
+      if (pendingUpdates.length === 0 && allUpdates.length > 0) {
+        console.warn(
+          "⚠️ [OFFLINE] Hay registros pero ninguno marcado como pendiente:"
+        );
+        allUpdates.forEach((update) => {
+          console.log(
+            `   - ${update.id_local}: sincronizado = ${update.sincronizado}`
+          );
+        });
+      }
+
+      return pendingUpdates;
     } catch (error) {
       console.error(
-        "❌ [OFFLINE] Error obteniendo actualizaciones pendientes:",
+        "❌ [OFFLINE] Error crítico obteniendo actualizaciones pendientes:",
         error
       );
-      return [];
+
+      // ✅ FALLBACK EXTREMO
+      try {
+        const allUpdates = await IndexedDBService.getAll(this.storeName);
+        const pendingUpdates = allUpdates.filter(
+          (update) =>
+            update.sincronizado === false || update.sincronizado === undefined
+        );
+        console.log(
+          `📦 [OFFLINE] Fallback: ${pendingUpdates.length} pendientes encontrados`
+        );
+        return pendingUpdates;
+      } catch (fallbackError) {
+        console.error("❌ [OFFLINE] Error en fallback extremo:", fallbackError);
+        return [];
+      }
     }
   }
 
@@ -127,17 +173,53 @@ class InventoryOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ OBTENER CONTADOR DE PENDIENTES
+  // En InventoryOfflineController.js - ACTUALIZAR getPendingCount
   async getPendingCount() {
     try {
-      const updates = await this.getPendingStockUpdates();
+      const updates = await this.getPendingStockUpdates(); // ✅ Usa el método corregido
       return updates.length;
     } catch (error) {
       console.error("❌ [OFFLINE] Error obteniendo contador:", error);
       return 0;
     }
   }
+  // ✅ MÉTODO TEMPORAL DE EMERGENCIA
+  async emergencyGetPendingStock() {
+    try {
+      console.log("🚨 [EMERGENCY] Obteniendo stock pendiente de emergencia...");
 
+      const allData = await IndexedDBService.getAll("stock_pendientes");
+      console.log(`📊 [EMERGENCY] ${allData.length} registros totales`);
+
+      const pending = allData.filter((item) => {
+        // ✅ MÚLTIPLES VERIFICACIONES
+        if (item.sincronizado === false) return true;
+        if (item.sincronizado === undefined) return true;
+        if (item.sincronizado === null) return true;
+        if (!item.hasOwnProperty("sincronizado")) return true;
+        return false;
+      });
+
+      console.log(`📦 [EMERGENCY] ${pending.length} pendientes encontrados`);
+
+      // ✅ LOG DEL REGISTRO ESPECÍFICO
+      const specificRecord = allData.find(
+        (item) => item.id_local === "stock_1762044568354_35ol875iu"
+      );
+      if (specificRecord) {
+        console.log("🎯 [EMERGENCY] Registro específico:", {
+          id_local: specificRecord.id_local,
+          sincronizado: specificRecord.sincronizado,
+          tipo: typeof specificRecord.sincronizado,
+        });
+      }
+
+      return pending;
+    } catch (error) {
+      console.error("❌ [EMERGENCY] Error crítico:", error);
+      return [];
+    }
+  }
   // ✅ OBTENER INVENTARIO EN CACHE (PARA MODO OFFLINE)
   async getCachedInventory() {
     try {

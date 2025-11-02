@@ -44,24 +44,44 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
 
   // ✅ EN Header.jsx - MOVER loadPendingData FUERA DEL useEffect
   // ✅ CARGAR DATOS PENDIENTES (ACTUALIZADO)
+  // En Header.jsx - MEJORAR loadPendingData
   const loadPendingData = async () => {
     try {
+      console.log("🔄 Cargando datos pendientes...");
+
       const status = await SyncController.getSyncStatus();
+      console.log("📊 Estado de sync:", status);
+
       setPendingCount(status.totalPending);
       setSyncStatus({
         pendingSessions: status.pendingSessions,
         pendingSales: status.pendingSales,
         pendingClosures: status.pendingClosures,
-        pendingStock: status.pendingStock, // ✅ NUEVO
+        pendingStock: status.pendingStock,
       });
 
-      // Si hay datos pendientes, cargar detalles
-      if (status.totalPending > 0) {
-        const details = await SyncController.getPendingDetails();
-        setSyncDetails(details);
-      }
+      // ✅ SIEMPRE cargar detalles, incluso si no hay pendientes
+      const details = await SyncController.getPendingDetails();
+      console.log("📋 Detalles cargados:", {
+        sessions: details.sessions.length,
+        sales: details.sales.length,
+        closures: details.closures.length,
+        stock: details.stock.length,
+      });
+
+      setSyncDetails(details);
     } catch (error) {
-      console.error("Error cargando estado de sincronización:", error);
+      console.error("❌ Error cargando estado de sincronización:", error);
+
+      // ✅ Cargar datos básicos incluso en error
+      const basicStatus = await SyncController.getSyncStatus();
+      setPendingCount(basicStatus.totalPending || 0);
+      setSyncStatus({
+        pendingSessions: basicStatus.pendingSessions || 0,
+        pendingSales: basicStatus.pendingSales || 0,
+        pendingClosures: basicStatus.pendingClosures || 0,
+        pendingStock: basicStatus.pendingStock || 0,
+      });
     }
   };
 
@@ -506,6 +526,17 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               onClick={() => setShowSyncModal(false)}
             >
               Cerrar
+            </button>
+            <button
+              className={styles.debugButton}
+              onClick={async () => {
+                const diagnosis = await SyncController.debugStockIssue();
+                console.log("🔍 Diagnóstico de stock:", diagnosis);
+                alert("Diagnóstico de stock completado - Revisa la consola");
+              }}
+            >
+              <FiAlertCircle />
+              Diagnosticar Stock
             </button>
 
             {isOnline && pendingCount > 0 && (

@@ -940,3 +940,21 @@
 .sectionIcon {
   color: #6c757d;
 }
+/* Agregar estos estilos si no existen */
+.sectionIcon {
+  margin-right: 8px;
+}
+
+.detailSection {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e1e5e9;
+  border-radius: 8px;
+}
+
+.detailSection h5 {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #374151;
+}

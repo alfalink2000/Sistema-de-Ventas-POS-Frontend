@@ -1,11 +1,10 @@
 // src/controllers/offline/SyncController/SyncController.js - VERSIÓN CORREGIDA
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
-import AuthOfflineController from "../AuthOfflineController/AuthOfflineController";
 import SalesOfflineController from "../SalesOfflineController/SalesOfflineController";
 import SessionsOfflineController from "../SessionsOfflineController/SessionsOfflineController";
 import ClosuresOfflineController from "../ClosuresOfflineController/ClosuresOfflineController";
-import ProductsOfflineController from "../ProductsOfflineController/ProductsOfflineController";
 import InventoryOfflineController from "../InventoryOfflineController/InventoryOfflineController";
+
 import { fetchConToken } from "../../../helpers/fetch";
 import IndexedDBService from "../../../services/IndexedDBService";
 
@@ -1103,7 +1102,7 @@ class SyncController extends BaseOfflineController {
     }
   }
 
-  // ✅ OBTENER DETALLES COMPLETOS DE DATOS PENDIENTES
+  // En SyncController.js - ACTUALIZAR getPendingDetails
   async getPendingDetails() {
     try {
       console.log("🔍 Obteniendo detalles de datos pendientes...");
@@ -1122,17 +1121,18 @@ class SyncController extends BaseOfflineController {
             console.error("❌ Error obteniendo cierres pendientes:", error);
             return [];
           }),
+          // ✅ USAR MÉTODO CORREGIDO
           InventoryOfflineController.getPendingStockUpdates().catch((error) => {
             console.error("❌ Error obteniendo stock pendiente:", error);
             return [];
           }),
         ]);
 
-      console.log(`📊 Detalles obtenidos: 
-      Sesiones: ${pendingSessions.length}
-      Ventas: ${pendingSales.length} 
-      Cierres: ${pendingClosures.length}
-      Stock: ${pendingStock.length}`);
+      console.log(`📊 Detalles obtenidos CORREGIDOS: 
+    Sesiones: ${pendingSessions.length}
+    Ventas: ${pendingSales.length} 
+    Cierres: ${pendingClosures.length}
+    Stock: ${pendingStock.length}`);
 
       const result = {
         sessions: pendingSessions.map((session) => ({
@@ -1161,18 +1161,21 @@ class SyncController extends BaseOfflineController {
           fecha: closure.fecha_cierre,
           data: closure,
         })),
+        // ✅ STOCK CORREGIDO
         stock: pendingStock.map((stockUpdate) => ({
           id: stockUpdate.id_local,
           type: "stock",
-          descripcion: `Stock - ${
-            stockUpdate.producto_nombre || stockUpdate.producto_id
-          } -> ${stockUpdate.stock_nuevo}`,
+          descripcion:
+            stockUpdate.descripcion ||
+            `Stock - ${
+              stockUpdate.producto_nombre || stockUpdate.producto_id
+            } (${stockUpdate.stock_anterior} → ${stockUpdate.stock_nuevo})`,
           fecha: stockUpdate.timestamp,
           data: stockUpdate,
         })),
       };
 
-      console.log("✅ Detalles de pendientes procesados correctamente");
+      console.log("✅ Detalles de pendientes PROCESADOS CORRECTAMENTE");
       return result;
     } catch (error) {
       console.error("❌ Error crítico obteniendo detalles pendientes:", error);
@@ -1185,7 +1188,58 @@ class SyncController extends BaseOfflineController {
       };
     }
   }
+  // En SyncController.js - AGREGAR método de diagnóstico
+  async debugStockIssue() {
+    try {
+      console.log("🔍 DIAGNÓSTICO DE STOCK PENDIENTE...");
 
+      // 1. Obtener stock pendiente directamente
+      const pendingStock =
+        await InventoryOfflineController.getPendingStockUpdates();
+      console.log("📦 Stock pendiente encontrado:", pendingStock.length);
+
+      // 2. Mostrar detalles de cada actualización
+      pendingStock.forEach((stock, index) => {
+        console.log(`📋 Stock ${index + 1}:`, {
+          id_local: stock.id_local,
+          producto_id: stock.producto_id,
+          producto_nombre: stock.producto_nombre,
+          stock_anterior: stock.stock_anterior,
+          stock_nuevo: stock.stock_nuevo,
+          timestamp: stock.timestamp,
+          sincronizado: stock.sincronizado,
+          descripcion: stock.descripcion,
+        });
+      });
+
+      // 3. Verificar en IndexedDB directamente
+      const allStock = await IndexedDBService.getAll("stock_pendientes");
+      console.log(
+        "🗄️ Todos los registros en stock_pendientes:",
+        allStock.length
+      );
+
+      const pendingInDB = allStock.filter(
+        (item) => item.sincronizado === false
+      );
+      console.log("📊 Pendientes en DB (filtrado):", pendingInDB.length);
+
+      return {
+        totalInDB: allStock.length,
+        pendingInDB: pendingInDB.length,
+        pendingFromController: pendingStock.length,
+        details: pendingStock.map((s) => ({
+          id_local: s.id_local,
+          producto_id: s.producto_id,
+          descripcion: s.descripcion,
+          sincronizado: s.sincronizado,
+        })),
+      };
+    } catch (error) {
+      console.error("❌ Error en diagnóstico de stock:", error);
+      return { error: error.message };
+    }
+  }
   // ✅ MÉTODOS EXISTENTES MEJORADOS (mantener los que ya tienes)
   async syncMasterData() {
     try {
@@ -1366,7 +1420,6 @@ class SyncController extends BaseOfflineController {
     });
   }
 
-  // En SyncController.js - VERSIÓN MÁS SEGURA
   async getSyncStatus() {
     try {
       console.log("🔄 Obteniendo estado de sincronización...");
@@ -1395,8 +1448,12 @@ class SyncController extends BaseOfflineController {
       }
 
       try {
+        // ✅ USAR MÉTODO DE EMERGENCIA TEMPORALMENTE
         pendingStock =
-          await InventoryOfflineController.getPendingStockUpdates();
+          await InventoryOfflineController.emergencyGetPendingStock();
+        console.log(
+          `📦 [SYNC STATUS] ${pendingStock.length} pendientes de stock encontrados`
+        );
       } catch (error) {
         console.error("❌ Error obteniendo stock pendiente:", error);
       }
@@ -1416,7 +1473,7 @@ class SyncController extends BaseOfflineController {
         lastSync: localStorage.getItem("lastSuccessfulSync") || null,
       };
 
-      console.log("📊 Estado de sincronización:", status);
+      console.log("📊 Estado de sincronización ACTUALIZADO:", status);
       return status;
     } catch (error) {
       console.error(
@@ -1461,7 +1518,7 @@ class SyncController extends BaseOfflineController {
     window.addEventListener("online", handleOnline);
   }
 
-  // En SyncController.js - agregar estos métodos
+  /// ✅ AGREGAR ESTE MÉTODO AL SyncController
   async syncPendingStockUpdates() {
     try {
       const pendingUpdates =
@@ -1485,7 +1542,9 @@ class SyncController extends BaseOfflineController {
 
       for (const update of sortedUpdates) {
         try {
-          console.log(`🔄 Procesando actualización: ${update.id_local}`);
+          console.log(
+            `🔄 Procesando actualización de stock: ${update.id_local}`
+          );
 
           // ✅ VERIFICAR QUE EL PRODUCTO EXISTA EN EL SERVIDOR
           const productExists = await this.verifyProductExists(
@@ -1635,7 +1694,7 @@ class SyncController extends BaseOfflineController {
       syncResults.sessions = await this.syncPendingSessionsDetailed();
 
       // 3. Stock (antes de ventas)
-      syncResults.stock = await this.syncPendingStockUpdates();
+      syncResults.stock = await this.syncPendingStockUpdates(); // ✅ AGREGADO
 
       // 4. Ventas
       syncResults.sales = await this.syncPendingSalesDetailed();
