@@ -1,10 +1,8 @@
-// components/layout/Header/Header.jsx - VERSIÓN FINAL FUNCIONAL
+// components/layout/Header/Header.jsx - VERSIÓN CORREGIDA
 import { useDispatch, useSelector } from "react-redux";
 import { startLogout } from "../../../actions/authActions";
 import {
   FiMenu,
-  FiLogOut,
-  FiUser,
   FiTrendingUp,
   FiDollarSign,
   FiWifi,
@@ -16,12 +14,17 @@ import {
   FiAlertTriangle,
   FiInfo,
   FiPackage,
+  FiEdit,
+  FiTrash2,
+  FiPlus,
+  FiSearch,
 } from "react-icons/fi";
 import styles from "./Header.module.css";
 import { useState, useEffect } from "react";
 import { loadSales } from "../../../actions/salesActions";
 import { loadClosures } from "../../../actions/closuresActions";
 import SyncController from "../../../controllers/offline/SyncController/SyncController";
+import ProductsOfflineController from "../../../controllers/offline/ProductsOfflineController/ProductsOfflineController";
 
 const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   const dispatch = useDispatch();
@@ -40,40 +43,26 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     pendingSales: 0,
     pendingClosures: 0,
     pendingStock: 0,
+    pendingProducts: 0,
   });
 
-  // ✅ EN Header.jsx - MOVER loadPendingData FUERA DEL useEffect
-  // ✅ CARGAR DATOS PENDIENTES (ACTUALIZADO)
-  // En Header.jsx - MEJORAR loadPendingData
+  // ✅ CARGAR DATOS PENDIENTES
   const loadPendingData = async () => {
     try {
-      console.log("🔄 Cargando datos pendientes...");
-
       const status = await SyncController.getSyncStatus();
-      console.log("📊 Estado de sync:", status);
-
       setPendingCount(status.totalPending);
       setSyncStatus({
         pendingSessions: status.pendingSessions,
         pendingSales: status.pendingSales,
         pendingClosures: status.pendingClosures,
         pendingStock: status.pendingStock,
+        pendingProducts: status.pendingProducts || 0,
       });
 
-      // ✅ SIEMPRE cargar detalles, incluso si no hay pendientes
       const details = await SyncController.getPendingDetails();
-      console.log("📋 Detalles cargados:", {
-        sessions: details.sessions.length,
-        sales: details.sales.length,
-        closures: details.closures.length,
-        stock: details.stock.length,
-      });
-
       setSyncDetails(details);
     } catch (error) {
       console.error("❌ Error cargando estado de sincronización:", error);
-
-      // ✅ Cargar datos básicos incluso en error
       const basicStatus = await SyncController.getSyncStatus();
       setPendingCount(basicStatus.totalPending || 0);
       setSyncStatus({
@@ -81,6 +70,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
         pendingSales: basicStatus.pendingSales || 0,
         pendingClosures: basicStatus.pendingClosures || 0,
         pendingStock: basicStatus.pendingStock || 0,
+        pendingProducts: basicStatus.pendingProducts || 0,
       });
     }
   };
@@ -90,48 +80,52 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
 
     const interval = setInterval(loadPendingData, 20000);
 
-    // ✅ ESCUCHAR EVENTOS DE CAMBIO EN STOCK
-    const handleStockUpdatesChanged = () => {
+    const handleDataChanged = () => {
       loadPendingData();
     };
 
     const removeListener = SyncController.addSyncListener((event, data) => {
-      if (event === "sync_complete" || event === "sync_error") {
+      if (
+        event === "sync_complete" ||
+        event === "sync_error" ||
+        event === "products_sync_complete" ||
+        event === "product_pending_changed"
+      ) {
         loadPendingData();
       }
     });
 
-    // ✅ AGREGAR LISTENERS PARA STOCK
-    window.addEventListener(
-      "stockPendingUpdatesChanged",
-      handleStockUpdatesChanged
-    );
-    window.addEventListener("pendingUpdatesChanged", handleStockUpdatesChanged);
+    window.addEventListener("stockPendingUpdatesChanged", handleDataChanged);
+    window.addEventListener("pendingUpdatesChanged", handleDataChanged);
+    window.addEventListener("productsPendingUpdatesChanged", handleDataChanged);
+    window.addEventListener("product_created_offline", handleDataChanged);
+    window.addEventListener("product_updated_offline", handleDataChanged);
+    window.addEventListener("product_deleted_offline", handleDataChanged);
 
     return () => {
       clearInterval(interval);
       removeListener();
       window.removeEventListener(
         "stockPendingUpdatesChanged",
-        handleStockUpdatesChanged
+        handleDataChanged
       );
+      window.removeEventListener("pendingUpdatesChanged", handleDataChanged);
       window.removeEventListener(
-        "pendingUpdatesChanged",
-        handleStockUpdatesChanged
+        "productsPendingUpdatesChanged",
+        handleDataChanged
       );
+      window.removeEventListener("product_created_offline", handleDataChanged);
+      window.removeEventListener("product_updated_offline", handleDataChanged);
+      window.removeEventListener("product_deleted_offline", handleDataChanged);
     };
   }, []);
 
-  // ✅ MANEJO DE CONEXIÓN (MANTENIDO)
+  // ✅ MANEJO DE CONEXIÓN
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      console.log("🌐 Conexión restaurada - Header");
-
-      // ✅ AUTO-SYNC AL RECUPERAR CONEXIÓN (OPCIONAL)
       setTimeout(() => {
         if (pendingCount > 0) {
-          console.log(`🔄 Auto-sync iniciado con ${pendingCount} pendientes`);
           handleForceSync();
         }
       }, 3000);
@@ -139,7 +133,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
 
     const handleOffline = () => {
       setIsOnline(false);
-      console.log("📴 Conexión perdida - Header");
     };
 
     window.addEventListener("online", handleOnline);
@@ -151,7 +144,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     };
   }, [pendingCount]);
 
-  // ✅ SINCRONIZACIÓN MANUAL MEJORADA
+  // ✅ SINCRONIZACIÓN MANUAL
   const handleForceSync = async () => {
     if (!isOnline) {
       alert("No hay conexión a internet para sincronizar");
@@ -162,70 +155,20 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     setShowSyncModal(true);
 
     try {
-      // ✅ EJECUTAR DIAGNÓSTICO PRIMERO
       const diagnosis = await SyncController.debugSessionIssue();
-      console.log("🔍 Diagnóstico antes del sync:", diagnosis);
-
-      // ✅ LIMPIAR DUPLICADOS
       const cleanupResult = await SyncController.cleanupDuplicatePendingData();
-      console.log("🧹 Resultado limpieza:", cleanupResult);
-
-      // ✅ SINCRONIZAR
       const result = await SyncController.fullSync();
 
-      console.log("📊 Resultado del sync:", result);
-
-      // ✅ RECARGAR DATOS
       setTimeout(() => {
         loadPendingData();
         dispatch(loadSales());
         dispatch(loadClosures());
-        console.log("🔄 Datos recargados después del sync");
       }, 1000);
     } catch (error) {
       console.error("Error en sincronización manual:", error);
+      alert(`Error en sincronización: ${error.message}`);
     } finally {
       setIsSyncing(false);
-    }
-  };
-  // En Header.jsx - AGREGAR esta función para forzar verificación
-  const handleForceVerification = async () => {
-    try {
-      console.log("🔍 Forzando verificación de sincronización...");
-
-      // 1. Obtener estado actual
-      const currentStatus = await SyncController.getSyncStatus();
-      console.log("📊 Estado actual:", currentStatus);
-
-      // 2. Verificar sesiones pendientes específicamente
-      const pendingSessions =
-        await SessionsOfflineController.getPendingSessions();
-      console.log("📋 Sesiones realmente pendientes:", pendingSessions.length);
-
-      pendingSessions.forEach((session) => {
-        console.log("🔍 Sesión pendiente:", {
-          id_local: session.id_local,
-          id: session.id,
-          sincronizado: session.sincronizado,
-          estado: session.estado,
-        });
-      });
-
-      // 3. Recargar datos
-      await loadPendingData();
-
-      alert("Verificación completada - Revisa la consola");
-    } catch (error) {
-      console.error("❌ Error en verificación:", error);
-    }
-  };
-  const runDiagnosis = async () => {
-    try {
-      const diagnosis = await SyncController.debugSessionIssue();
-      console.log("🔍 DIAGNÓSTICO COMPLETO:", diagnosis);
-      alert("Diagnóstico completado - Revisa la consola");
-    } catch (error) {
-      console.error("❌ Error en diagnóstico:", error);
     }
   };
 
@@ -240,11 +183,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     }
   };
 
-  const handleLogout = () => {
-    dispatch(startLogout());
-  };
-
-  // ✅ CALCULAR GANANCIAS EN TIEMPO REAL (MANTENIDO)
+  // ✅ CALCULAR GANANCIAS EN TIEMPO REAL
   const calcularGananciasSesion = () => {
     if (!sesionAbierta || !sales || sales.length === 0) {
       return { gananciaBruta: 0, ventasTotales: 0, cantidadVentas: 0 };
@@ -279,7 +218,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
           }
         });
       } else {
-        // Estimación del 30% si no hay datos detallados
         gananciaBruta += (venta.total || 0) * 0.3;
       }
     });
@@ -301,8 +239,35 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     }).format(amount);
   };
 
+  // ✅ FUNCIÓN PARA OBTENER ICONO DE OPERACIÓN DE PRODUCTO
+  const getProductOperationIcon = (operacion) => {
+    switch (operacion) {
+      case "crear":
+        return <FiPlus />;
+      case "actualizar":
+        return <FiEdit />;
+      case "eliminar":
+        return <FiTrash2 />;
+      default:
+        return <FiPackage />;
+    }
+  };
+
+  // ✅ FUNCIÓN PARA OBTENER COLOR DE OPERACIÓN DE PRODUCTO
+  const getProductOperationColor = (operacion) => {
+    switch (operacion) {
+      case "crear":
+        return "#10b981";
+      case "actualizar":
+        return "#f59e0b";
+      case "eliminar":
+        return "#ef4444";
+      default:
+        return "#6b7280";
+    }
+  };
+
   // ✅ COMPONENTE MODAL DE SINCRONIZACIÓN
-  // ✅ COMPONENTE MODAL DE SINCRONIZACIÓN ACTUALIZADO
   const SyncModal = () => {
     if (!showSyncModal) return null;
 
@@ -343,7 +308,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </div>
             </div>
 
-            {/* ✅ CONTADORES PENDIENTES ACTUALIZADOS */}
+            {/* CONTADORES PENDIENTES */}
             <div className={styles.pendingCounters}>
               <div className={styles.counterItem}>
                 <span className={styles.counterNumber}>
@@ -363,12 +328,17 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                 </span>
                 <span className={styles.counterLabel}>Cierres</span>
               </div>
-              {/* ✅ NUEVO CONTADOR DE STOCK */}
               <div className={styles.counterItem}>
                 <span className={styles.counterNumber}>
                   {syncStatus.pendingStock}
                 </span>
                 <span className={styles.counterLabel}>Stock</span>
+              </div>
+              <div className={styles.counterItem}>
+                <span className={styles.counterNumber}>
+                  {syncStatus.pendingProducts}
+                </span>
+                <span className={styles.counterLabel}>Productos</span>
               </div>
               <div className={styles.counterTotal}>
                 <span className={styles.totalNumber}>{pendingCount}</span>
@@ -376,16 +346,61 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </div>
             </div>
 
-            {/* ✅ DETALLES DE DATOS PENDIENTES ACTUALIZADOS */}
+            {/* DETALLES DE DATOS PENDIENTES */}
             {syncDetails && (
               <div className={styles.pendingDetails}>
                 <h4>Detalles de Datos Pendientes</h4>
 
-                {/* SESIONES PENDIENTES */}
+                {syncDetails.products && syncDetails.products.length > 0 && (
+                  <div className={styles.detailSection}>
+                    <h5>
+                      <FiPackage className={styles.sectionIcon} />
+                      Productos ({syncDetails.products.length})
+                    </h5>
+                    {syncDetails.products.map((product) => (
+                      <div key={product.id} className={styles.detailItem}>
+                        <div
+                          className={styles.itemIcon}
+                          style={{
+                            color: getProductOperationColor(product.operacion),
+                          }}
+                        >
+                          {getProductOperationIcon(product.operacion)}
+                        </div>
+                        <div className={styles.itemContent}>
+                          <span className={styles.itemTitle}>
+                            {product.descripcion}
+                          </span>
+                          <span className={styles.itemDate}>
+                            {new Date(product.fecha).toLocaleDateString()} -
+                            {new Date(product.fecha).toLocaleTimeString()}
+                          </span>
+                          {product.data?.datos?.nombre && (
+                            <span className={styles.itemSubtitle}>
+                              {product.data.datos.nombre}
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={styles.itemStatus}
+                          style={{
+                            backgroundColor:
+                              getProductOperationColor(product.operacion) +
+                              "20",
+                            color: getProductOperationColor(product.operacion),
+                          }}
+                        >
+                          {product.operacion?.toUpperCase()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {syncDetails.sessions.length > 0 && (
                   <div className={styles.detailSection}>
                     <h5>
-                      <FiUser className={styles.sectionIcon} />
+                      <FiInfo className={styles.sectionIcon} />
                       Sesiones de Caja ({syncDetails.sessions.length})
                     </h5>
                     {syncDetails.sessions.map((session) => (
@@ -411,7 +426,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                   </div>
                 )}
 
-                {/* VENTAS PENDIENTES */}
                 {syncDetails.sales.length > 0 && (
                   <div className={styles.detailSection}>
                     <h5>
@@ -441,7 +455,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                   </div>
                 )}
 
-                {/* ✅ NUEVA SECCIÓN: STOCK PENDIENTE */}
                 {syncDetails.stock && syncDetails.stock.length > 0 && (
                   <div className={styles.detailSection}>
                     <h5>
@@ -471,7 +484,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                   </div>
                 )}
 
-                {/* CIERRES PENDIENTES */}
                 {syncDetails.closures.length > 0 && (
                   <div className={styles.detailSection}>
                     <h5>
@@ -501,7 +513,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
                   </div>
                 )}
 
-                {/* SIN DATOS PENDIENTES */}
                 {pendingCount === 0 && (
                   <div className={styles.noPendingData}>
                     <FiCheck className={styles.successIcon} />
@@ -511,7 +522,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </div>
             )}
 
-            {/* ERRORES */}
             {syncDetails?.error && (
               <div className={styles.errorSection}>
                 <FiAlertTriangle className={styles.errorIcon} />
@@ -526,17 +536,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               onClick={() => setShowSyncModal(false)}
             >
               Cerrar
-            </button>
-            <button
-              className={styles.debugButton}
-              onClick={async () => {
-                const diagnosis = await SyncController.debugStockIssue();
-                console.log("🔍 Diagnóstico de stock:", diagnosis);
-                alert("Diagnóstico de stock completado - Revisa la consola");
-              }}
-            >
-              <FiAlertCircle />
-              Diagnosticar Stock
             </button>
 
             {isOnline && pendingCount > 0 && (
@@ -568,13 +567,10 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     <header className={styles.header}>
       <div className={styles.headerLeft}>
         <div className={styles.menuButtonContainer}>
-          {sidebarOpen ? (
-            <button className={styles.menuButton} onClick={onToggleSidebar}>
-              <FiMenu className={styles.menuIcon} />
-            </button>
-          ) : (
-            <div className={styles.menuButtonPlaceholder} />
-          )}
+          {/* ✅ CORRECCIÓN: Mostrar siempre el botón de menú */}
+          <button className={styles.menuButton} onClick={onToggleSidebar}>
+            <FiMenu className={styles.menuIcon} />
+          </button>
         </div>
         <div className={styles.breadcrumb}>
           <span className={styles.appName}>KioskoFlow</span>
@@ -591,7 +587,39 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       </div>
 
       <div className={styles.headerRight}>
-        {/* ✅ INDICADOR DE SINCRONIZACIÓN MEJORADO */}
+        <button
+          className={styles.debugButton}
+          onClick={async () => {
+            try {
+              console.log(
+                "🔍 INICIANDO DIAGNÓSTICO DE PRODUCTOS PENDIENTES..."
+              );
+
+              // Obtener todos los productos pendientes
+              const pendingProducts =
+                await ProductsOfflineController.getPendingProducts();
+              console.log(
+                `📦 Total productos pendientes: ${pendingProducts.length}`
+              );
+
+              // Diagnosticar cada producto pendiente
+              for (const product of pendingProducts) {
+                console.log("=".repeat(50));
+                console.log(`🔍 DIAGNOSTICANDO PRODUCTO: ${product.id_local}`);
+                await ProductsOfflineController.debugPendingProductStructure(
+                  product.id_local
+                );
+              }
+
+              console.log("🎉 DIAGNÓSTICO COMPLETADO");
+            } catch (error) {
+              console.error("❌ Error en diagnóstico:", error);
+            }
+          }}
+        >
+          🐛 Debug
+        </button>
+        {/* ✅ INDICADOR DE SINCRONIZACIÓN COMPACTO */}
         <div className={styles.syncIndicator} onClick={handleShowSyncDetails}>
           <div className={styles.syncIconContainer}>
             <div
@@ -600,7 +628,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               } ${isSyncing ? styles.syncing : ""} ${
                 pendingCount > 0 ? styles.hasPending : ""
               }`}
-              title="Ver detalles de sincronización"
             >
               {isSyncing ? (
                 <FiRefreshCw className={styles.syncSpinner} />
@@ -616,6 +643,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
             </div>
           </div>
 
+          {/* ✅ AGREGAR LA INFO DE SINCRONIZACIÓN */}
           <div className={styles.syncInfo}>
             <span className={styles.syncStatus}>
               {isSyncing
@@ -630,38 +658,21 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </span>
             )}
           </div>
-
-          {/* Botón de sincronización */}
-          {pendingCount > 0 && isOnline && !isSyncing && (
-            <button
-              className={styles.syncButton}
-              onClick={handleForceSync}
-              title="Sincronizar datos pendientes"
-            >
-              <FiRefreshCw className={styles.syncButtonIcon} />
-            </button>
-          )}
         </div>
 
-        {/* ✅ INDICADOR DE GANANCIAS EN TIEMPO REAL (MANTENIDO) */}
+        {/* ✅ INDICADOR DE GANANCIAS COMPACTO */}
         {sesionAbierta ? (
           <div className={styles.earningsIndicator}>
             <div className={styles.earningsIcon}>
               <FiTrendingUp className={styles.trendingIcon} />
             </div>
             <div className={styles.earningsInfo}>
-              <span className={styles.earningsLabel}>Ganancia Actual</span>
               <span className={styles.earningsAmount}>
                 {formatCurrency(gananciaBruta)}
               </span>
-              <div className={styles.earningsDetails}>
-                <span className={styles.salesCount}>
-                  {cantidadVentas} venta{cantidadVentas !== 1 ? "s" : ""}
-                </span>
-                {!isOnline && (
-                  <span className={styles.offlineEarningBadge}>local</span>
-                )}
-              </div>
+              <span className={styles.salesCount}>
+                {cantidadVentas} venta{cantidadVentas !== 1 ? "s" : ""}
+              </span>
             </div>
           </div>
         ) : (
@@ -670,34 +681,24 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               <FiDollarSign className={styles.dollarIcon} />
             </div>
             <div className={styles.noSessionInfo}>
-              <span className={styles.noSessionLabel}>Sesión No Iniciada</span>
-              <span className={styles.noSessionText}>Abre una sesión</span>
+              <span className={styles.noSessionText}>Sin sesión</span>
             </div>
           </div>
         )}
 
-        {/* ✅ INFORMACIÓN DEL USUARIO VENDEDOR (MANTENIDO) */}
+        {/* ✅ INFORMACIÓN DEL USUARIO COMPACTA */}
         <div className={styles.userInfo}>
           <div className={styles.userAvatar}>
-            <FiUser className={styles.userIcon} />
+            <span className={styles.userInitial}>
+              {user?.nombre?.charAt(0) || user?.name?.charAt(0) || "U"}
+            </span>
           </div>
           <div className={styles.userDetails}>
             <span className={styles.userName}>
               {user?.nombre || user?.name || "Usuario"}
             </span>
-            <span className={styles.userRole}>
-              {user?.rol
-                ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1)
-                : "Administrador"}
-            </span>
           </div>
         </div>
-
-        {/* Botón de salir */}
-        <button className={styles.logoutButton} onClick={handleLogout}>
-          <FiLogOut className={styles.logoutIcon} />
-          <span>Salir</span>
-        </button>
       </div>
 
       {/* ✅ MODAL DE SINCRONIZACIÓN */}

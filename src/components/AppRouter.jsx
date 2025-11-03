@@ -1,4 +1,4 @@
-// AppRouter.jsx - VERSIÓN SIN SINCRONIZACIÓN AUTOMÁTICA
+// AppRouter.jsx - VERSIÓN SIMPLIFICADA Y CORREGIDA
 import { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import Login from "../pages/Login/Login";
@@ -17,243 +17,194 @@ import { loadInventory } from "../actions/inventoryActions";
 import { loadTodayClosure } from "../actions/closuresActions";
 import { loadOpenSesion } from "../actions/sesionesCajaActions";
 import LoadingSpinner from "../components/ui/LoadingSpinner/LoadingSpinner";
-import IndexedDBService from "../services/IndexedDBService";
+import { startChecking, startOfflineChecking } from "../actions/authActions";
 import styles from "./AppRouter.module.css";
 
 const AppRouter = () => {
   const [currentView, setCurrentView] = useState("dashboard");
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  const [loadProgress, setLoadProgress] = useState({
-    products: false,
-    categories: false,
-    sales: false,
-    inventory: false,
-    closures: false,
-    sesionCaja: false,
-  });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   const { isAuthenticated, checking, user } = useSelector(
     (state) => state.auth
   );
   const dispatch = useDispatch();
   const loadAttemptedRef = useRef(false);
+  const authCheckedRef = useRef(false);
 
-  // ✅ INICIALIZACIÓN OFFLINE BÁSICA
+  // ✅ DETECTAR CAMBIOS DE CONEXIÓN
   useEffect(() => {
-    const initializeOffline = async () => {
-      try {
-        // Inicializar IndexedDB
-        await IndexedDBService.init();
-        console.log("✅ IndexedDB inicializado correctamente");
-
-        if (!navigator.onLine) {
-          console.log("📱 Modo offline - Usando datos locales");
-        }
-      } catch (error) {
-        console.error("❌ Error inicializando servicios offline:", error);
-      }
+    const handleOnline = () => {
+      console.log("🌐 Conexión restaurada");
+      setIsOnline(true);
     };
 
-    if (isAuthenticated && user) {
-      initializeOffline();
-    }
-  }, [isAuthenticated, user]);
+    const handleOffline = () => {
+      console.log("📴 Conexión perdida - Modo offline");
+      setIsOnline(false);
+    };
 
-  // ✅ CARGA DE DATOS SIMPLIFICADA
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // ✅ VERIFICACIÓN DE AUTENTICACIÓN - UNA SOLA VEZ
+  useEffect(() => {
+    if (!authCheckedRef.current) {
+      authCheckedRef.current = true;
+
+      const checkAuth = async () => {
+        if (isOnline) {
+          console.log("🌐 Modo online - Verificación completa");
+          await dispatch(startChecking());
+        } else {
+          console.log("📱 Modo offline - Verificación local");
+          await dispatch(startOfflineChecking());
+        }
+      };
+
+      checkAuth();
+    }
+  }, [dispatch, isOnline]);
+
+  // ✅ CARGA DE DATOS SOLO CUANDO ESTÉ AUTENTICADO
   useEffect(() => {
     if (!checking && isAuthenticated && user && !loadAttemptedRef.current) {
-      console.log("🔄 AppRouter: Iniciando carga de datos...", user);
+      console.log("🔄 AppRouter: Usuario autenticado, iniciando carga...", {
+        user: user.username,
+        online: isOnline,
+      });
       loadAttemptedRef.current = true;
 
-      const loadAllData = async () => {
+      const loadEssentialData = async () => {
         try {
-          console.log("🚀 === INICIANDO CARGA DE DATOS ===");
+          console.log("🚀 Cargando datos esenciales...");
 
-          // ✅ CARGAS CRÍTICAS PRIMERO
-          const criticalLoads = [
-            {
-              key: "sesionCaja",
-              action: () => dispatch(loadOpenSesion(user.id)),
-              label: "sesión de caja",
-              optional: false,
-            },
+          // ✅ CARGAS CRÍTICAS CON MANEJO DE ERRORES
+          const essentialLoads = [
             {
               key: "products",
               action: () => dispatch(loadProducts()),
               label: "productos",
-              optional: false,
             },
             {
               key: "categories",
               action: () => dispatch(loadCategories()),
               label: "categorías",
-              optional: false,
             },
           ];
 
-          // ✅ EJECUTAR CARGAS CRÍTICAS
-          for (const { key, action, label, optional } of criticalLoads) {
-            console.log(`📦 Cargando ${label}...`);
-            setLoadProgress((prev) => ({ ...prev, [key]: true }));
-
+          for (const { key, action, label } of essentialLoads) {
             try {
+              console.log(`📦 Cargando ${label}...`);
               await action();
-              console.log(`✅ ${label} cargados correctamente`);
+              console.log(`✅ ${label} listos`);
             } catch (error) {
-              console.error(`❌ Error cargando ${label}:`, error);
-              if (!optional) {
-                console.log(
-                  `🔄 Intentando usar datos locales para ${label}...`
-                );
-              }
-            } finally {
-              setLoadProgress((prev) => ({ ...prev, [key]: false }));
+              console.error(`⚠️ Error con ${label}:`, error.message);
+              // Continuar aunque falle
             }
           }
 
-          // ✅ CARGAS SECUNDARIAS
-          const secondaryLoads = [
-            {
-              key: "sales",
-              action: () => dispatch(loadSales(10, 1)),
-              label: "ventas",
-            },
-            {
-              key: "inventory",
-              action: () => dispatch(loadInventory()),
-              label: "inventario",
-            },
-            {
-              key: "closures",
-              action: () => dispatch(loadTodayClosure()),
-              label: "cierres de caja",
-            },
-          ];
+          // ✅ CARGAS OPCIONALES (SOLO ONLINE)
+          if (isOnline) {
+            const optionalLoads = [
+              {
+                action: () => dispatch(loadOpenSesion(user.id)),
+                label: "sesión",
+              },
+              { action: () => dispatch(loadSales(10, 1)), label: "ventas" },
+              { action: () => dispatch(loadInventory()), label: "inventario" },
+              { action: () => dispatch(loadTodayClosure()), label: "cierres" },
+            ];
 
-          console.log("🔄 Ejecutando cargas secundarias...");
-          const secondaryPromises = secondaryLoads.map(
-            ({ key, action, label }) => {
-              setLoadProgress((prev) => ({ ...prev, [key]: true }));
-              return action().finally(() => {
-                setLoadProgress((prev) => ({ ...prev, [key]: false }));
-                console.log(`✅ ${label} cargados`);
-              });
-            }
-          );
+            console.log("🔄 Cargando datos opcionales...");
+            await Promise.allSettled(
+              optionalLoads.map(({ action, label }) =>
+                action().catch((error) =>
+                  console.log(`⚠️ ${label} no disponibles:`, error.message)
+                )
+              )
+            );
+          }
 
-          await Promise.allSettled(secondaryPromises);
-
-          console.log("🎉 === CARGA DE DATOS COMPLETADA ===");
+          console.log("🎉 Carga completada");
           setInitialLoadComplete(true);
         } catch (error) {
-          console.error("❌ Error en carga inicial:", error);
-          // Permitir acceso a la app aunque haya errores
-          console.log("🔄 Continuando con funcionalidad limitada...");
+          console.error("❌ Error en carga:", error);
+          // ✅ PERMITIR ACCESO AUNQUE HAYA ERRORES
           setInitialLoadComplete(true);
         }
       };
 
-      loadAllData();
+      // ✅ TIMEOUT DE SEGURIDAD
+      const timeout = setTimeout(() => {
+        if (!initialLoadComplete) {
+          console.log("⏰ Timeout - Continuando con app...");
+          setInitialLoadComplete(true);
+        }
+      }, 5000);
+
+      loadEssentialData().finally(() => {
+        clearTimeout(timeout);
+      });
     }
-  }, [isAuthenticated, checking, user, dispatch]);
+  }, [
+    isAuthenticated,
+    checking,
+    user,
+    dispatch,
+    isOnline,
+    initialLoadComplete,
+  ]);
 
   // ✅ RESETEO AL CERRAR SESIÓN
   useEffect(() => {
-    if (!isAuthenticated) {
-      console.log("🔄 Usuario cerró sesión, reseteando estados...");
+    if (!isAuthenticated && loadAttemptedRef.current) {
+      console.log("🔄 Sesión cerrada, reseteando...");
       loadAttemptedRef.current = false;
+      authCheckedRef.current = false;
       setInitialLoadComplete(false);
       setCurrentView("dashboard");
-      setLoadProgress({
-        products: false,
-        categories: false,
-        sales: false,
-        inventory: false,
-        closures: false,
-        sesionCaja: false,
-      });
     }
   }, [isAuthenticated]);
 
-  // ✅ LOADING STATES
+  // ✅ RENDERIZADO
   if (checking) {
     return (
       <div className={styles.loadingContainer}>
         <LoadingSpinner size="large" />
         <div className={styles.loadingContent}>
-          <h3>Verificando autenticación...</h3>
-          <p>Estamos preparando tu sesión</p>
+          <h3>Verificando sesión...</h3>
+          <p>
+            {isOnline ? "Conectando con servidor" : "Verificando datos locales"}
+          </p>
         </div>
       </div>
     );
   }
 
+  // ✅ REDIRIGIR A LOGIN SI NO ESTÁ AUTENTICADO
   if (!isAuthenticated) {
-    console.log("🔐 AppRouter: Redirigiendo a Login");
+    console.log("🔐 Redirigiendo a Login - usuario no autenticado");
     return <Login />;
   }
 
-  // ✅ SPINNER DE CARGA
+  // ✅ MOSTRAR LOADING MIENTRAS CARGA DATOS
   if (!initialLoadComplete) {
-    const loadingItems = Object.entries(loadProgress)
-      .filter(([_, isLoading]) => isLoading)
-      .map(([key]) => {
-        const labels = {
-          products: "📦 Productos",
-          categories: "🏷️ Categorías",
-          sales: "💰 Ventas",
-          inventory: "📊 Inventario",
-          closures: "💳 Cierres de caja",
-          sesionCaja: "🏦 Sesión de caja",
-        };
-        return labels[key] || key;
-      });
-
-    const completedItems = Object.entries(loadProgress)
-      .filter(([_, isLoading]) => !isLoading)
-      .map(([key]) => {
-        const labels = {
-          products: "Productos",
-          categories: "Categorías",
-          sales: "Ventas",
-          inventory: "Inventario",
-          closures: "Cierres",
-          sesionCaja: "Sesión",
-        };
-        return labels[key] || key;
-      });
-
     return (
       <div className={styles.loadingContainer}>
         <LoadingSpinner size="large" />
         <div className={styles.loadingContent}>
-          <h3>Preparando tu aplicación</h3>
-          <p>Cargando todos los datos necesarios...</p>
-
-          {loadingItems.length > 0 && (
-            <div className={styles.loadingSection}>
-              <p className={styles.sectionTitle}>🔄 Cargando:</p>
-              <div className={styles.itemsList}>
-                {loadingItems.map((item, index) => (
-                  <div key={index} className={styles.loadingItem}>
-                    <span className={styles.spinnerSmall}></span>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {completedItems.length > 0 && (
-            <div className={styles.loadingSection}>
-              <p className={styles.sectionTitle}>✅ Completado:</p>
-              <div className={styles.itemsList}>
-                {completedItems.map((item, index) => (
-                  <div key={index} className={styles.completedItem}>
-                    {item}
-                  </div>
-                ))}
-              </div>
+          <h3>Preparando aplicación</h3>
+          <p>{isOnline ? "Cargando datos..." : "Cargando datos locales..."}</p>
+          {!isOnline && (
+            <div className={styles.offlineNotice}>
+              <span>📱 Modo Offline</span>
             </div>
           )}
         </div>
@@ -261,14 +212,13 @@ const AppRouter = () => {
     );
   }
 
-  console.log("🏠 AppRouter: Mostrando aplicación principal");
+  // ✅ APLICACIÓN PRINCIPAL
+  console.log("🏠 App lista -", isOnline ? "ONLINE" : "OFFLINE");
 
   const handleViewChange = (view) => {
-    console.log("🔄 Cambiando vista a:", view);
     setCurrentView(view);
   };
 
-  // ✅ RENDERIZADO PRINCIPAL
   const renderContent = () => {
     const views = {
       dashboard: <Dashboard onViewChange={handleViewChange} />,
@@ -284,7 +234,11 @@ const AppRouter = () => {
   };
 
   return (
-    <DashboardLayout onViewChange={handleViewChange} currentView={currentView}>
+    <DashboardLayout
+      onViewChange={handleViewChange}
+      currentView={currentView}
+      isOnline={isOnline}
+    >
       {renderContent()}
     </DashboardLayout>
   );

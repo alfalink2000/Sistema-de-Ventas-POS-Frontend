@@ -92,13 +92,17 @@ class SalesOfflineController extends BaseOfflineController {
         const detalle = {
           id_local: detalleId,
           venta_id_local: ventaIdLocal,
-          producto_id: producto.producto_id.toString(), // ✅ Asegurar string
+          producto_id: producto.producto_id.toString(),
           cantidad: parseInt(producto.cantidad),
           precio_unitario: parseFloat(producto.precio_unitario),
+          precio_compra: parseFloat(producto.precio_compra || 0), // ✅ GUARDAR PRECIO COMPRA
           subtotal: parseFloat(producto.subtotal),
+          ganancia:
+            (parseFloat(producto.precio_unitario) -
+              parseFloat(producto.precio_compra || 0)) *
+            parseInt(producto.cantidad),
           sincronizado: false,
           fecha_creacion: new Date().toISOString(),
-          // Información adicional para mejor debugging
           producto_nombre: producto.nombre || `Producto ${index + 1}`,
         };
 

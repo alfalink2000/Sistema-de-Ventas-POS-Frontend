@@ -14,6 +14,7 @@ const processSaleStockUpdate = async (productos, ventaIdLocal = null) => {
       ventaIdLocal,
     });
 
+    // ✅ USAR EL MÉTODO CORRECTO
     const resultados = await ProductsOfflineController.updateStockAfterSale(
       productos
     );
@@ -119,7 +120,7 @@ export const loadSales = (limite = 50, pagina = 1) => {
   };
 };
 
-// ✅ CREAR VENTA CON SOPORTE OFFLINE COMPLETO - VERSIÓN CORREGIDA
+// ✅ CREAR VENTA - VERSIÓN CORREGIDA
 export const createSale = (saleData) => {
   return async (dispatch, getState) => {
     try {
@@ -128,7 +129,7 @@ export const createSale = (saleData) => {
         online: navigator.onLine,
       });
 
-      // ✅ VALIDAR STOCK ANTES DE PROCESAR
+      // ✅ VALIDAR STOCK ANTES DE PROCESAR - USANDO MÉTODO CORRECTO
       const validacionStock =
         await ProductsOfflineController.validateStockForSaleSimple(
           saleData.productos

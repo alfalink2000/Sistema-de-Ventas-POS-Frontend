@@ -1,15 +1,15 @@
-/* components/layout/Header/Header.module.css - VERSIÓN CON COLORES ORIGINALES */
+/* components/layout/Header/Header.module.css - VERSIÓN MEJORADA */
 
-/* ESTILOS BASE DEL HEADER - COLORES ORIGINALES */
+/* ESTILOS BASE DEL HEADER - COMPACTO */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
   background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
   border-bottom: 1px solid #3b82f6;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  min-height: 70px;
+  min-height: 83px;
   position: relative;
   z-index: 1000;
 }
@@ -17,17 +17,17 @@
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   flex: 1;
 }
 
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
-/* BOTÓN DE MENÚ */
+/* BOTÓN DE MENÚ SIEMPRE VISIBLE */
 .menuButtonContainer {
   display: flex;
   align-items: center;
@@ -37,13 +37,15 @@
   background: none;
   border: none;
   color: #dbeafe;
-  padding: 0.5rem;
-  border-radius: 8px;
+  padding: 0.4rem;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
 }
 
 .menuButton:hover {
@@ -52,31 +54,26 @@
 }
 
 .menuIcon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
-.menuButtonPlaceholder {
-  width: 40px;
-  height: 40px;
-}
-
-/* BREADCRUMB Y NOMBRE DE LA APP */
+/* BREADCRUMB COMPACTO */
 .breadcrumb {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.1rem;
 }
 
 .appName {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.025em;
 }
 
 .welcomeText {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: #dbeafe;
   display: flex;
   align-items: center;
@@ -86,33 +83,37 @@
 .offlineHeaderBadge {
   background: #dc2626;
   color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
   font-weight: 500;
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
-/* INDICADOR DE SINCRONIZACIÓN MEJORADO - COLORES AZULES */
+/* ✅ INDICADOR DE SINCRONIZACIÓN MEJORADO */
 .syncIndicator {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  height: 44px;
+  min-width: auto;
   position: relative;
-  min-width: 180px;
+  backdrop-filter: blur(10px);
 }
 
 .syncIndicator:hover {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .syncIconContainer {
@@ -122,32 +123,34 @@
 }
 
 .syncIcon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   transition: all 0.3s ease;
+  font-size: 0.875rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .syncIcon.online {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
-  border: 2px solid rgba(34, 197, 94, 0.4);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  border: 2px solid rgba(34, 197, 94, 0.6);
 }
 
 .syncIcon.offline {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border: 2px solid rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border: 2px solid rgba(239, 68, 68, 0.6);
 }
 
 .syncIcon.syncing {
-  background: rgba(59, 130, 246, 0.3);
-  color: #3b82f6;
-  border: 2px solid rgba(59, 130, 246, 0.6);
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: 2px solid rgba(59, 130, 246, 0.8);
   animation: pulse 1.5s infinite;
 }
 
@@ -161,84 +164,71 @@
 
 .wifiIcon,
 .wifiOffIcon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 .pendingBadge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  background: #ef4444;
+  top: -6px;
+  right: -6px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
   border-radius: 50%;
   width: 18px;
   height: 18px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid #1e40af;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: bounce 2s infinite;
 }
 
+/* ✅ INFO DE SINCRONIZACIÓN MEJORADA */
 .syncInfo {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-  flex: 1;
+  min-width: 80px;
 }
 
 .syncStatus {
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: #ffffff;
+  white-space: nowrap;
 }
 
 .pendingCount {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #fef3c7;
   font-weight: 500;
+  background: rgba(245, 158, 11, 0.2);
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  text-align: center;
 }
 
-.syncButton {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  padding: 0.4rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.syncButton:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.syncButtonIcon {
-  width: 16px;
-  height: 16px;
-}
-
-/* INDICADOR DE GANANCIAS - COLORES COMBINABLES CON AZUL */
+/* INDICADOR DE GANANCIAS COMPACTO */
 .earningsIndicator {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: 0.5rem;
+  padding: 0.5rem;
   background: rgba(34, 197, 94, 0.15);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 10px;
-  min-width: 200px;
+  border-radius: 8px;
+  height: 40px;
+  min-width: 120px;
+  backdrop-filter: blur(10px);
 }
 
 .earningsIcon {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   background: rgba(34, 197, 94, 0.2);
   border-radius: 50%;
   display: flex;
@@ -248,64 +238,47 @@
 }
 
 .trendingIcon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 .earningsInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.1rem;
   flex: 1;
 }
 
-.earningsLabel {
-  font-size: 0.75rem;
-  color: #dbeafe;
-  font-weight: 500;
-}
-
 .earningsAmount {
-  font-size: 1.1rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: #22c55e;
-}
-
-.earningsDetails {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
+  line-height: 1;
 }
 
 .salesCount {
-  color: #bfdbfe;
-}
-
-.offlineEarningBadge {
-  background: #f59e0b;
-  color: white;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
   font-size: 0.65rem;
-  font-weight: 500;
+  color: #bbf7d0;
+  line-height: 1;
 }
 
-/* INDICADOR SIN SESIÓN */
+/* INDICADOR SIN SESIÓN COMPACTO */
 .noSessionIndicator {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: 0.5rem;
+  padding: 0.5rem;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  min-width: 200px;
+  border-radius: 8px;
+  height: 40px;
+  min-width: 100px;
+  backdrop-filter: blur(10px);
 }
 
 .noSessionIcon {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   display: flex;
@@ -315,260 +288,278 @@
 }
 
 .dollarIcon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 .noSessionInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.1rem;
   flex: 1;
 }
 
-.noSessionLabel {
-  font-size: 0.75rem;
-  color: #dbeafe;
-  font-weight: 500;
-}
-
 .noSessionText {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: #bfdbfe;
+  line-height: 1;
 }
 
-/* INFORMACIÓN DEL USUARIO */
+/* INFORMACIÓN DEL USUARIO COMPACTA */
 .userInfo {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  height: 40px;
+  min-width: 120px;
+  backdrop-filter: blur(10px);
 }
 
 .userAvatar {
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.2);
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
+  font-weight: 600;
+  font-size: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.userIcon {
-  width: 18px;
-  height: 18px;
+.userInitial {
+  line-height: 1;
 }
 
 .userDetails {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  flex: 1;
 }
 
 .userName {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: #ffffff;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
 }
 
-.userRole {
-  font-size: 0.75rem;
-  color: #dbeafe;
-  text-transform: capitalize;
-}
-
-/* BOTÓN DE SALIR */
-.logoutButton {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #fecaca;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-weight: 500;
-}
-
-.logoutButton:hover {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.6);
-  color: #ffffff;
-}
-
-.logoutIcon {
-  width: 16px;
-  height: 16px;
-}
-
-/* MODAL DE SINCRONIZACIÓN - FONDO AZUL COHERENTE */
+/* ✅ MODAL DE SINCRONIZACIÓN MEJORADO */
 .modalOverlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(30, 64, 175, 0.8);
+  background: rgba(30, 64, 175, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  padding: 1rem;
 }
 
 .modalContent {
   background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
-  border-radius: 16px;
+  border-radius: 20px;
   border: 1px solid #3b82f6;
-  width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
+  width: 95%;
+  max-width: 700px;
+  max-height: 85vh;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
   animation: modalSlideIn 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 .modalHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
   border-bottom: 1px solid #3b82f6;
-  background: rgba(30, 64, 175, 0.9);
+  background: rgba(30, 64, 175, 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .modalHeader h3 {
   margin: 0;
   color: #ffffff;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 .closeButton {
-  background: none;
-  border: none;
-  color: #bfdbfe;
-  padding: 0.5rem;
-  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fecaca;
+  padding: 0.75rem;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
 }
 
 .closeButton:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fecaca;
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+  transform: scale(1.05);
 }
 
 .modalBody {
-  padding: 1.5rem;
+  padding: 2rem;
   overflow-y: auto;
-  max-height: 60vh;
+  max-height: calc(85vh - 140px);
   background: rgba(30, 64, 175, 0.1);
+  flex: 1;
 }
 
-/* SECCIÓN DE ESTADO DE SINCRONIZACIÓN */
+/* ✅ SECCIÓN DE ESTADO DE SINCRONIZACIÓN MEJORADA */
 .syncStatusSection {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .statusIndicator {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border-radius: 10px;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .statusIndicator.online {
-  border-left: 4px solid #22c55e;
+  border-left: 6px solid #22c55e;
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.1) 0%,
+    rgba(30, 64, 175, 0.1) 100%
+  );
 }
 
 .statusIndicator.offline {
-  border-left: 4px solid #ef4444;
+  border-left: 6px solid #ef4444;
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.1) 0%,
+    rgba(30, 64, 175, 0.1) 100%
+  );
 }
 
 .statusIcon {
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
+  flex-shrink: 0;
 }
 
 .statusIndicator.online .statusIcon {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
 }
 
 .statusIndicator.offline .statusIcon {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
 
 .statusText {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
   flex: 1;
 }
 
 .statusTitle {
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
-  font-size: 1rem;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
 }
 
 .statusSubtitle {
   color: #bfdbfe;
-  font-size: 0.875rem;
+  font-size: 1rem;
+  line-height: 1.4;
 }
 
-/* CONTADORES PENDIENTES */
+/* ✅ CONTADORES PENDIENTES MEJORADOS */
 .pendingCounters {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
-.counterItem,
+.counterItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.counterItem:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .counterTotal {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1rem;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.counterTotal {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
+  padding: 1.25rem 0.75rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .counterNumber {
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #ffffff;
+  margin-bottom: 0.25rem;
 }
 
 .counterTotal .counterNumber {
-  color: #fecaca;
+  color: #ffffff;
+  font-size: 1.75rem;
 }
 
 .counterLabel,
@@ -576,54 +567,70 @@
   font-size: 0.75rem;
   color: #bfdbfe;
   text-align: center;
-}
-
-.totalLabel {
-  color: #fecaca;
   font-weight: 500;
 }
 
-/* DETALLES PENDIENTES */
-.pendingDetails {
-  margin-bottom: 1.5rem;
-}
-
-.pendingDetails h4 {
-  margin: 0 0 1rem 0;
+.totalLabel {
   color: #ffffff;
-  font-size: 1.1rem;
   font-weight: 600;
 }
 
+/* ✅ DETALLES PENDIENTES MEJORADOS */
+.pendingDetails {
+  margin-bottom: 2rem;
+}
+
+.pendingDetails h4 {
+  margin: 0 0 1.5rem 0;
+  color: #ffffff;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+}
+
 .detailSection {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .detailSection h5 {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0 0 0.75rem 0;
+  gap: 0.75rem;
+  margin: 0 0 1rem 0;
   color: #dbeafe;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sectionIcon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: #93c5fd;
 }
 
 .detailItem {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  margin-bottom: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+.detailItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(5px);
 }
 
 .detailItem:last-child {
@@ -631,28 +638,29 @@
 }
 
 .itemIcon {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #93c5fd;
-  font-size: 0.875rem;
+  font-size: 1rem;
+  flex-shrink: 0;
 }
 
 .itemContent {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.3rem;
   flex: 1;
 }
 
 .itemTitle {
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   color: #ffffff;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .itemDate {
@@ -660,13 +668,20 @@
   color: #bfdbfe;
 }
 
+.itemSubtitle {
+  font-size: 0.8rem;
+  color: #93c5fd;
+  font-style: italic;
+}
+
 .itemStatus {
   font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.25rem 0.5rem;
-  border-radius: 12px;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .itemStatus.pending {
@@ -679,20 +694,21 @@
 .noPendingData {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   padding: 2rem;
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 10px;
+  border-radius: 16px;
   text-align: center;
   justify-content: center;
   color: #bbf7d0;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 1rem;
 }
 
 .successIcon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   color: #22c55e;
 }
 
@@ -700,55 +716,64 @@
 .errorSection {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 1rem;
+  padding: 1.5rem;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 10px;
+  border-radius: 16px;
   color: #fecaca;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .errorIcon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   color: #ef4444;
 }
 
-/* PIE DEL MODAL */
+/* ✅ PIE DEL MODAL MEJORADO */
 .modalFooter {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
   border-top: 1px solid #3b82f6;
-  background: rgba(30, 64, 175, 0.9);
+  background: rgba(30, 64, 175, 0.95);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 .primaryButton,
 .secondaryButton {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 500;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   border: none;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
+  min-width: 160px;
+  justify-content: center;
 }
 
 .primaryButton {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
   border: 1px solid #60a5fa;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
 }
 
 .primaryButton:disabled {
@@ -756,25 +781,29 @@
   border-color: #94a3b8;
   cursor: not-allowed;
   opacity: 0.7;
+  transform: none;
+  box-shadow: none;
 }
 
 .secondaryButton {
   background: rgba(255, 255, 255, 0.1);
   color: #dbeafe;
   border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
 }
 
 .secondaryButton:hover {
   background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
 }
 
 .spinner {
   animation: spin 1s linear infinite;
 }
 
-/* ANIMACIONES */
+/* ✅ NUEVAS ANIMACIONES MEJORADAS */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -787,27 +816,45 @@
 @keyframes pulse {
   0%,
   100% {
+    transform: scale(1);
     opacity: 1;
   }
   50% {
-    opacity: 0.7;
+    transform: scale(1.05);
+    opacity: 0.8;
   }
 }
 
 @keyframes glow {
   0%,
   100% {
-    box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
   }
   50% {
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.8);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.9);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(-2px);
   }
 }
 
 @keyframes modalSlideIn {
   from {
     opacity: 0;
-    transform: translateY(-20px) scale(0.95);
+    transform: translateY(-30px) scale(0.95);
   }
   to {
     opacity: 1;
@@ -815,56 +862,108 @@
   }
 }
 
-/* RESPONSIVE */
+/* ✅ RESPONSIVE MEJORADO */
 @media (max-width: 768px) {
   .header {
-    padding: 0.5rem 1rem;
-    flex-wrap: wrap;
-    gap: 1rem;
+    padding: 0.4rem 0.75rem;
+    gap: 0.5rem;
   }
 
   .headerRight {
-    gap: 1rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    gap: 0.5rem;
   }
 
   .syncIndicator {
-    min-width: auto;
+    padding: 0.4rem 0.6rem;
+    gap: 0.4rem;
+  }
+
+  .syncInfo {
+    min-width: 60px;
+  }
+
+  .syncStatus {
+    font-size: 0.7rem;
+  }
+
+  .pendingCount {
+    font-size: 0.65rem;
   }
 
   .earningsIndicator,
   .noSessionIndicator {
     min-width: auto;
-    flex: 1;
   }
 
-  .pendingCounters {
-    grid-template-columns: repeat(2, 1fr);
+  .userName {
+    display: none;
+  }
+
+  .userInfo {
+    min-width: auto;
+    padding: 0.4rem;
+  }
+
+  .modalOverlay {
+    padding: 0.5rem;
   }
 
   .modalContent {
-    width: 95%;
-    margin: 1rem;
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 16px;
+  }
+
+  .modalHeader {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .modalHeader h3 {
+    font-size: 1.25rem;
+  }
+
+  .modalBody {
+    padding: 1.5rem;
+    max-height: calc(90vh - 120px);
+  }
+
+  .pendingCounters {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .counterItem,
+  .counterTotal {
+    padding: 1rem 0.5rem;
+  }
+
+  .counterNumber {
+    font-size: 1.25rem;
+  }
+
+  .counterTotal .counterNumber {
+    font-size: 1.5rem;
   }
 
   .modalFooter {
+    padding: 1.25rem 1.5rem;
     flex-direction: column;
   }
 
   .primaryButton,
   .secondaryButton {
     width: 100%;
-    justify-content: center;
+    min-width: auto;
+    padding: 0.875rem 1.5rem;
   }
 }
 
 @media (max-width: 480px) {
   .appName {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
   }
 
-  .userInfo .userDetails {
+  .welcomeText {
     display: none;
   }
 
@@ -872,89 +971,30 @@
     display: none;
   }
 
-  .pendingCounters {
-    grid-template-columns: 1fr;
+  .syncIndicator {
+    padding: 0.4rem;
   }
-}
-/* En Header.module.css - agregar estos estilos */
-.pendingCounters {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr) 2fr;
-  gap: 10px;
-  margin: 15px 0;
-}
 
-.counterItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-}
+  .earningsInfo .salesCount {
+    display: none;
+  }
 
-.counterNumber {
-  font-size: 18px;
-  font-weight: bold;
-  color: #495057;
-}
+  .pendingCounters {
+    grid-template-columns: repeat(2, 1fr);
+  }
 
-.counterLabel {
-  font-size: 12px;
-  color: #6c757d;
-  margin-top: 4px;
-}
+  .detailSection {
+    padding: 1rem;
+  }
 
-.counterTotal {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px;
-  background: #007bff;
-  color: white;
-  border-radius: 8px;
-}
+  .detailItem {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
 
-.totalNumber {
-  font-size: 20px;
-  font-weight: bold;
-}
-
-.totalLabel {
-  font-size: 12px;
-  margin-top: 4px;
-  opacity: 0.9;
-}
-
-/* Estilos para la sección de stock en el modal */
-.detailSection h5 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 15px 0 10px 0;
-  color: #495057;
-  font-size: 14px;
-}
-
-.sectionIcon {
-  color: #6c757d;
-}
-/* Agregar estos estilos si no existen */
-.sectionIcon {
-  margin-right: 8px;
-}
-
-.detailSection {
-  margin-bottom: 16px;
-  padding: 12px;
-  border: 1px solid #e1e5e9;
-  border-radius: 8px;
-}
-
-.detailSection h5 {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-  color: #374151;
+  .itemIcon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.875rem;
+  }
 }

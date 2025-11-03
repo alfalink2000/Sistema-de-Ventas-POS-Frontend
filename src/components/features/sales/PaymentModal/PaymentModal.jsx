@@ -99,6 +99,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
     }
   };
 
+  // ✅ FUNCIÓN PRINCIPAL CORREGIDA - PROCESAR VENTA
   const handleProcessSale = async () => {
     console.log("🔍 [PAYMENT] Iniciando proceso de venta...");
 
@@ -201,7 +202,53 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
 
       setStockUpdateStatus({ updating: true, message: "Creando venta..." });
 
-      // 4. CREAR LA VENTA CON PRODUCTOS INCLUIDOS
+      // 4. ✅ CORREGIDO: PREPARAR DATOS DE PRODUCTOS CON PRECIO_COMPRA
+      const productosConCosto = items.map((item) => {
+        // ✅ BUSCAR PRODUCTO COMPLETO EN EL ESTADO
+        const productoCompleto = products.find((p) => p.id === item.id);
+
+        // ✅ CALCULAR PRECIO_COMPRA (usar el del producto o un valor por defecto)
+        const precioCompra =
+          productoCompleto?.precio_compra ||
+          item.precio_compra ||
+          item.precio * 0.8; // Fallback al 80% del precio
+
+        console.log(`📊 Producto ${item.nombre}:`, {
+          precio_venta: item.precio,
+          precio_compra: precioCompra,
+          ganancia: (item.precio - precioCompra) * item.quantity,
+        });
+
+        return {
+          producto_id: item.id.toString(),
+          cantidad: parseInt(item.quantity),
+          precio_unitario: parseFloat(item.precio),
+          precio_compra: parseFloat(precioCompra), // ✅ INCLUIR PRECIO COMPRA
+          subtotal: parseFloat(item.precio * item.quantity),
+          nombre: item.nombre,
+        };
+      });
+
+      // ✅ CALCULAR GANANCIA TOTAL PARA VERIFICACIÓN
+      const gananciaTotal = productosConCosto.reduce((total, producto) => {
+        return (
+          total +
+          (producto.precio_unitario - producto.precio_compra) *
+            producto.cantidad
+        );
+      }, 0);
+
+      console.log("💰 Resumen de ganancias:", {
+        total_venta: total,
+        costo_total: productosConCosto.reduce(
+          (sum, p) => sum + p.precio_compra * p.cantidad,
+          0
+        ),
+        ganancia_total: gananciaTotal,
+        productos: productosConCosto,
+      });
+
+      // 5. CREAR LA VENTA CON PRODUCTOS INCLUIDOS
       const saleData = {
         sesion_caja_id: sesionAbierta.id || sesionAbierta.id_local,
         vendedor_id: user.id,
@@ -212,25 +259,22 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
           efectivo_recibido: parseFloat(cashAmount),
           cambio: parseFloat(change),
         }),
-        productos: items.map((item) => ({
-          producto_id: item.id.toString(), // ✅ ASEGURAR QUE SEA STRING
-          cantidad: parseInt(item.quantity),
-          precio_unitario: parseFloat(item.precio),
-          subtotal: parseFloat(item.precio * item.quantity),
-        })),
+        productos: productosConCosto, // ✅ USAR PRODUCTOS CON COSTO
       };
 
       console.log("🔄 [PAYMENT] Enviando datos de venta:", saleData);
-      const ventaCreada = await dispatch(createSale(saleData));
+      const resultadoVenta = await dispatch(createSale(saleData));
 
-      if (!ventaCreada) {
-        throw new Error("Error al crear la venta en la base de datos");
+      if (!resultadoVenta || !resultadoVenta.success) {
+        throw new Error(
+          resultadoVenta?.error || "Error al crear la venta en la base de datos"
+        );
       }
 
-      // 5. Limpiar carrito y notificar éxito
+      // 6. Limpiar carrito y notificar éxito
       dispatch(clearCart());
 
-      // 6. Recargar sesión de caja para actualizar totales
+      // 7. Recargar sesión de caja para actualizar totales
       await dispatch(loadOpenSesion(user.id));
 
       setStockUpdateStatus({
@@ -240,18 +284,50 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
       });
 
       console.log("💰 Venta procesada exitosamente:", {
-        venta: ventaCreada,
-        productos: saleData.productos,
-        stockUpdates: stockUpdates,
+        venta: resultadoVenta.venta,
+        ganancia_calculada: gananciaTotal,
+        productos: productosConCosto.length,
       });
 
       // Pequeño delay para mostrar el estado de éxito
       await new Promise((resolve) => setTimeout(resolve, 500));
 
+      // ✅ MOSTRAR RESUMEN DETALLADO AL USUARIO
+      await Swal.fire({
+        icon: "success",
+        title: "¡Venta Exitosa!",
+        html: `
+          <div style="text-align: left;">
+            <p><strong>Resumen de la venta:</strong></p>
+            <p>📦 Productos: ${productosConCosto.length}</p>
+            <p>💰 Total Venta: $${total.toFixed(2)}</p>
+            <p>📊 Ganancia: $${gananciaTotal.toFixed(2)}</p>
+            <p>💵 Método: ${
+              paymentMethod === "efectivo" ? "Efectivo" : "Tarjeta"
+            }</p>
+            ${
+              paymentMethod === "efectivo"
+                ? `
+              <p>🎫 Recibido: $${parseFloat(cashAmount).toFixed(2)}</p>
+              <p>🔄 Cambio: $${Math.abs(change).toFixed(2)}</p>
+            `
+                : ""
+            }
+            ${
+              !navigator.onLine
+                ? "<p>📱 <em>Venta guardada localmente - Se sincronizará automáticamente</em></p>"
+                : ""
+            }
+          </div>
+        `,
+        confirmButtonText: "Aceptar",
+      });
+
       if (onSuccess) {
         onSuccess({
-          venta: ventaCreada,
-          productos: saleData.productos,
+          venta: resultadoVenta.venta,
+          productos: productosConCosto,
+          ganancia: gananciaTotal,
           stockUpdates: stockUpdates,
         });
       }
@@ -263,6 +339,13 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         updating: false,
         success: false,
         message: error.message,
+      });
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error en Venta",
+        text: error.message || "Error al procesar la venta",
+        confirmButtonText: "Entendido",
       });
 
       if (onError) {
@@ -286,6 +369,22 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
     };
   };
 
+  // ✅ DEBUG: Mostrar información de productos
+  useEffect(() => {
+    if (isOpen && products.length > 0) {
+      console.log(
+        "📦 Productos disponibles (primeros 3):",
+        products.slice(0, 3).map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          precio: p.precio,
+          precio_compra: p.precio_compra,
+          tiene_precio_compra: !!p.precio_compra,
+        }))
+      );
+    }
+  }, [isOpen, products]);
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Procesar Pago" size="large">
       <div className={styles.paymentModal}>
@@ -302,7 +401,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         {/* Alerta de sesión de caja */}
         {!sesionAbierta && (
           <div className={styles.alertWarning}>
-            ⚠️ No hay sesión de caja abierta. Abre una sesión primero en la
+            ⚠️ No hay sesión de caja activa. Abre una sesión primero en la
             sección de Caja.
           </div>
         )}
@@ -312,6 +411,13 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
           <div className={styles.orderItems}>
             {items.map((item) => {
               const stockInfo = getProductStockInfo(item.id);
+              const productoCompleto = products.find((p) => p.id === item.id);
+              const precioCompra =
+                productoCompleto?.precio_compra ||
+                item.precio_compra ||
+                item.precio * 0.8;
+              const gananciaItem = (item.precio - precioCompra) * item.quantity;
+
               return (
                 <div key={item.id} className={styles.orderItem}>
                   <div className={styles.itemMain}>
@@ -323,6 +429,9 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
                   <div className={styles.itemDetails}>
                     <span className={styles.itemPrice}>
                       ${(item.precio * item.quantity).toFixed(2)}
+                    </span>
+                    <span className={styles.itemGanancia}>
+                      💰 +${gananciaItem.toFixed(2)}
                     </span>
                     {stockInfo && (
                       <span
@@ -427,6 +536,26 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
             {processing ? "Procesando..." : "Confirmar Venta"}
           </Button>
         </div>
+
+        {/* ✅ DEBUG INFO (solo en desarrollo) */}
+        {process.env.NODE_ENV === "development" && (
+          <div className={styles.debugInfo}>
+            <details>
+              <summary>🔍 Info Debug (Productos en carrito)</summary>
+              <div style={{ fontSize: "12px", textAlign: "left" }}>
+                {items.map((item) => {
+                  const product = products.find((p) => p.id === item.id);
+                  return (
+                    <div key={item.id}>
+                      {item.nombre}: PV ${item.precio} | PC $
+                      {product?.precio_compra || "N/A"} | Cant: {item.quantity}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          </div>
+        )}
       </div>
     </Modal>
   );

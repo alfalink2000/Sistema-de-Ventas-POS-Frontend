@@ -21,6 +21,7 @@ class SyncController extends BaseOfflineController {
     if (!this.isOnline) {
       return { success: false, error: "Sin conexión a internet" };
     }
+
     // ✅ LIMPIAR DUPLICADOS ANTES DE SINCRONIZAR
     await this.cleanupDuplicatePendingData();
 
@@ -37,23 +38,31 @@ class SyncController extends BaseOfflineController {
       sessions: null,
       closures: null,
       masterData: null,
+      products: null, // ✅ AGREGAR PRODUCTOS AL RESULTADO
       errors: [],
     };
 
     try {
-      console.log("🔄 INICIANDO SINCRONIZACIÓN CON ORDEN CORRECTO...");
+      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA CON PRODUCTOS...");
 
-      // ✅ ORDEN CRÍTICO:
-      // 1. Datos maestros
+      // ✅ ORDEN CRÍTICO CORREGIDO:
+      // 1. Datos maestros PRIMERO
       syncResults.masterData = await this.syncMasterData();
 
-      // 2. Sesiones PRIMERO (los cierres dependen de ellas)
+      // 2. PRODUCTOS SEGUNDO (antes de sesiones y ventas)
+      console.log("🔄 Sincronizando productos pendientes...");
+      syncResults.products = await this.syncPendingProductsDetailed();
+
+      // 3. Sesiones (los cierres dependen de ellas)
       syncResults.sessions = await this.syncPendingSessionsDetailed();
 
-      // 3. Ventas (dependen de sesiones)
+      // 4. Ventas (dependen de sesiones)
       syncResults.sales = await this.syncPendingSalesDetailed();
 
-      // 4. Cierres ÚLTIMO (dependen de sesiones existentes)
+      // 5. Stock updates
+      syncResults.stock = await this.syncPendingStockUpdates();
+
+      // 6. Cierres ÚLTIMO (dependen de sesiones existentes)
       syncResults.closures = await this.syncPendingClosuresDetailed();
 
       syncResults.duration = Date.now() - syncResults.startTime;
@@ -61,11 +70,12 @@ class SyncController extends BaseOfflineController {
 
       if (syncResults.success) {
         localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
+        console.log("🎉 SINCRONIZACIÓN COMPLETA EXITOSA");
+      } else {
+        console.warn("⚠️ SINCRONIZACIÓN COMPLETA CON ERRORES");
       }
 
-      console.log("✅ SINCRONIZACIÓN COMPLETADA", syncResults);
       this.notifyListeners("sync_complete", syncResults);
-
       return syncResults;
     } catch (error) {
       syncResults.duration = Date.now() - syncResults.startTime;
@@ -73,7 +83,7 @@ class SyncController extends BaseOfflineController {
       syncResults.error = error.message;
       syncResults.errors.push(error.message);
 
-      console.error("❌ ERROR EN SINCRONIZACIÓN:", error);
+      console.error("❌ ERROR EN SINCRONIZACIÓN COMPLETA:", error);
       this.notifyListeners("sync_error", syncResults);
 
       return syncResults;
@@ -1138,9 +1148,9 @@ class SyncController extends BaseOfflineController {
         }),
       ]);
 
-      console.log(`📊 Detalles obtenidos CORREGIDOS: 
+      console.log(`📊 Detalles obtenidos CORREGIDOS:
     Sesiones: ${pendingSessions.length}
-    Ventas: ${pendingSales.length} 
+    Ventas: ${pendingSales.length}
     Cierres: ${pendingClosures.length}
     Stock: ${pendingStock.length}
     Productos: ${pendingProducts.length}`);
@@ -1271,6 +1281,70 @@ class SyncController extends BaseOfflineController {
       };
     } catch (error) {
       console.error("❌ Error en diagnóstico de stock:", error);
+      return { error: error.message };
+    }
+  }
+
+  // ✅ AGREGAR MÉTODO PARA DESCRIPCIÓN DE OPERACIONES DE PRODUCTOS
+  getProductOperationDescription(product) {
+    const base = `Producto: ${
+      product.datos?.nombre || product.producto_id || "N/A"
+    }`;
+
+    switch (product.operacion) {
+      case "crear":
+        return `${base} - CREAR`;
+      case "actualizar":
+        return `${base} - ACTUALIZAR`;
+      case "eliminar":
+        return `${base} - ELIMINAR`;
+      default:
+        return `${base} - ${product.operacion?.toUpperCase()}`;
+    }
+  }
+  // Agregar al SyncController.js
+  async debugProductsDeleteIssue() {
+    try {
+      console.log("🔍 DIAGNÓSTICO GLOBAL DE ELIMINACIÓN DE PRODUCTOS");
+
+      // 1. Obtener todas las operaciones pendientes
+      const pendingProducts =
+        await ProductsOfflineController.getPendingProducts();
+      const deleteOps = pendingProducts.filter(
+        (op) => op.operacion === "eliminar"
+      );
+
+      console.log(
+        "📦 Operaciones de eliminación pendientes:",
+        deleteOps.length
+      );
+
+      // 2. Diagnóstico detallado para cada eliminación pendiente
+      const diagnostics = [];
+      for (const op of deleteOps) {
+        console.log(`🔍 Diagnóstico para: ${op.producto_id}`);
+        const diagnosis = await ProductsOfflineController.debugDeleteIssue(
+          op.producto_id
+        );
+        diagnostics.push(diagnosis);
+      }
+
+      // 3. Verificar sincronización
+      console.log("🔄 Intentando sincronizar productos...");
+      const syncResult = await this.syncPendingProductsDetailed();
+
+      return {
+        totalDeleteOps: deleteOps.length,
+        diagnostics,
+        syncResult,
+        summary: {
+          conProblemas: diagnostics.filter((d) => !d.hasPendingDeletes).length,
+          pendientes: diagnostics.filter((d) => d.hasPendingDeletes).length,
+          online: navigator.onLine,
+        },
+      };
+    } catch (error) {
+      console.error("❌ Error en diagnóstico global:", error);
       return { error: error.message };
     }
   }
@@ -1454,6 +1528,51 @@ class SyncController extends BaseOfflineController {
     });
   }
 
+  // ✅ AGREGAR MÉTODO PARA OBTENER ESTADO DE PRODUCTOS
+  async getProductsSyncStatus() {
+    try {
+      const pendingProducts =
+        await ProductsOfflineController.getPendingProducts();
+      const productsStats = await ProductsOfflineController.getPendingStats();
+
+      return {
+        pendingProducts: pendingProducts.length,
+        pendingCreate: productsStats.crear,
+        pendingUpdate: productsStats.actualizar,
+        pendingDelete: productsStats.eliminar,
+        totalPending: pendingProducts.length,
+      };
+    } catch (error) {
+      console.error("❌ Error obteniendo estado de productos:", error);
+      return {
+        pendingProducts: 0,
+        pendingCreate: 0,
+        pendingUpdate: 0,
+        pendingDelete: 0,
+        totalPending: 0,
+      };
+    }
+  }
+  // ✅ AGREGAR MÉTODO PARA OBTENER DETALLES DE PRODUCTOS
+  async getProductsPendingDetails() {
+    try {
+      const pendingProducts =
+        await ProductsOfflineController.getPendingProducts();
+
+      return pendingProducts.map((product) => ({
+        id: product.id_local,
+        tipo: "producto",
+        operacion: product.operacion,
+        descripcion: this.getProductOperationDescription(product),
+        fecha: product.timestamp,
+        datos: product.datos,
+        producto_id: product.producto_id,
+      }));
+    } catch (error) {
+      console.error("❌ Error obteniendo detalles de productos:", error);
+      return [];
+    }
+  }
   // ✅ ACTUALIZAR getSyncStatus para incluir productos
   async getSyncStatus() {
     try {
@@ -1517,28 +1636,90 @@ class SyncController extends BaseOfflineController {
   startAutoSyncListener() {
     const handleOnline = async () => {
       console.log(
-        "🌐 Conexión detectada - Iniciando auto-sync en 5 segundos..."
+        "🌐 Conexión detectada - Iniciando auto-sync en 3 segundos..."
       );
 
-      // Esperar 5 segundos para que la conexión sea estable
+      // Esperar 3 segundos para que la conexión sea estable
       setTimeout(async () => {
         try {
           const status = await this.getSyncStatus();
+          console.log("📊 Estado para auto-sync:", status);
+
+          // ✅ VERIFICAR ESPECÍFICAMENTE PRODUCTOS PENDIENTES
+          if (status.pendingProducts > 0) {
+            console.log(
+              `🔄 Auto-sync iniciado con ${status.pendingProducts} productos pendientes`
+            );
+            await this.syncPendingProductsDetailed();
+          }
+
+          // ✅ LUEGO VERIFICAR EL RESTO Y HACER SYNC COMPLETO
           if (status.totalPending > 0) {
             console.log(
-              `🔄 Auto-sync iniciado con ${status.totalPending} pendientes`
+              `🔄 Auto-sync completo con ${status.totalPending} pendientes totales`
             );
             await this.fullSync();
+          } else {
+            console.log("✅ No hay datos pendientes para sincronizar");
           }
         } catch (error) {
           console.error("❌ Error en auto-sync:", error);
         }
-      }, 5000);
+      }, 3000);
     };
 
     window.addEventListener("online", handleOnline);
   }
+  // ✅ DIAGNÓSTICO COMPLETO DEL PRODUCTO
+  async debugProductMapping(localProductId) {
+    try {
+      console.log("🔍 DIAGNÓSTICO COMPLETO DE MAPEO:", localProductId);
 
+      // 1. Buscar en TODOS los productos del cache
+      const allProducts = await IndexedDBService.getAll(this.cacheStore);
+      console.log("📦 Total productos en cache:", allProducts.length);
+
+      const productInCache = allProducts.find(
+        (p) => p.id === localProductId || p.id_local === localProductId
+      );
+      console.log("💾 Producto en cache:", productInCache);
+
+      // 2. Buscar en TODAS las operaciones pendientes
+      const allPendingOps = await IndexedDBService.getAll(this.storeName);
+      console.log("📋 Total operaciones pendientes:", allPendingOps.length);
+
+      const opsForThisProduct = allPendingOps.filter(
+        (op) =>
+          op.producto_id === localProductId ||
+          op.datos?.id_local === localProductId
+      );
+      console.log("🔄 Operaciones para este producto:", opsForThisProduct);
+
+      // 3. Buscar operaciones de CREACIÓN sincronizadas
+      const syncedCreations = allPendingOps.filter(
+        (op) => op.operacion === "crear" && op.sincronizado === true
+      );
+      console.log("✅ Creaciones sincronizadas:", syncedCreations);
+
+      // 4. Buscar cualquier operación que tenga este ID local
+      const anyOpWithThisId = allPendingOps.find(
+        (op) =>
+          op.datos?.id_local === localProductId ||
+          (op.operacion === "crear" && op.datos?.id === localProductId)
+      );
+      console.log("🎯 Cualquier operación con este ID:", anyOpWithThisId);
+
+      return {
+        productInCache,
+        opsForThisProduct,
+        syncedCreations: syncedCreations.length,
+        anyOpWithThisId,
+      };
+    } catch (error) {
+      console.error("❌ Error en diagnóstico:", error);
+      return { error: error.message };
+    }
+  }
   /// ✅ AGREGAR ESTE MÉTODO AL SyncController
   async syncPendingStockUpdates() {
     try {
@@ -1685,6 +1866,7 @@ class SyncController extends BaseOfflineController {
       return { success: false, error: "Sin conexión a internet" };
     }
 
+    // ✅ LIMPIAR DUPLICADOS ANTES DE SINCRONIZAR
     await this.cleanupDuplicatePendingData();
 
     if (this.isSyncing) {
@@ -1696,34 +1878,31 @@ class SyncController extends BaseOfflineController {
 
     const syncResults = {
       startTime: Date.now(),
-      masterData: null,
-      sessions: null,
       sales: null,
+      sessions: null,
       closures: null,
-      stock: null, // ✅ NUEVO
-      products: null,
+      masterData: null,
+      products: null, // ✅ AGREGAR PRODUCTOS AL RESULTADO
       errors: [],
     };
 
     try {
-      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA...");
+      console.log("🔄 INICIANDO SINCRONIZACIÓN CON ORDEN CORRECTO...");
 
-      // ✅ ORDEN CORREGIDO:
+      // ✅ ORDEN CRÍTICO CORREGIDO:
       // 1. Datos maestros
       syncResults.masterData = await this.syncMasterData();
 
+      // 2. PRODUCTOS PRIMERO (antes de sesiones y ventas)
       syncResults.products = await this.syncPendingProductsDetailed();
 
-      // 2. Sesiones PRIMERO
+      // 3. Sesiones (los cierres dependen de ellas)
       syncResults.sessions = await this.syncPendingSessionsDetailed();
 
-      // 3. Stock (antes de ventas)
-      syncResults.stock = await this.syncPendingStockUpdates(); // ✅ AGREGADO
-
-      // 4. Ventas
+      // 4. Ventas (dependen de sesiones)
       syncResults.sales = await this.syncPendingSalesDetailed();
 
-      // 5. Cierres ÚLTIMO
+      // 5. Cierres ÚLTIMO (dependen de sesiones existentes)
       syncResults.closures = await this.syncPendingClosuresDetailed();
 
       syncResults.duration = Date.now() - syncResults.startTime;
@@ -1751,17 +1930,78 @@ class SyncController extends BaseOfflineController {
       this.isSyncing = false;
     }
   }
+  // En SyncController.js - AGREGAR MÉTODO DE DIAGNÓSTICO PARA PRODUCTOS
+  async debugProductsIssue() {
+    try {
+      console.log("🔍 DIAGNÓSTICO DE PRODUCTOS PENDIENTES...");
+
+      const pendingProducts =
+        await ProductsOfflineController.getPendingProducts();
+      console.log(
+        "📦 Productos pendientes encontrados:",
+        pendingProducts.length
+      );
+
+      // Mostrar detalles de cada producto pendiente
+      pendingProducts.forEach((product, index) => {
+        console.log(`📋 Producto ${index + 1}:`, {
+          id_local: product.id_local,
+          operacion: product.operacion,
+          producto_id: product.producto_id,
+          sincronizado: product.sincronizado,
+          timestamp: product.timestamp,
+          datos: product.datos
+            ? {
+                nombre: product.datos.nombre,
+                precio: product.datos.precio,
+                stock: product.datos.stock,
+              }
+            : "Sin datos",
+        });
+      });
+
+      // Verificar conexión y token
+      console.log("🌐 Estado conexión:", navigator.onLine);
+      console.log("🔑 Token existe:", !!localStorage.getItem("token"));
+
+      return {
+        totalProducts: pendingProducts.length,
+        products: pendingProducts.map((p) => ({
+          id_local: p.id_local,
+          operacion: p.operacion,
+          producto_id: p.producto_id,
+          sincronizado: p.sincronizado,
+        })),
+      };
+    } catch (error) {
+      console.error("❌ Error en diagnóstico de productos:", error);
+      return { error: error.message };
+    }
+  }
   // ✅ NUEVO MÉTODO: Sincronización detallada de productos
   async syncPendingProductsDetailed() {
     try {
+      console.log("🔄 [SYNC] Iniciando sincronización de productos...");
+
       const resultados = await ProductsOfflineController.syncPendingProducts();
 
       console.log(
-        `📊 RESULTADO PRODUCTOS: ${resultados.exitosas}/${resultados.total} exitosas`
+        `📊 [SYNC] RESULTADO PRODUCTOS: ${resultados.exitosas}/${resultados.total} exitosas`
       );
+
+      // ✅ NOTIFICAR A LOS LISTENERS
+      this.notifyListeners("products_sync_complete", resultados);
+
+      // ✅ EMITIR EVENTO GLOBAL
+      window.dispatchEvent(
+        new CustomEvent("products_sync_completed", {
+          detail: resultados,
+        })
+      );
+
       return resultados;
     } catch (error) {
-      console.error("❌ Error en syncPendingProductsDetailed:", error);
+      console.error("❌ [SYNC] Error en syncPendingProductsDetailed:", error);
       return {
         total: 0,
         exitosas: 0,

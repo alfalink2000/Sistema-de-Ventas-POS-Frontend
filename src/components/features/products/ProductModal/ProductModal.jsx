@@ -13,6 +13,7 @@ import {
   FiEye,
 } from "react-icons/fi";
 import styles from "./ProductModal.module.css";
+import ProductsOfflineController from "../../../../controllers/offline/ProductsOfflineController/ProductsOfflineController";
 
 const ProductModal = ({
   isOpen,
@@ -579,6 +580,36 @@ const ProductModal = ({
           </div>
 
           <div className={styles.modalFooter}>
+            <button
+              type="button"
+              onClick={async () => {
+                console.log("🐛 DEBUG - FormData actual:", formData);
+                console.log("🐛 DEBUG - Product actual:", product);
+
+                // Probar createProductPending directamente
+                const testData = {
+                  nombre: formData.nombre,
+                  descripcion: formData.descripcion,
+                  precio: formData.precio,
+                  precio_compra: formData.precio_compra,
+                  categoria_id: formData.categoria_id,
+                  stock: formData.stock,
+                  stock_minimo: formData.stock_minimo,
+                  activo: formData.activo,
+                };
+
+                console.log("🐛 DEBUG - Test data:", testData);
+
+                const result =
+                  await ProductsOfflineController.debugCreateProductFlow(
+                    testData
+                  );
+                console.log("🐛 DEBUG - Resultado:", result);
+              }}
+              className={styles.debugButton}
+            >
+              🐛 Debug Data
+            </button>
             <button
               type="button"
               className={styles.cancelButton}

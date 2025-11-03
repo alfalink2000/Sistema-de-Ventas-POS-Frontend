@@ -135,7 +135,6 @@ const Products = () => {
     dispatch(deleteProduct(productId));
   };
 
-  // ✅ CORREGIDO: Manejo mejorado de async/await
   // En Products.jsx - ACTUALIZAR handleSaveProduct
   const handleSaveProduct = async (
     productData,

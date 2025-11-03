@@ -1,6 +1,7 @@
-// components/layout/Sidebar/Sidebar.jsx
+// components/layout/Sidebar/Sidebar.jsx - CON BOTÓN DE SALIR
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
+import { startLogout } from "../../../actions/authActions";
 import {
   FiHome,
   FiShoppingCart,
@@ -12,10 +13,12 @@ import {
   FiX,
   FiShield,
   FiUsers,
+  FiLogOut,
 } from "react-icons/fi";
 import styles from "./Sidebar.module.css";
 
 const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
+  const dispatch = useDispatch();
   const [currentPath, setCurrentPath] = useState(`/${currentView || "sales"}`);
 
   const menuItems = [
@@ -39,6 +42,10 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
     if (onNavigation) {
       onNavigation(path);
     }
+  };
+
+  const handleLogout = () => {
+    dispatch(startLogout());
   };
 
   if (!isOpen) {
@@ -86,7 +93,15 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
         })}
       </nav>
 
+      {/* ✅ BOTÓN DE SALIR EN EL SIDEBAR */}
       <div className={styles.sidebarFooter}>
+        <button className={styles.logoutButton} onClick={handleLogout}>
+          <div className={styles.logoutIconWrapper}>
+            <FiLogOut className={styles.logoutIcon} />
+          </div>
+          <span className={styles.logoutLabel}>Cerrar Sesión</span>
+        </button>
+
         <div className={styles.systemInfo}>
           <div className={styles.versionBadge}>
             <span>v1.0</span>

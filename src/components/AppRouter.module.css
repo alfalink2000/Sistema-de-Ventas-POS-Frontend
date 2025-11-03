@@ -132,3 +132,48 @@
     gap: 6px;
   }
 }
+/* AppRouter.module.css - AGREGAR ESTOS ESTILOS */
+.offlineNotice {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+.offlineNotice span {
+  font-weight: bold;
+  color: #d97706;
+}
+
+.offlineNotice p {
+  margin: 5px 0 0 0;
+  color: #92400e;
+  font-size: 14px;
+}
+
+.loadingItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.spinnerSmall {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

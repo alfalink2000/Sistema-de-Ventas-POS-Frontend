@@ -123,14 +123,25 @@ class AuthOfflineController extends BaseOfflineController {
     }
   }
   // ✅ VERIFICAR CREDENCIALES OFFLINE
+  // ✅ MEJORA EN verifyCredentials - AuthOfflineController.js
   async verifyCredentials(username, password) {
     try {
+      console.log("🔐 Verificando credenciales offline para:", username);
+
+      // ✅ VERIFICAR QUE INDEXEDDB ESTÉ INICIALIZADO
+      if (!IndexedDBService.initialized) {
+        await IndexedDBService.init();
+      }
+
       const users = await IndexedDBService.getAll(this.storeName);
+      console.log(`📊 Usuarios en BD: ${users.length}`);
+
       const user = users.find(
         (u) => u.username === username && u.activo !== false
       );
 
       if (!user) {
+        console.log("❌ Usuario no encontrado en datos offline:", username);
         return {
           success: false,
           error:
@@ -138,27 +149,47 @@ class AuthOfflineController extends BaseOfflineController {
         };
       }
 
-      // Verificar token JWT
+      console.log("✅ Usuario encontrado, verificando token...");
+
+      // ✅ VERIFICAR TOKEN JWT
       if (user.token) {
         try {
-          const tokenPayload = JSON.parse(atob(user.token.split(".")[1]));
+          const tokenParts = user.token.split(".");
+          if (tokenParts.length !== 3) {
+            return {
+              success: false,
+              error: "Token inválido. Conecta a internet para renovar.",
+            };
+          }
+
+          const tokenPayload = JSON.parse(atob(tokenParts[1]));
           const isTokenValid = tokenPayload.exp * 1000 > Date.now();
 
           if (!isTokenValid) {
+            console.warn("⚠️ Token expirado para usuario:", username);
             return {
               success: false,
               error: "Sesión expirada. Conecta a internet para renovar.",
             };
           }
+
+          console.log("✅ Token válido para usuario:", username);
         } catch (tokenError) {
+          console.error("❌ Error decodificando token:", tokenError);
           return {
             success: false,
             error: "Error de sesión. Conecta a internet.",
           };
         }
+      } else {
+        console.warn("⚠️ Usuario sin token:", username);
+        return {
+          success: false,
+          error: "Credenciales incompletas. Conecta a internet.",
+        };
       }
 
-      // Actualizar último login
+      // ✅ ACTUALIZAR ÚLTIMO LOGIN
       await this.updateLastLogin(user.id);
 
       return {
@@ -175,7 +206,10 @@ class AuthOfflineController extends BaseOfflineController {
       };
     } catch (error) {
       console.error("❌ Error verificando credenciales offline:", error);
-      return { success: false, error: "Error de autenticación offline" };
+      return {
+        success: false,
+        error: "Error de autenticación offline: " + error.message,
+      };
     }
   }
 
@@ -312,6 +346,38 @@ class AuthOfflineController extends BaseOfflineController {
     } catch (error) {
       console.error("Error limpiando duplicados:", error);
       return { success: false, error: error.message };
+    }
+  }
+  // controllers/offline/AuthOfflineController/AuthOfflineController.js - AGREGAR
+  async getUserByUsername(username) {
+    try {
+      console.log("🔍 Buscando usuario en offline_users:", username);
+
+      if (!IndexedDBService.initialized) {
+        await IndexedDBService.init();
+      }
+
+      const storeExists = await IndexedDBService.storeExists("offline_users");
+      if (!storeExists) {
+        console.warn("❌ Store offline_users no existe");
+        return null;
+      }
+
+      const users = await IndexedDBService.getAll("offline_users");
+      console.log(`📊 Total de usuarios en BD: ${users.length}`);
+
+      const user = users.find(
+        (u) => u.username === username && u.activo !== false
+      );
+
+      console.log(
+        "🔍 Resultado búsqueda usuario:",
+        user ? "ENCONTRADO" : "NO ENCONTRADO"
+      );
+      return user;
+    } catch (error) {
+      console.error("❌ Error en getUserByUsername:", error);
+      return null;
     }
   }
 }

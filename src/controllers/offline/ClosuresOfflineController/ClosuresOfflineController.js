@@ -77,7 +77,7 @@ class ClosuresOfflineController extends BaseOfflineController {
       return false;
     }
   }
-  // ✅ CALCULAR TOTALES DE SESIÓN
+  // En ClosuresOfflineController.js - ACTUALIZAR ESTE MÉTODO
   async calculateSessionTotals(sesionId) {
     try {
       const ventas = await SalesOfflineController.getSalesBySession(sesionId);
@@ -89,6 +89,7 @@ class ClosuresOfflineController extends BaseOfflineController {
         total_tarjeta: 0,
         total_transferencia: 0,
         ganancia_bruta: 0,
+        costo_total: 0, // ✅ NUEVO: Agregar costo total
       };
 
       for (const venta of ventas) {
@@ -96,6 +97,7 @@ class ClosuresOfflineController extends BaseOfflineController {
           totales.cantidad_ventas++;
           totales.total_ventas += parseFloat(venta.total || 0);
 
+          // Método de pago
           switch (venta.metodo_pago) {
             case "efectivo":
               totales.total_efectivo += parseFloat(venta.total || 0);
@@ -108,8 +110,17 @@ class ClosuresOfflineController extends BaseOfflineController {
               break;
           }
 
-          // Calcular ganancia estimada (40%)
-          totales.ganancia_bruta += parseFloat(venta.total || 0) * 0.4;
+          // ✅ CALCULAR GANANCIA REAL CON DETALLES
+          if (venta.productos && Array.isArray(venta.productos)) {
+            for (const producto of venta.productos) {
+              const precioCompra =
+                producto.precio_compra || producto.precio_unitario * 0.8;
+              const gananciaProducto =
+                (producto.precio_unitario - precioCompra) * producto.cantidad;
+              totales.ganancia_bruta += gananciaProducto;
+              totales.costo_total += precioCompra * producto.cantidad;
+            }
+          }
         }
       }
 
@@ -120,6 +131,7 @@ class ClosuresOfflineController extends BaseOfflineController {
         }
       });
 
+      console.log("💰 Totales calculados offline:", totales);
       return totales;
     } catch (error) {
       console.error("Error calculando totales:", error);
@@ -130,10 +142,39 @@ class ClosuresOfflineController extends BaseOfflineController {
         total_tarjeta: 0,
         total_transferencia: 0,
         ganancia_bruta: 0,
+        costo_total: 0,
       };
     }
   }
 
+  // ✅ OBTENER DETALLES CON INFORMACIÓN DE COSTO
+  async getSaleDetailsWithCost(ventaIdLocal) {
+    try {
+      const detalles = await SalesOfflineController.getSaleDetails(
+        ventaIdLocal
+      );
+      const detallesConCosto = [];
+
+      for (const detalle of detalles) {
+        // Buscar información completa del producto
+        const producto = await IndexedDBService.get(
+          "productos",
+          detalle.producto_id
+        );
+
+        detallesConCosto.push({
+          ...detalle,
+          precio_compra: producto?.precio_compra || 0,
+          producto_nombre: producto?.nombre || detalle.producto_nombre,
+        });
+      }
+
+      return detallesConCosto;
+    } catch (error) {
+      console.error("Error obteniendo detalles con costo:", error);
+      return [];
+    }
+  }
   // ✅ OBTENER CIERRES PENDIENTES
   async getPendingClosures() {
     try {

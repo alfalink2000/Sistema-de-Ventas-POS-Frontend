@@ -72,18 +72,10 @@ const LoginForm = () => {
         if (result.success) {
           console.log("✅ Login offline exitoso");
 
-          // ✅ CORRECCIÓN: Usar el type correcto del reducer
-          dispatch({
-            type: types.authLogin, // ✅ USAR EL TYPE DEFINIDO
-            payload: result.user, // ✅ SOLO ENVIAR EL USER (como hace el login online)
-          });
-
-          // ✅ GUARDAR EN LOCALSTORAGE (igual que el login online)
-          localStorage.setItem("token", result.token);
-          localStorage.setItem("user", JSON.stringify(result.user));
-
-          console.log(
-            "🔐 Token y usuario guardados en localStorage para offline"
+          // ✅ CORRECCIÓN: Usar la acción startLogin para consistencia
+          // Esto asegura que todo el flujo se ejecute correctamente
+          await dispatch(
+            startLogin(formData.username.trim(), formData.password)
           );
         } else {
           throw new Error(result.error || "Error en autenticación offline");

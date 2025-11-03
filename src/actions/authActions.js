@@ -346,57 +346,260 @@ export const startChecking = () => {
     console.log("🔍 Verificando autenticación...", {
       hasToken: !!token,
       hasUser: !!user,
+      isOnline: navigator.onLine,
     });
 
-    if (token && user) {
-      try {
-        const userData = JSON.parse(user);
+    if (!token || !user) {
+      console.log("📝 No hay credenciales guardadas");
+      dispatch(checkingFinish());
+      return;
+    }
 
-        // ✅ CORRECCIÓN: Verificación más tolerante del token
+    try {
+      const userData = JSON.parse(user);
+
+      // ✅ MODO OFFLINE: Verificación simplificada
+      if (!navigator.onLine) {
+        console.log("📱 Modo offline - Verificación con IndexedDB");
+
+        // Verificar que el usuario existe en IndexedDB
+        const offlineUser = await AuthOfflineController.getUserByUsername(
+          userData.username
+        );
+
+        if (offlineUser && offlineUser.token) {
+          console.log("✅ Usuario encontrado en datos offline - Autenticando");
+
+          // ✅ VERIFICAR QUE EL TOKEN NO ESTÉ EXPIRADO
+          try {
+            const tokenParts = offlineUser.token.split(".");
+            if (tokenParts.length === 3) {
+              const tokenPayload = JSON.parse(atob(tokenParts[1]));
+              const isTokenValid = tokenPayload.exp * 1000 > Date.now();
+
+              if (isTokenValid) {
+                dispatch({
+                  type: types.authLogin,
+                  payload: userData,
+                });
+                dispatch(checkingFinish());
+                return;
+              } else {
+                console.warn("⚠️ Token expirado en modo offline");
+                // Limpiar credenciales expiradas
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+              }
+            }
+          } catch (tokenError) {
+            console.warn("⚠️ Error verificando token offline:", tokenError);
+          }
+        }
+
+        console.warn(
+          "⚠️ Usuario no encontrado en datos offline o token inválido"
+        );
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        dispatch(checkingFinish());
+        return;
+      }
+
+      // ✅ MODO ONLINE: Verificación estándar
+      try {
+        // Verificar token con el servidor o decodificarlo
+        const response = await fetchConToken("auth/verify");
+        if (response.ok) {
+          dispatch({
+            type: types.authLogin,
+            payload: userData,
+          });
+        } else {
+          throw new Error("Token inválido");
+        }
+      } catch (error) {
+        console.warn("⚠️ Error verificando token online:", error);
+        // Intentar con decodificación local
         try {
-          // Intentar decodificar el token JWT
           const tokenParts = token.split(".");
           if (tokenParts.length === 3) {
             const tokenPayload = JSON.parse(atob(tokenParts[1]));
             const isTokenValid = tokenPayload.exp * 1000 > Date.now();
 
             if (isTokenValid) {
-              console.log("✅ Token válido - usuario autenticado");
               dispatch({
                 type: types.authLogin,
                 payload: userData,
               });
-              return;
             } else {
-              console.warn("⚠️ Token expirado");
+              throw new Error("Token expirado");
             }
-          } else {
-            console.warn("⚠️ Formato de token inválido");
           }
-        } catch (tokenError) {
-          console.warn("⚠️ Error decodificando token:", tokenError.message);
-          // Continuar con verificación básica
+        } catch (localError) {
+          console.warn("⚠️ Token inválido, limpiando credenciales");
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
         }
-
-        // ✅ VERIFICACIÓN ALTERNATIVA: Si el token no es JWT válido pero existe usuario
-        console.log("🔄 Usando verificación alternativa con usuario guardado");
-        dispatch({
-          type: types.authLogin,
-          payload: userData,
-        });
-      } catch (parseError) {
-        console.error("❌ Error parseando usuario:", parseError);
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        dispatch(checkingFinish());
       }
-    } else {
-      console.log("📝 No hay token o usuario - sesión no iniciada");
+
+      dispatch(checkingFinish());
+    } catch (error) {
+      console.error("❌ Error en startChecking:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       dispatch(checkingFinish());
     }
   };
 };
+// ✅ AGREGAR ESTE NUEVO ACTION EN authActions.js
+export const verifyOfflineAuth = () => {
+  return async (dispatch) => {
+    try {
+      const token = localStorage.getItem("token");
+      const user = localStorage.getItem("user");
 
+      if (!token || !user) {
+        return { success: false, error: "No hay credenciales guardadas" };
+      }
+
+      const userData = JSON.parse(user);
+
+      // Verificar en IndexedDB
+      const offlineUser = await AuthOfflineController.getUserByUsername(
+        userData.username
+      );
+
+      if (!offlineUser) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        return {
+          success: false,
+          error: "Usuario no encontrado en datos offline",
+        };
+      }
+
+      // Verificar token
+      if (offlineUser.token) {
+        const tokenParts = offlineUser.token.split(".");
+        if (tokenParts.length === 3) {
+          const tokenPayload = JSON.parse(atob(tokenParts[1]));
+          const isTokenValid = tokenPayload.exp * 1000 > Date.now();
+
+          if (isTokenValid) {
+            dispatch({
+              type: types.authLogin,
+              payload: userData,
+            });
+            return { success: true, user: userData };
+          }
+        }
+      }
+
+      // Token inválido o expirado
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      return { success: false, error: "Sesión expirada" };
+    } catch (error) {
+      console.error("❌ Error en verifyOfflineAuth:", error);
+      return { success: false, error: error.message };
+    }
+  };
+};
+// ✅ AGREGAR ESTA FUNCIÓN PARA DIAGNÓSTICO
+export const diagnoseOfflineAuth = async () => {
+  console.group("🔍 DIAGNÓSTICO LOGIN OFFLINE");
+
+  // 1. Verificar localStorage
+  const token = localStorage.getItem("token");
+  const user = localStorage.getItem("user");
+  console.log("📋 LocalStorage:", { hasToken: !!token, hasUser: !!user });
+
+  // 2. Verificar IndexedDB
+  let users = []; // ✅ DEFINIR LA VARIABLE
+  try {
+    users = await AuthOfflineController.getAllOfflineUsers(); // ✅ ASIGNAR VALOR
+    console.log("💾 IndexedDB - Usuarios:", users.length);
+    console.log(
+      "👥 Usuarios en BD:",
+      users.map((u) => ({
+        username: u.username,
+        hasToken: !!u.token,
+        activo: u.activo,
+      }))
+    );
+  } catch (error) {
+    console.error("❌ Error accediendo IndexedDB:", error);
+  }
+
+  // 3. Verificar conexión
+  console.log("🌐 Conexión:", navigator.onLine ? "ONLINE" : "OFFLINE");
+
+  console.groupEnd();
+
+  return {
+    hasLocalStorage: !!(token && user),
+    offlineUsersCount: users.length, // ✅ AHORA users ESTÁ DEFINIDA
+    isOnline: navigator.onLine,
+  };
+};
+
+// actions/authActions.js - AGREGAR ESTE NUEVO ACTION
+export const startOfflineChecking = () => {
+  return async (dispatch) => {
+    console.log("🔍 Iniciando verificación offline...");
+
+    const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+
+    if (!token || !user) {
+      console.log("❌ No hay credenciales guardadas para offline");
+      dispatch(checkingFinish());
+      return;
+    }
+
+    try {
+      const userData = JSON.parse(user);
+
+      // Verificar si el usuario existe en IndexedDB
+      const offlineUser = await AuthOfflineController.getUserByUsername(
+        userData.username
+      );
+
+      if (offlineUser) {
+        console.log("✅ Credenciales offline válidas - Autenticando");
+
+        dispatch({
+          type: types.authLogin,
+          payload: userData,
+        });
+
+        // ✅ CORRECCIÓN CRÍTICA: LLAMAR A checkingFinish CUANDO ES EXITOSO
+        dispatch(checkingFinish());
+
+        // Mostrar alerta de modo offline
+        setTimeout(() => {
+          Swal.fire({
+            icon: "info",
+            title: "Modo Offline",
+            text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
+            timer: 3000,
+            showConfirmButton: false,
+          });
+        }, 1000);
+      } else {
+        console.warn("❌ Usuario no encontrado en datos offline");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        dispatch(checkingFinish());
+      }
+    } catch (error) {
+      console.error("❌ Error en verificación offline:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      dispatch(checkingFinish());
+    }
+  };
+};
 // ✅ ACTION PARA MANEJO DE ERRORES
 export const clearError = () => ({
   type: types.authClearError,

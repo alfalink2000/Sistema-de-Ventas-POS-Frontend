@@ -1,4 +1,4 @@
-// reducers/authReducer.js
+// reducers/authReducer.js - VERSIÓN CORREGIDA
 import { types } from "../types/types";
 
 const initialState = {
@@ -13,13 +13,28 @@ const initialState = {
   error: null,
 };
 
+// ✅ LISTA DE ACCIONES QUE DEBE MANEJAR ESTE REDUCER
+const authActions = [
+  types.authStartLoading,
+  types.authFinishLoading,
+  types.authLogin,
+  types.authLogout,
+  types.authCheckingFinish,
+  types.authError,
+  types.authClearError,
+];
+
 export const authReducer = (state = initialState, action) => {
   if (!action || !action.type) {
-    console.warn("⚠️ Action inválida:", action);
     return state;
   }
 
-  console.log("🔄 authReducer:", action.type, action.payload);
+  // ✅ FILTRAR SOLO ACCIONES DE AUTH
+  if (!authActions.includes(action.type)) {
+    return state;
+  }
+
+  console.log("🔐 authReducer - Procesando:", action.type);
 
   switch (action.type) {
     case types.authStartLoading:
@@ -40,24 +55,26 @@ export const authReducer = (state = initialState, action) => {
         ...state,
         checking: false,
         loading: false,
-        uid: action.payload.id,
-        name: action.payload.nombre,
-        username: action.payload.username,
-        rol: action.payload.rol,
+        uid: action.payload?.id || null,
+        name: action.payload?.nombre || null,
+        username: action.payload?.username || null,
+        rol: action.payload?.rol || null,
         user: action.payload,
         isAuthenticated: true,
         error: null,
       };
-      console.log("✅ authLogin - Nuevo estado:", loginState);
+      console.log("✅ authLogin - Usuario autenticado:", loginState.username);
       return loginState;
 
     case types.authCheckingFinish:
+      console.log("✅ authCheckingFinish - Terminando verificación");
       return {
         ...state,
         checking: false,
       };
 
     case types.authLogout:
+      console.log("✅ authLogout - Cerrando sesión");
       return {
         ...initialState,
         checking: false,
@@ -67,7 +84,14 @@ export const authReducer = (state = initialState, action) => {
       return {
         ...state,
         loading: false,
+        checking: false,
         error: action.payload,
+      };
+
+    case types.authClearError:
+      return {
+        ...state,
+        error: null,
       };
 
     default:

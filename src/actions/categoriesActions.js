@@ -2,51 +2,164 @@
 import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
+import CategoriesOfflineController from "../controllers/offline/CategoriesOfflineController/CategoriesOfflineController";
 
 export const loadCategories = () => {
   return async (dispatch) => {
     console.log("🔄 [CATEGORIES] Iniciando carga de categorías...");
-    dispatch({ type: types.categoriesStartLoading });
 
-    try {
-      const response = await fetchConToken("categorias");
-      console.log("📦 [CATEGORIES] Respuesta del backend:", response);
+    // ✅ MODO OFFLINE
+    if (!navigator.onLine) {
+      console.log("📱 [CATEGORIES] Modo offline - cargando desde cache local");
+      try {
+        const categories = await CategoriesOfflineController.getCategories();
 
-      let categorias = [];
+        console.log(
+          `✅ [CATEGORIES] ${categories.length} categorías cargadas desde cache`
+        );
 
-      if (response && response.categorias) {
-        if (
-          response.categorias.rows &&
-          Array.isArray(response.categorias.rows)
-        ) {
-          categorias = response.categorias.rows;
-        } else if (Array.isArray(response.categorias)) {
-          categorias = response.categorias;
-        }
-      } else if (Array.isArray(response)) {
-        categorias = response;
+        // ✅ USAR EL TYPE CORRECTO: categoriesLoad
+        dispatch({
+          type: types.categoriesLoad, // ← CORREGIDO
+          payload: categories,
+        });
+
+        return;
+      } catch (error) {
+        console.error(
+          "❌ [CATEGORIES] Error cargando categorías offline:",
+          error
+        );
+
+        // Enviar array vacío
+        dispatch({
+          type: types.categoriesLoad, // ← CORREGIDO
+          payload: [],
+        });
+
+        return;
       }
+    }
 
-      console.log(`✅ [CATEGORIES] ${categorias.length} categorías procesadas`);
+    // ✅ MODO ONLINE
+    try {
+      console.log("🌐 [CATEGORIES] Modo online - cargando desde servidor");
 
-      dispatch({
-        type: types.categoriesLoad,
-        payload: categorias,
-      });
+      const response = await fetchConToken("categorias");
 
-      return categorias;
+      if (response.ok) {
+        const data = await response.json();
+        const categories = data.categorias || [];
+
+        console.log(
+          `✅ [CATEGORIES] ${categories.length} categorías cargadas desde servidor`
+        );
+
+        // Guardar en IndexedDB para uso offline
+        try {
+          await CategoriesOfflineController.saveCategories(categories);
+          console.log("💾 [CATEGORIES] Categorías guardadas en cache local");
+        } catch (saveError) {
+          console.error("❌ [CATEGORIES] Error guardando en cache:", saveError);
+        }
+
+        dispatch({
+          type: types.categoriesLoad, // ← CORREGIDO
+          payload: categories,
+        });
+      } else {
+        throw new Error(response.msg || "Error al cargar categorías");
+      }
     } catch (error) {
       console.error("❌ [CATEGORIES] Error cargando categorías:", error);
 
-      dispatch({
-        type: types.categoriesLoad,
-        payload: [],
-      });
+      // ✅ FALLBACK: Intentar cargar desde cache local
+      try {
+        console.log(
+          "🔄 [CATEGORIES] Intentando cargar desde cache como fallback..."
+        );
+        const categories = await CategoriesOfflineController.getCategories();
 
-      return [];
+        dispatch({
+          type: types.categoriesLoad, // ← CORREGIDO
+          payload: categories,
+        });
+
+        console.log(
+          `✅ [CATEGORIES] Fallback exitoso: ${categories.length} categorías desde cache`
+        );
+      } catch (fallbackError) {
+        console.error("❌ [CATEGORIES] Fallback también falló:", fallbackError);
+
+        // Último recurso: array vacío
+        dispatch({
+          type: types.categoriesLoad, // ← CORREGIDO
+          payload: [],
+        });
+      }
     }
   };
 };
+// ✅ ACTION PARA SINCRONIZAR CATEGORÍAS
+export const syncCategories = () => {
+  return async (dispatch) => {
+    if (!navigator.onLine) {
+      console.log("📴 [CATEGORIES] Sin conexión - no se puede sincronizar");
+      return { success: false, error: "Sin conexión a internet" };
+    }
+
+    try {
+      console.log("🔄 [CATEGORIES] Sincronizando categorías...");
+
+      dispatch({ type: types.categoriesStartLoading });
+
+      const result =
+        await CategoriesOfflineController.syncCategoriesFromServer();
+
+      if (result.success) {
+        // Recargar las categorías después de sincronizar
+        await dispatch(loadCategories());
+
+        console.log(
+          `✅ [CATEGORIES] Sincronización completada: ${result.count} categorías`
+        );
+
+        dispatch({ type: types.categoriesFinishLoading });
+        return result;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error("❌ [CATEGORIES] Error en sincronización:", error);
+
+      dispatch({
+        type: types.categoriesError,
+        payload: error.message,
+      });
+
+      return { success: false, error: error.message };
+    }
+  };
+};
+
+// ✅ ACTION PARA OBTENER ESTADÍSTICAS
+export const getCategoriesStats = () => {
+  return async () => {
+    try {
+      const stats = await CategoriesOfflineController.getStats();
+      return stats;
+    } catch (error) {
+      console.error("❌ Error obteniendo estadísticas:", error);
+      return { total: 0, active: 0, inactive: 0 };
+    }
+  };
+};
+
+// ✅ ACTION PARA SETEAR ERROR
+export const setCategoriesError = (error) => ({
+  type: types.categoriesError,
+  payload: error,
+});
 
 // ✅ CORREGIDO: Manejo de respuestas
 export const createCategory = (categoryData) => {

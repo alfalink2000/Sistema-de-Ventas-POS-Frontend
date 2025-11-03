@@ -3,6 +3,7 @@ import { types } from "../types/types";
 import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
+import ProductsOfflineController from "../controllers/offline/ProductsOfflineController/ProductsOfflineController";
 
 // Servicio para operaciones offline (reemplaza el hook)
 class OfflineProductsService {
@@ -369,100 +370,99 @@ export const createProduct = (productData) => {
   return async (dispatch) => {
     try {
       console.log("🔄 [PRODUCTS] Creando producto...", productData);
+      console.log("🌐 [PRODUCTS] Estado de conexión:", navigator.onLine);
 
       let resultado;
 
-      if (navigator.onLine) {
-        // Online: crear en servidor
-        const response = await fetchConToken("productos", productData, "POST");
-        console.log("📥 [PRODUCTS] Respuesta del backend:", response);
-
-        // ✅ VERIFICAR RESPUESTA CORRECTAMENTE
-        if (response && response.ok === true) {
-          // Probar diferentes estructuras posibles
-          if (response.producto) {
-            resultado = response.producto;
-            console.log(
-              "✅ [PRODUCTS] Producto creado exitosamente:",
-              resultado.id
-            );
-
-            // ✅ MOSTRAR SWEETALERT INMEDIATAMENTE
-            await Swal.fire({
-              icon: "success",
-              title: "¡Éxito!",
-              text: response.msg || "Producto creado exitosamente",
-              timer: 3000,
-              showConfirmButton: false,
-              position: "top-end",
-              toast: true,
-            });
-          } else if (response.product) {
-            resultado = response.product;
-            console.log(
-              "✅ [PRODUCTS] Producto creado exitosamente (product):",
-              resultado.id
-            );
-
-            await Swal.fire({
-              icon: "success",
-              title: "¡Éxito!",
-              text: "Producto creado exitosamente",
-              timer: 3000,
-              showConfirmButton: false,
-              position: "top-end",
-              toast: true,
-            });
-          } else {
-            console.warn(
-              "⚠️ [PRODUCTS] Estructura de respuesta no reconocida:",
-              response
-            );
-            throw new Error("Estructura de respuesta inesperada del servidor");
-          }
-
-          // Guardar en IndexedDB para offline
-          if (resultado) {
-            await IndexedDBService.add("productos", resultado);
-          }
-        } else {
-          // ✅ MEJOR MANEJO DE ERRORES
-          const errorMsg =
-            response?.msg || response?.error || "Error al crear producto";
-          console.error("❌ [PRODUCTS] Error del servidor:", errorMsg);
-          throw new Error(errorMsg);
-        }
-      } else {
-        // ✅ NUEVO: Usar controller offline
-        console.log(
-          "📱 [PRODUCTS] Creando producto localmente con controller..."
-        );
+      // ✅ DECISIÓN CLARA: OFFLINE vs ONLINE
+      if (!navigator.onLine) {
+        // 🔴 MODO OFFLINE: Solo crear localmente
+        console.log("📱 [PRODUCTS] Modo OFFLINE - creando solo localmente");
 
         resultado = await ProductsOfflineController.createProductPending(
           productData
         );
 
         if (resultado.success) {
+          console.log(
+            "✅ [PRODUCTS] Producto creado localmente:",
+            resultado.id_local
+          );
+
           await Swal.fire({
             icon: "info",
             title: "Modo Offline",
             text: "Producto guardado localmente. Se sincronizará cuando recuperes la conexión.",
             confirmButtonText: "Entendido",
           });
+
+          // ✅ DISPATCH SOLO PARA ACTUALIZAR UI LOCAL
+          dispatch({
+            type: types.productAddNew,
+            payload: {
+              ...resultado.datos,
+              id: resultado.id_local,
+              sincronizado: false,
+            },
+          });
+
+          return { success: true, producto: resultado };
         } else {
           throw new Error(resultado.error);
         }
-      }
-      // ✅ VERIFICAR QUE TENEMOS RESULTADO ANTES DE DISPATCH
-      if (resultado) {
-        dispatch({
-          type: types.productAddNew,
-          payload: resultado,
-        });
-
-        return { success: true, producto: resultado };
       } else {
-        throw new Error("No se recibió datos del producto creado");
+        // 🟢 MODO ONLINE: Crear en servidor
+        console.log("🌐 [PRODUCTS] Modo ONLINE - creando en servidor");
+
+        const response = await fetchConToken("productos", productData, "POST");
+        console.log("📥 [PRODUCTS] Respuesta del backend:", response);
+
+        if (response && response.ok === true) {
+          // Buscar producto en diferentes estructuras
+          if (response.producto) {
+            resultado = response.producto;
+          } else if (response.product) {
+            resultado = response.product;
+          } else {
+            console.warn("⚠️ Estructura de respuesta no reconocida:", response);
+            resultado = response;
+          }
+
+          console.log(
+            "✅ [PRODUCTS] Producto creado en servidor:",
+            resultado?.id
+          );
+
+          // ✅ GUARDAR EN CACHE LOCAL TAMBIÉN
+          if (resultado) {
+            await IndexedDBService.add("productos", {
+              ...resultado,
+              sincronizado: true,
+            });
+          }
+
+          await Swal.fire({
+            icon: "success",
+            title: "¡Éxito!",
+            text: response.msg || "Producto creado exitosamente",
+            timer: 3000,
+            showConfirmButton: false,
+            position: "top-end",
+            toast: true,
+          });
+
+          // ✅ DISPATCH PARA ACTUALIZAR UI
+          dispatch({
+            type: types.productAddNew,
+            payload: resultado,
+          });
+
+          return { success: true, producto: resultado };
+        } else {
+          const errorMsg =
+            response?.msg || response?.error || "Error al crear producto";
+          throw new Error(errorMsg);
+        }
       }
     } catch (error) {
       console.error("❌ [PRODUCTS] Error creando producto:", error);
