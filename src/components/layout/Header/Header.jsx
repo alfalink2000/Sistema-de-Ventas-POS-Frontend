@@ -21,11 +21,11 @@ import {
 } from "react-icons/fi";
 import styles from "./Header.module.css";
 import { useState, useEffect } from "react";
-import { loadSales } from "../../../actions/salesActions";
-import { loadClosures } from "../../../actions/closuresActions";
 import SyncController from "../../../controllers/offline/SyncController/SyncController";
 import ProductsOfflineController from "../../../controllers/offline/ProductsOfflineController/ProductsOfflineController";
-
+import { fetchConToken } from "../../../helpers/fetch";
+import diagnosticarSesionesVentas from "../../../controllers/offline/SyncController/SyncController";
+import Swal from "sweetalert2";
 const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   const dispatch = useDispatch();
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
@@ -145,30 +145,107 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   }, [pendingCount]);
 
   // ✅ SINCRONIZACIÓN MANUAL
+  // Header.jsx - MEJORAR MANEJO DE ERRORES
   const handleForceSync = async () => {
-    if (!isOnline) {
-      alert("No hay conexión a internet para sincronizar");
-      return;
-    }
-
-    setIsSyncing(true);
-    setShowSyncModal(true);
-
     try {
-      const diagnosis = await SyncController.debugSessionIssue();
-      const cleanupResult = await SyncController.cleanupDuplicatePendingData();
-      const result = await SyncController.fullSync();
+      console.log("🔄 Iniciando sincronización manual...");
 
-      setTimeout(() => {
-        loadPendingData();
-        dispatch(loadSales());
-        dispatch(loadClosures());
-      }, 1000);
+      // ✅ CONFIRMACIÓN SIMPLE
+      const { value: aceptar } = await Swal.fire({
+        title: "Sincronizar ventas pendientes",
+        text: "¿Deseas enviar todas las ventas pendientes al servidor?",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Sí, sincronizar",
+        cancelButtonText: "Cancelar",
+      });
+
+      if (!aceptar) return;
+
+      // ✅ PROGRESO
+      Swal.fire({
+        title: "Sincronizando...",
+        html: "Reasignando ventas a sesión actual<br/><small>Esto puede tomar unos segundos</small>",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
+
+      // ✅ SINCRONIZAR DIRECTAMENTE
+      const syncResult = await SyncController.fullSync();
+
+      Swal.close();
+
+      // ✅ MOSTRAR RESULTADOS
+      if (syncResult && syncResult.success) {
+        const ventasExitosas = syncResult.sales?.exitosas || 0;
+        const ventasTotales = syncResult.sales?.total || 0;
+
+        let htmlResultado = `
+        <div style="text-align: left;">
+          <p><strong>Resultado de sincronización:</strong></p>
+          <p>✅ Ventas sincronizadas: ${ventasExitosas}/${ventasTotales}</p>
+      `;
+
+        if (syncResult.sales?.fallidas > 0) {
+          htmlResultado += `<p>❌ Ventas fallidas: ${syncResult.sales.fallidas}</p>`;
+        }
+
+        if (ventasExitosas === 0 && ventasTotales > 0) {
+          htmlResultado += `
+          <hr style="margin: 10px 0;">
+          <p style="color: #f39c12; font-size: 14px;">
+            💡 <strong>Solución:</strong> 
+            Las ventas necesitan una sesión activa. Abre una sesión en "Sesiones de Caja" y vuelve a intentar.
+          </p>
+        `;
+        }
+
+        htmlResultado += `</div>`;
+
+        await Swal.fire({
+          icon: ventasExitosas > 0 ? "success" : "warning",
+          title:
+            ventasExitosas > 0
+              ? "¡Sincronización exitosa!"
+              : "Sincronización parcial",
+          html: htmlResultado,
+          confirmButtonText: "Aceptar",
+        });
+
+        // ✅ RECARGAR DATOS SI SE SINCRONIZÓ ALGO
+        if (ventasExitosas > 0) {
+          dispatch(loadSales());
+          dispatch(loadProducts());
+        }
+      } else {
+        throw new Error(
+          syncResult?.error || "Error desconocido en sincronización"
+        );
+      }
     } catch (error) {
-      console.error("Error en sincronización manual:", error);
-      alert(`Error en sincronización: ${error.message}`);
-    } finally {
-      setIsSyncing(false);
+      console.error("❌ Error en sincronización manual:", error);
+
+      Swal.close();
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error de sincronización",
+        html: `
+        <div style="text-align: left;">
+          <p><strong>Error:</strong> ${error.message}</p>
+          <hr style="margin: 10px 0;">
+          <p style="font-size: 14px;">
+            🔧 <strong>Pasos para solucionar:</strong>
+          </p>
+          <ol style="text-align: left; font-size: 13px; margin: 10px 0; padding-left: 20px;">
+            <li>Ve a <strong>"Sesiones de Caja"</strong></li>
+            <li>Abre una <strong>nueva sesión</strong></li>
+            <li>Vuelve a intentar la sincronización</li>
+          </ol>
+        </div>
+      `,
+        confirmButtonText: "Entendido",
+      });
     }
   };
 
@@ -587,38 +664,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       </div>
 
       <div className={styles.headerRight}>
-        <button
-          className={styles.debugButton}
-          onClick={async () => {
-            try {
-              console.log(
-                "🔍 INICIANDO DIAGNÓSTICO DE PRODUCTOS PENDIENTES..."
-              );
-
-              // Obtener todos los productos pendientes
-              const pendingProducts =
-                await ProductsOfflineController.getPendingProducts();
-              console.log(
-                `📦 Total productos pendientes: ${pendingProducts.length}`
-              );
-
-              // Diagnosticar cada producto pendiente
-              for (const product of pendingProducts) {
-                console.log("=".repeat(50));
-                console.log(`🔍 DIAGNOSTICANDO PRODUCTO: ${product.id_local}`);
-                await ProductsOfflineController.debugPendingProductStructure(
-                  product.id_local
-                );
-              }
-
-              console.log("🎉 DIAGNÓSTICO COMPLETADO");
-            } catch (error) {
-              console.error("❌ Error en diagnóstico:", error);
-            }
-          }}
-        >
-          🐛 Debug
-        </button>
         {/* ✅ INDICADOR DE SINCRONIZACIÓN COMPACTO */}
         <div className={styles.syncIndicator} onClick={handleShowSyncDetails}>
           <div className={styles.syncIconContainer}>

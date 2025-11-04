@@ -7,31 +7,6 @@ class SessionsOfflineController extends BaseOfflineController {
     super();
     this.storeName = "sesiones_caja_offline";
   }
-  async generateLocalId(prefix = "item") {
-    try {
-      // ✅ Asegurar que siempre genere un ID válido
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 10000); // Más rango
-      const localId = `${prefix}_${timestamp}_${random}`;
-
-      console.log(`🔑 ID local generado: ${localId}`);
-
-      // ✅ Verificación adicional
-      if (!localId || localId.length < 5) {
-        throw new Error("ID local generado inválido");
-      }
-
-      return localId;
-    } catch (error) {
-      console.error("❌ Error generando ID local:", error);
-      // ✅ Fallback más robusto
-      const fallbackId = `${prefix}_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 12)}`;
-      console.log(`🔄 Usando fallback ID: ${fallbackId}`);
-      return fallbackId;
-    }
-  }
 
   // ✅ VERIFICAR SI UNA SESIÓN ESTÁ ACTIVA (no muy antigua)
   isSessionActive(session) {

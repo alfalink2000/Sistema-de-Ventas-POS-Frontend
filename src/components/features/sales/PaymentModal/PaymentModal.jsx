@@ -1,33 +1,498 @@
-// components/features/sales/PaymentModal/PaymentModal.jsx - VERSIÓN CORREGIDA
+// components/features/sales/PaymentModal/PaymentModal.jsx - VERSIÓN CON DIAGNÓSTICO COMPLETO
 import { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
 import { createSale } from "../../../../actions/salesActions";
 import { loadOpenSesion } from "../../../../actions/sesionesCajaActions";
+import { loadProducts } from "../../../../actions/productsActions";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
 import Swal from "sweetalert2";
 import styles from "./PaymentModal.module.css";
+import IndexedDBService from "../../../../services/IndexedDBService";
 
 const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
   const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [cashAmount, setCashAmount] = useState("");
   const [processing, setProcessing] = useState(false);
   const [stockUpdateStatus, setStockUpdateStatus] = useState({});
+  const [debugInfo, setDebugInfo] = useState({});
 
   const dispatch = useDispatch();
   const { items } = useSelector((state) => state.cart);
-  const { products } = useSelector((state) => state.products);
   const { user } = useSelector((state) => state.auth);
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
 
-  // Resetear estado cuando se abre/cierra el modal
+  // ✅ DIAGNÓSTICO COMPLETO DE INDEXEDDB
+  const runFullDiagnostic = async () => {
+    console.log("🩺 EJECUTANDO DIAGNÓSTICO COMPLETO...");
+
+    const diagnostic = {
+      timestamp: new Date().toISOString(),
+      cartItems: items,
+      indexedDBStatus: {},
+      productMatch: {},
+      errors: [],
+    };
+
+    try {
+      // 1. VERIFICAR ESTADO DE INDEXEDDB
+      diagnostic.indexedDBStatus.dbInfo = await IndexedDBService.getDBInfo();
+
+      // 2. OBTENER TODOS LOS PRODUCTOS
+      const allProducts = await IndexedDBService.getAll("productos");
+      diagnostic.indexedDBStatus.totalProducts = allProducts.length;
+      diagnostic.indexedDBStatus.products = allProducts.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        stock: p.stock,
+        precio: p.precio,
+      }));
+
+      // 3. VERIFICAR COINCIDENCIAS CON EL CARRITO
+      diagnostic.productMatch = {};
+      for (const item of items) {
+        const match = {
+          cartItem: item,
+          foundById: null,
+          foundByName: null,
+          exactMatch: null,
+        };
+
+        // Buscar por ID exacto
+        match.foundById = allProducts.find((p) => p.id === item.id);
+
+        // Buscar por nombre
+        match.foundByName = allProducts.find(
+          (p) => p.nombre?.toLowerCase() === item.nombre?.toLowerCase()
+        );
+
+        // Buscar coincidencia exacta
+        match.exactMatch = allProducts.find(
+          (p) =>
+            p.id === item.id &&
+            p.nombre?.toLowerCase() === item.nombre?.toLowerCase()
+        );
+
+        diagnostic.productMatch[item.id] = match;
+
+        if (!match.foundById && !match.foundByName) {
+          diagnostic.errors.push(
+            `PRODUCTO NO ENCONTRADO: ${item.nombre} (ID: ${item.id})`
+          );
+        }
+      }
+
+      // 4. VERIFICAR MÉTODOS DE INDEXEDDB
+      diagnostic.indexedDBStatus.methods = {};
+      for (const item of items) {
+        try {
+          const directGet = await IndexedDBService.get("productos", item.id);
+          diagnostic.indexedDBStatus.methods[item.id] = {
+            directGet: directGet ? "SUCCESS" : "NULL",
+            directGetData: directGet,
+          };
+        } catch (error) {
+          diagnostic.indexedDBStatus.methods[item.id] = {
+            directGet: "ERROR: " + error.message,
+          };
+        }
+      }
+
+      console.log("🔍 DIAGNÓSTICO COMPLETO:", diagnostic);
+      setDebugInfo(diagnostic);
+
+      return diagnostic;
+    } catch (error) {
+      console.error("❌ ERROR EN DIAGNÓSTICO:", error);
+      diagnostic.errors.push(`Error en diagnóstico: ${error.message}`);
+      setDebugInfo(diagnostic);
+      return diagnostic;
+    }
+  };
+
+  // ✅ FUNCIÓN PARA VERIFICAR STOCK CON DIAGNÓSTICO
+  const checkStockAvailability = async () => {
+    console.log("🔍 Verificando stock con diagnóstico...");
+
+    const diagnostic = await runFullDiagnostic();
+    const stockIssues = [];
+
+    // Usar los datos del diagnóstico para verificar stock
+    for (const item of items) {
+      const match = diagnostic.productMatch[item.id];
+
+      if (!match.foundById && !match.foundByName) {
+        stockIssues.push({
+          product: item.nombre,
+          error: `NO ENCONTRADO EN INDEXEDDB`,
+          diagnostic: {
+            availableProducts: diagnostic.indexedDBStatus.products,
+            directGetResult: diagnostic.indexedDBStatus.methods[item.id],
+          },
+        });
+        continue;
+      }
+
+      // Usar el producto encontrado (priorizar por ID, luego por nombre)
+      const product = match.foundById || match.foundByName;
+
+      if (product.stock < item.quantity) {
+        stockIssues.push({
+          product: item.nombre,
+          currentStock: product.stock,
+          required: item.quantity,
+          deficit: item.quantity - product.stock,
+        });
+      }
+    }
+
+    return stockIssues;
+  };
+
+  // ✅ FUNCIÓN MEJORADA PARA ACTUALIZAR STOCK
+  const updateProductStockOffline = async (productId, quantity) => {
+    console.log(`🔄 Intentando actualizar stock: ${productId} -${quantity}`);
+
+    try {
+      // PRIMERO: Diagnosticar antes de la operación
+      const diagnostic = await runFullDiagnostic();
+      const item = items.find((item) => item.id === productId);
+      const match = diagnostic.productMatch[productId];
+
+      if (!match.foundById && !match.foundByName) {
+        throw new Error(
+          `PRODUCTO NO ENCONTRADO EN DIAGNÓSTICO: ${item?.nombre} (${productId})`
+        );
+      }
+
+      // USAR el producto del diagnóstico
+      const product = match.foundById || match.foundByName;
+      console.log(`✅ Producto para actualizar:`, product);
+
+      const newStock = product.stock - quantity;
+
+      if (newStock < 0) {
+        throw new Error(
+          `Stock insuficiente: ${product.stock} disponible, ${quantity} requerido`
+        );
+      }
+
+      // ACTUALIZAR usando put
+      const updatedProduct = {
+        ...product,
+        stock: newStock,
+        last_updated: new Date().toISOString(),
+      };
+
+      console.log(`💾 Guardando producto actualizado:`, updatedProduct);
+      const success = await IndexedDBService.put("productos", updatedProduct);
+
+      if (!success) {
+        throw new Error("Fallo al guardar en IndexedDB");
+      }
+
+      console.log(
+        `✅ Stock actualizado: ${product.nombre} (${product.stock} → ${newStock})`
+      );
+
+      // VERIFICAR que se guardó correctamente
+      const verifyProduct = await IndexedDBService.get("productos", productId);
+      console.log(`🔍 Verificación post-actualización:`, verifyProduct);
+
+      return {
+        success: true,
+        newStock,
+        productName: product.nombre,
+        verification: verifyProduct,
+      };
+    } catch (error) {
+      console.error(`❌ Error crítico actualizando stock:`, error);
+      return {
+        success: false,
+        error: error.message,
+        diagnostic: await runFullDiagnostic(),
+      };
+    }
+  };
+
+  // ✅ FUNCIÓN PRINCIPAL CON DIAGNÓSTICO COMPLETO
+  const handleProcessSale = async () => {
+    console.log("💰 INICIANDO VENTA CON DIAGNÓSTICO COMPLETO");
+
+    // Ejecutar diagnóstico inicial
+    const initialDiagnostic = await runFullDiagnostic();
+
+    if (initialDiagnostic.errors.length > 0) {
+      await Swal.fire({
+        icon: "error",
+        title: "Problemas Detectados",
+        html: `
+          <div style="text-align: left;">
+            <p><strong>Se encontraron problemas antes de procesar:</strong></p>
+            <ul>
+              ${initialDiagnostic.errors
+                .map((error) => `<li>${error}</li>`)
+                .join("")}
+            </ul>
+            <p>Revisa la consola para más detalles.</p>
+          </div>
+        `,
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
+
+    setProcessing(true);
+    setStockUpdateStatus({
+      updating: true,
+      message: "Ejecutando diagnóstico...",
+    });
+
+    try {
+      // 1. VERIFICAR STOCK
+      setStockUpdateStatus({ updating: true, message: "Verificando stock..." });
+      const stockIssues = await checkStockAvailability();
+
+      if (stockIssues.length > 0) {
+        const issueText = stockIssues
+          .map((issue) =>
+            issue.error
+              ? `❌ ${issue.product}: ${issue.error}`
+              : `⚠️ ${issue.product}: Stock insuficiente (${issue.currentStock} disponible, necesita ${issue.required})`
+          )
+          .join("\n");
+
+        throw new Error(`Problemas de stock:\n${issueText}`);
+      }
+
+      // 2. ACTUALIZAR STOCK
+      setStockUpdateStatus({
+        updating: true,
+        message: "Actualizando stock...",
+      });
+
+      const stockUpdates = [];
+      for (const item of items) {
+        const result = await updateProductStockOffline(item.id, item.quantity);
+
+        if (!result.success) {
+          // Revertir cambios
+          for (const update of stockUpdates) {
+            if (update.success) {
+              await updateProductStockOffline(
+                update.productId,
+                -update.quantity
+              );
+            }
+          }
+          throw new Error(`Error actualizando ${item.nombre}: ${result.error}`);
+        }
+
+        stockUpdates.push({
+          productId: item.id,
+          productName: item.nombre,
+          success: true,
+          quantity: item.quantity,
+          newStock: result.newStock,
+        });
+      }
+
+      // 3. CREAR VENTA
+      setStockUpdateStatus({ updating: true, message: "Creando venta..." });
+
+      const productosConCosto = items.map((item) => ({
+        producto_id: item.id,
+        cantidad: parseInt(item.quantity),
+        precio_unitario: parseFloat(item.precio),
+        precio_compra: parseFloat(item.precio * 0.8), // Valor por defecto
+        subtotal: parseFloat(item.precio * item.quantity),
+        nombre: item.nombre,
+        producto_nombre: item.nombre,
+      }));
+
+      const saleData = {
+        sesion_caja_id: sesionAbierta.id || sesionAbierta.id_local,
+        vendedor_id: user.id,
+        total: total,
+        metodo_pago: paymentMethod,
+        ...(paymentMethod === "efectivo" && {
+          efectivo_recibido: parseFloat(cashAmount),
+          cambio: parseFloat(change),
+        }),
+        productos: productosConCosto,
+        es_offline: !navigator.onLine,
+        timestamp_offline: new Date().toISOString(),
+      };
+
+      console.log("📤 Enviando venta:", saleData);
+      const resultadoVenta = await dispatch(createSale(saleData));
+
+      if (!resultadoVenta?.success) {
+        throw new Error(resultadoVenta?.error || "Error al crear la venta");
+      }
+
+      // ÉXITO
+      dispatch(clearCart());
+      await dispatch(loadOpenSesion(user.id));
+      await dispatch(loadProducts());
+
+      setStockUpdateStatus({
+        updating: false,
+        success: true,
+        message: "✅ Venta completada",
+      });
+
+      await Swal.fire({
+        icon: "success",
+        title: "¡Venta Exitosa!",
+        text: `Venta procesada por $${total.toFixed(2)}`,
+        confirmButtonText: "Aceptar",
+      });
+
+      onClose();
+    } catch (error) {
+      console.error("❌ Error en venta:", error);
+
+      setStockUpdateStatus({
+        updating: false,
+        success: false,
+        message: error.message,
+      });
+
+      await dispatch(loadProducts());
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error en Venta",
+        html: `
+          <div style="text-align: left;">
+            <p><strong>${error.message}</strong></p>
+            <p>Revisa la consola para el diagnóstico completo.</p>
+          </div>
+        `,
+        confirmButtonText: "Entendido",
+      });
+
+      if (onError) onError(error);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ✅ COMPONENTE DE DEBUG CLICKEABLE
+  const DebugPanel = () => {
+    const [showDetails, setShowDetails] = useState(false);
+
+    if (Object.keys(debugInfo).length === 0) return null;
+
+    return (
+      <div className={styles.debugPanel}>
+        <div
+          className={styles.debugHeader}
+          onClick={() => setShowDetails(!showDetails)}
+          style={{
+            cursor: "pointer",
+            padding: "10px",
+            background: "#f5f5f5",
+            border: "1px solid #ddd",
+          }}
+        >
+          <strong>🩺 DIAGNÓSTICO INDEXEDDB</strong>
+          <span style={{ float: "right" }}>
+            {showDetails ? "▲" : "▼"}
+            {debugInfo.errors?.length > 0
+              ? ` ❌ ${debugInfo.errors.length} errores`
+              : " ✅ OK"}
+          </span>
+        </div>
+
+        {showDetails && (
+          <div
+            className={styles.debugDetails}
+            style={{
+              padding: "10px",
+              background: "#fff",
+              border: "1px solid #ddd",
+              fontSize: "12px",
+            }}
+          >
+            <div>
+              <strong>Productos en IndexedDB:</strong>{" "}
+              {debugInfo.indexedDBStatus?.totalProducts || 0}
+            </div>
+            <div>
+              <strong>Productos en carrito:</strong>{" "}
+              {debugInfo.cartItems?.length || 0}
+            </div>
+
+            {debugInfo.errors?.length > 0 && (
+              <div style={{ color: "red", marginTop: "10px" }}>
+                <strong>ERRORES:</strong>
+                <ul>
+                  {debugInfo.errors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div style={{ marginTop: "10px" }}>
+              <strong>COINCIDENCIAS:</strong>
+              {debugInfo.cartItems?.map((item) => {
+                const match = debugInfo.productMatch?.[item.id];
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      margin: "5px 0",
+                      padding: "5px",
+                      background: match?.foundById ? "#e8f5e8" : "#ffe8e8",
+                    }}
+                  >
+                    <div>
+                      <strong>{item.nombre}</strong> (ID: {item.id})
+                    </div>
+                    <div>Por ID: {match?.foundById ? "✅" : "❌"}</div>
+                    <div>Por nombre: {match?.foundByName ? "✅" : "❌"}</div>
+                    {match?.foundById && (
+                      <div>Stock: {match.foundById.stock}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => {
+                console.log("🔍 DIAGNÓSTICO COMPLETO:", debugInfo);
+                Swal.fire({
+                  title: "Diagnóstico en Consola",
+                  text: "Revisa la consola del navegador para ver todos los detalles",
+                  icon: "info",
+                });
+              }}
+              style={{ marginTop: "10px", padding: "5px 10px" }}
+            >
+              📋 Ver en Consola
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Reset cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
       setPaymentMethod("efectivo");
       setCashAmount("");
       setProcessing(false);
       setStockUpdateStatus({});
+      setDebugInfo({});
+
+      // Ejecutar diagnóstico automáticamente
+      setTimeout(() => runFullDiagnostic(), 500);
     }
   }, [isOpen]);
 
@@ -41,354 +506,10 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
   const total = getTotalPrice();
   const change = cashAmount ? (parseFloat(cashAmount) - total).toFixed(2) : 0;
 
-  // Verificar stock antes de procesar
-  const checkStockAvailability = () => {
-    const stockIssues = [];
-
-    items.forEach((item) => {
-      const product = products.find((p) => p.id === item.id);
-      if (product) {
-        const newStock = product.stock - item.quantity;
-        if (newStock < 0) {
-          stockIssues.push({
-            product: item.nombre,
-            currentStock: product.stock,
-            required: item.quantity,
-            deficit: Math.abs(newStock),
-          });
-        }
-      }
-    });
-
-    return stockIssues;
-  };
-
-  // ✅ FUNCIÓN ALTERNATIVA PARA ACTUALIZAR STOCK
-  const updateProductStock = async (productId, quantity) => {
-    try {
-      // Buscar el producto actual
-      const product = products.find((p) => p.id === productId);
-      if (!product) {
-        throw new Error(`Producto con ID ${productId} no encontrado`);
-      }
-
-      // Calcular nuevo stock
-      const newStock = product.stock - quantity;
-      if (newStock < 0) {
-        throw new Error(
-          `Stock insuficiente: ${product.stock} disponible, ${quantity} requerido`
-        );
-      }
-
-      // Actualizar en Redux (simulación - en una app real esto haría una llamada API)
-      dispatch({
-        type: "PRODUCT_UPDATE_STOCK",
-        payload: {
-          id: productId,
-          stock: newStock,
-        },
-      });
-
-      return true;
-    } catch (error) {
-      console.error(
-        `Error actualizando stock del producto ${productId}:`,
-        error
-      );
-      return false;
-    }
-  };
-
-  // ✅ FUNCIÓN PRINCIPAL CORREGIDA - PROCESAR VENTA
-  const handleProcessSale = async () => {
-    console.log("🔍 [PAYMENT] Iniciando proceso de venta...");
-
-    console.log("🔍 Estado de sesión:", {
-      sesionAbierta: !!sesionAbierta,
-      id: sesionAbierta?.id,
-      id_local: sesionAbierta?.id_local,
-      estado: sesionAbierta?.estado,
-      vendedor: sesionAbierta?.vendedor_id,
-    });
-
-    // ✅ VERIFICAR SESIÓN DE CAJA PRIMERO
-    if (!sesionAbierta || (!sesionAbierta.id && !sesionAbierta.id_local)) {
-      await Swal.fire({
-        icon: "error",
-        title: "Sesión de Caja Requerida",
-        text: "Debes tener una sesión de caja abierta para realizar ventas",
-        confirmButtonText: "Entendido",
-      });
-      return;
-    }
-
-    // ✅ VERIFICAR QUE LOS PRODUCTOS TENGAN ID VÁLIDO
-    const productosSinId = items.filter((item) => !item.id || item.id === "");
-    if (productosSinId.length > 0) {
-      await Swal.fire({
-        icon: "error",
-        title: "Productos Inválidos",
-        text: `Los siguientes productos no tienen ID válido: ${productosSinId
-          .map((p) => p.nombre)
-          .join(", ")}`,
-        confirmButtonText: "Entendido",
-      });
-      return;
-    }
-
-    setProcessing(true);
-    setStockUpdateStatus({ updating: true, message: "Verificando stock..." });
-
-    try {
-      // 1. Verificar disponibilidad de stock
-      const stockIssues = checkStockAvailability();
-      if (stockIssues.length > 0) {
-        const issueMessages = stockIssues
-          .map(
-            (issue) =>
-              `${issue.product}: Stock actual ${issue.currentStock}, necesita ${issue.required}`
-          )
-          .join("\n");
-
-        throw new Error(`Stock insuficiente:\n${issueMessages}`);
-      }
-
-      // 2. ✅ ACTUALIZAR STOCK USANDO LA FUNCIÓN ALTERNATIVA
-      setStockUpdateStatus({
-        updating: true,
-        message: "Actualizando stock...",
-      });
-
-      console.log("🔄 Actualizando stock de productos vendidos...");
-      const stockUpdates = [];
-
-      for (const item of items) {
-        try {
-          const success = await updateProductStock(item.id, item.quantity);
-          stockUpdates.push({
-            productId: item.id,
-            productName: item.nombre,
-            success: success,
-            quantity: item.quantity,
-            previousStock: products.find((p) => p.id === item.id)?.stock || 0,
-          });
-
-          if (!success) {
-            throw new Error(`Error actualizando stock de ${item.nombre}`);
-          }
-        } catch (error) {
-          console.error(
-            `❌ Error actualizando stock para ${item.nombre}:`,
-            error
-          );
-          stockUpdates.push({
-            productId: item.id,
-            productName: item.nombre,
-            success: false,
-            quantity: item.quantity,
-            error: error.message,
-          });
-        }
-      }
-
-      // 3. Verificar resultados de actualización de stock
-      const failedUpdates = stockUpdates.filter((update) => !update.success);
-      if (failedUpdates.length > 0) {
-        const errorMessages = failedUpdates
-          .map((update) => `${update.productName}: ${update.error}`)
-          .join(", ");
-        throw new Error(`Error en actualización de stock: ${errorMessages}`);
-      }
-
-      setStockUpdateStatus({ updating: true, message: "Creando venta..." });
-
-      // 4. ✅ CORREGIDO: PREPARAR DATOS DE PRODUCTOS CON PRECIO_COMPRA
-      const productosConCosto = items.map((item) => {
-        // ✅ BUSCAR PRODUCTO COMPLETO EN EL ESTADO
-        const productoCompleto = products.find((p) => p.id === item.id);
-
-        // ✅ CALCULAR PRECIO_COMPRA (usar el del producto o un valor por defecto)
-        const precioCompra =
-          productoCompleto?.precio_compra ||
-          item.precio_compra ||
-          item.precio * 0.8; // Fallback al 80% del precio
-
-        console.log(`📊 Producto ${item.nombre}:`, {
-          precio_venta: item.precio,
-          precio_compra: precioCompra,
-          ganancia: (item.precio - precioCompra) * item.quantity,
-        });
-
-        return {
-          producto_id: item.id.toString(),
-          cantidad: parseInt(item.quantity),
-          precio_unitario: parseFloat(item.precio),
-          precio_compra: parseFloat(precioCompra), // ✅ INCLUIR PRECIO COMPRA
-          subtotal: parseFloat(item.precio * item.quantity),
-          nombre: item.nombre,
-        };
-      });
-
-      // ✅ CALCULAR GANANCIA TOTAL PARA VERIFICACIÓN
-      const gananciaTotal = productosConCosto.reduce((total, producto) => {
-        return (
-          total +
-          (producto.precio_unitario - producto.precio_compra) *
-            producto.cantidad
-        );
-      }, 0);
-
-      console.log("💰 Resumen de ganancias:", {
-        total_venta: total,
-        costo_total: productosConCosto.reduce(
-          (sum, p) => sum + p.precio_compra * p.cantidad,
-          0
-        ),
-        ganancia_total: gananciaTotal,
-        productos: productosConCosto,
-      });
-
-      // 5. CREAR LA VENTA CON PRODUCTOS INCLUIDOS
-      const saleData = {
-        sesion_caja_id: sesionAbierta.id || sesionAbierta.id_local,
-        vendedor_id: user.id,
-        total: total,
-        metodo_pago: paymentMethod,
-        // Solo enviar estos campos si no son null
-        ...(paymentMethod === "efectivo" && {
-          efectivo_recibido: parseFloat(cashAmount),
-          cambio: parseFloat(change),
-        }),
-        productos: productosConCosto, // ✅ USAR PRODUCTOS CON COSTO
-      };
-
-      console.log("🔄 [PAYMENT] Enviando datos de venta:", saleData);
-      const resultadoVenta = await dispatch(createSale(saleData));
-
-      if (!resultadoVenta || !resultadoVenta.success) {
-        throw new Error(
-          resultadoVenta?.error || "Error al crear la venta en la base de datos"
-        );
-      }
-
-      // 6. Limpiar carrito y notificar éxito
-      dispatch(clearCart());
-
-      // 7. Recargar sesión de caja para actualizar totales
-      await dispatch(loadOpenSesion(user.id));
-
-      setStockUpdateStatus({
-        updating: false,
-        success: true,
-        message: "Venta completada ✅",
-      });
-
-      console.log("💰 Venta procesada exitosamente:", {
-        venta: resultadoVenta.venta,
-        ganancia_calculada: gananciaTotal,
-        productos: productosConCosto.length,
-      });
-
-      // Pequeño delay para mostrar el estado de éxito
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // ✅ MOSTRAR RESUMEN DETALLADO AL USUARIO
-      await Swal.fire({
-        icon: "success",
-        title: "¡Venta Exitosa!",
-        html: `
-          <div style="text-align: left;">
-            <p><strong>Resumen de la venta:</strong></p>
-            <p>📦 Productos: ${productosConCosto.length}</p>
-            <p>💰 Total Venta: $${total.toFixed(2)}</p>
-            <p>📊 Ganancia: $${gananciaTotal.toFixed(2)}</p>
-            <p>💵 Método: ${
-              paymentMethod === "efectivo" ? "Efectivo" : "Tarjeta"
-            }</p>
-            ${
-              paymentMethod === "efectivo"
-                ? `
-              <p>🎫 Recibido: $${parseFloat(cashAmount).toFixed(2)}</p>
-              <p>🔄 Cambio: $${Math.abs(change).toFixed(2)}</p>
-            `
-                : ""
-            }
-            ${
-              !navigator.onLine
-                ? "<p>📱 <em>Venta guardada localmente - Se sincronizará automáticamente</em></p>"
-                : ""
-            }
-          </div>
-        `,
-        confirmButtonText: "Aceptar",
-      });
-
-      if (onSuccess) {
-        onSuccess({
-          venta: resultadoVenta.venta,
-          productos: productosConCosto,
-          ganancia: gananciaTotal,
-          stockUpdates: stockUpdates,
-        });
-      }
-
-      onClose();
-    } catch (error) {
-      console.error("❌ Error procesando venta:", error);
-      setStockUpdateStatus({
-        updating: false,
-        success: false,
-        message: error.message,
-      });
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error en Venta",
-        text: error.message || "Error al procesar la venta",
-        confirmButtonText: "Entendido",
-      });
-
-      if (onError) {
-        onError(error);
-      }
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const getProductStockInfo = (productId) => {
-    const product = products.find((p) => p.id === productId);
-    const cartItem = items.find((item) => item.id === productId);
-
-    if (!product || !cartItem) return null;
-
-    return {
-      current: product.stock,
-      after: product.stock - cartItem.quantity,
-      sufficient: product.stock - cartItem.quantity >= 0,
-    };
-  };
-
-  // ✅ DEBUG: Mostrar información de productos
-  useEffect(() => {
-    if (isOpen && products.length > 0) {
-      console.log(
-        "📦 Productos disponibles (primeros 3):",
-        products.slice(0, 3).map((p) => ({
-          id: p.id,
-          nombre: p.nombre,
-          precio: p.precio,
-          precio_compra: p.precio_compra,
-          tiene_precio_compra: !!p.precio_compra,
-        }))
-      );
-    }
-  }, [isOpen, products]);
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Procesar Pago" size="large">
       <div className={styles.paymentModal}>
-        {/* Estado de actualización de stock */}
+        {/* Estado de procesamiento */}
         {stockUpdateStatus.updating && (
           <div className={styles.processingOverlay}>
             <div className={styles.processingContent}>
@@ -398,55 +519,39 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
           </div>
         )}
 
-        {/* Alerta de sesión de caja */}
+        {/* Panel de diagnóstico */}
+        <DebugPanel />
+
+        {/* Alertas */}
         {!sesionAbierta && (
           <div className={styles.alertWarning}>
-            ⚠️ No hay sesión de caja activa. Abre una sesión primero en la
-            sección de Caja.
+            ⚠️ No hay sesión de caja activa
           </div>
         )}
 
+        {!navigator.onLine && (
+          <div className={styles.alertInfo}>
+            📱 Modo Offline - Las ventas se guardarán localmente
+          </div>
+        )}
+
+        {/* Contenido normal del modal */}
         <div className={styles.orderSummary}>
           <h4>Resumen de la Venta</h4>
           <div className={styles.orderItems}>
-            {items.map((item) => {
-              const stockInfo = getProductStockInfo(item.id);
-              const productoCompleto = products.find((p) => p.id === item.id);
-              const precioCompra =
-                productoCompleto?.precio_compra ||
-                item.precio_compra ||
-                item.precio * 0.8;
-              const gananciaItem = (item.precio - precioCompra) * item.quantity;
-
-              return (
-                <div key={item.id} className={styles.orderItem}>
-                  <div className={styles.itemMain}>
-                    <span className={styles.itemName}>{item.nombre}</span>
-                    <span className={styles.itemQuantity}>
-                      x{item.quantity}
-                    </span>
-                  </div>
-                  <div className={styles.itemDetails}>
-                    <span className={styles.itemPrice}>
-                      ${(item.precio * item.quantity).toFixed(2)}
-                    </span>
-                    <span className={styles.itemGanancia}>
-                      💰 +${gananciaItem.toFixed(2)}
-                    </span>
-                    {stockInfo && (
-                      <span
-                        className={`${styles.stockInfo} ${
-                          !stockInfo.sufficient ? styles.stockWarning : ""
-                        }`}
-                      >
-                        Stock: {stockInfo.current} → {stockInfo.after}
-                        {!stockInfo.sufficient && " ⚠️"}
-                      </span>
-                    )}
-                  </div>
+            {items.map((item) => (
+              <div key={item.id} className={styles.orderItem}>
+                <div className={styles.itemMain}>
+                  <span className={styles.itemName}>{item.nombre}</span>
+                  <span className={styles.itemQuantity}>x{item.quantity}</span>
                 </div>
-              );
-            })}
+                <div className={styles.itemDetails}>
+                  <span className={styles.itemPrice}>
+                    ${(item.precio * item.quantity).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
           <div className={styles.orderTotal}>
             <span>Total a Pagar:</span>
@@ -500,11 +605,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
                   <span>Recibido:</span>
                   <span>${parseFloat(cashAmount).toFixed(2)}</span>
                 </div>
-                <div
-                  className={`${styles.cashRow} ${styles.changeRow} ${
-                    change >= 0 ? styles.sufficient : styles.insufficient
-                  }`}
-                >
+                <div className={`${styles.cashRow} ${styles.changeRow}`}>
                   <span>Cambio:</span>
                   <span>${Math.abs(change).toFixed(2)}</span>
                 </div>
@@ -536,26 +637,6 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
             {processing ? "Procesando..." : "Confirmar Venta"}
           </Button>
         </div>
-
-        {/* ✅ DEBUG INFO (solo en desarrollo) */}
-        {process.env.NODE_ENV === "development" && (
-          <div className={styles.debugInfo}>
-            <details>
-              <summary>🔍 Info Debug (Productos en carrito)</summary>
-              <div style={{ fontSize: "12px", textAlign: "left" }}>
-                {items.map((item) => {
-                  const product = products.find((p) => p.id === item.id);
-                  return (
-                    <div key={item.id}>
-                      {item.nombre}: PV ${item.precio} | PC $
-                      {product?.precio_compra || "N/A"} | Cant: {item.quantity}
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          </div>
-        )}
       </div>
     </Modal>
   );

@@ -54,30 +54,47 @@ const Inventory = () => {
   }, []);
 
   // ✅ EFFECT PARA ACTUALIZAR CONTADOR DE PENDIENTES (CORREGIDO)
+  // ✅ EFFECT MEJORADO: Actualizar contador de pendientes periódicamente
   useEffect(() => {
     const updatePendingCount = async () => {
       try {
         const count = await dispatch(getPendingStockCount());
-        setPendingUpdates(count);
-        console.log(`📦 [INVENTORY] Pendientes actualizados: ${count}`);
+        setPendingUpdates(count || 0);
+        console.log(`📦 Inventory: ${count} actualizaciones pendientes`);
       } catch (error) {
-        console.error("❌ Error obteniendo contador de pendientes:", error);
+        console.error("❌ Error obteniendo pendientes:", error);
         setPendingUpdates(0);
       }
     };
 
     updatePendingCount();
 
-    // ✅ ESCUCHAR EVENTOS DE CAMBIO EN PENDIENTES
+    // ✅ Actualizar cada 10 segundos cuando hay pendientes
+    const interval =
+      pendingUpdates > 0 ? setInterval(updatePendingCount, 10000) : null;
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [dispatch, pendingUpdates]);
+
+  // ✅ EFFECT CORREGIDO: Cargar inventario solo cuando sea necesario
+  useEffect(() => {
+    console.log("🔄 Inventory: Cargando datos...");
+    dispatch(loadInventory());
+  }, [dispatch]);
+
+  // ✅ EFFECT PARA DETECTAR CAMBIOS EN PENDIENTES
+  useEffect(() => {
     const handlePendingUpdatesChanged = () => {
-      console.log("🔄 Evento de cambio en pendientes recibido");
-      updatePendingCount();
+      console.log(
+        "🔄 Inventory: Evento de cambio recibido, actualizando contador..."
+      );
+      dispatch(getPendingStockCount()).then((count) => {
+        setPendingUpdates(count || 0);
+      });
     };
 
-    window.addEventListener(
-      "stockPendingUpdatesChanged",
-      handlePendingUpdatesChanged
-    );
     window.addEventListener(
       "pendingUpdatesChanged",
       handlePendingUpdatesChanged
@@ -85,20 +102,11 @@ const Inventory = () => {
 
     return () => {
       window.removeEventListener(
-        "stockPendingUpdatesChanged",
-        handlePendingUpdatesChanged
-      );
-      window.removeEventListener(
         "pendingUpdatesChanged",
         handlePendingUpdatesChanged
       );
     };
   }, [dispatch]);
-
-  // ✅ EFFECT PRINCIPAL PARA CARGAR INVENTARIO
-  useEffect(() => {
-    dispatch(loadInventory());
-  }, [dispatch, refreshTrigger]);
 
   // ✅ PROTEGER CONTRA DATOS INVALIDOS
   const safeProducts = Array.isArray(inventory) ? inventory : [];

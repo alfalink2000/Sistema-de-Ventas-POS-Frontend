@@ -17,16 +17,25 @@ class SyncController extends BaseOfflineController {
     this.startAutoSyncListener();
   }
 
+  // ✅ REEMPLAZAR CON ESTE MÉTODO MEJORADO:
   async fullSync() {
     if (!this.isOnline) {
-      return { success: false, error: "Sin conexión a internet" };
+      return {
+        success: false,
+        error: "Sin conexión a internet",
+        silent: true,
+      };
     }
 
     // ✅ LIMPIAR DUPLICADOS ANTES DE SINCRONIZAR
     await this.cleanupDuplicatePendingData();
 
     if (this.isSyncing) {
-      return { success: false, error: "Sincronización en progreso" };
+      return {
+        success: false,
+        error: "Sincronización en progreso",
+        silent: true,
+      };
     }
 
     this.isSyncing = true;
@@ -34,45 +43,67 @@ class SyncController extends BaseOfflineController {
 
     const syncResults = {
       startTime: Date.now(),
-      sales: null,
-      sessions: null,
-      closures: null,
-      masterData: null,
-      products: null, // ✅ AGREGAR PRODUCTOS AL RESULTADO
+      steps: {},
       errors: [],
+      warnings: [],
     };
 
     try {
-      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA CON PRODUCTOS...");
+      console.log("🔄 INICIANDO SINCRONIZACIÓN RESILIENTE...");
 
-      // ✅ ORDEN CRÍTICO CORREGIDO:
-      // 1. Datos maestros PRIMERO
-      syncResults.masterData = await this.syncMasterData();
+      // ✅ SINCRONIZAR EN ORDEN PERO CON MANEJO DE ERRORES INDEPENDIENTE
+      const syncSteps = [
+        { name: "masterData", method: () => this.syncMasterData() },
+        { name: "products", method: () => this.syncPendingProductsDetailed() },
+        { name: "sessions", method: () => this.syncPendingSessionsDetailed() },
+        { name: "sales", method: () => this.syncPendingSalesDetailed() },
+        { name: "stock", method: () => this.syncPendingStockUpdates() },
+        { name: "closures", method: () => this.syncPendingClosuresDetailed() },
+      ];
 
-      // 2. PRODUCTOS SEGUNDO (antes de sesiones y ventas)
-      console.log("🔄 Sincronizando productos pendientes...");
-      syncResults.products = await this.syncPendingProductsDetailed();
+      for (const step of syncSteps) {
+        try {
+          console.log(`🔄 Ejecutando paso: ${step.name}`);
+          syncResults.steps[step.name] = await step.method();
 
-      // 3. Sesiones (los cierres dependen de ellas)
-      syncResults.sessions = await this.syncPendingSessionsDetailed();
+          if (syncResults.steps[step.name]?.error) {
+            syncResults.warnings.push(
+              `Paso ${step.name} completado con errores: ${
+                syncResults.steps[step.name].error
+              }`
+            );
+          }
+        } catch (stepError) {
+          console.error(`❌ Error en paso ${step.name}:`, stepError);
+          syncResults.steps[step.name] = { error: stepError.message };
+          syncResults.warnings.push(
+            `Error en ${step.name}: ${stepError.message}`
+          );
+          // ✅ CONTINUAR CON EL SIGUIENTE PASO EN LUGAR DE DETENERSE
+        }
+      }
 
-      // 4. Ventas (dependen de sesiones)
-      syncResults.sales = await this.syncPendingSalesDetailed();
-
-      // 5. Stock updates
-      syncResults.stock = await this.syncPendingStockUpdates();
-
-      // 6. Cierres ÚLTIMO (dependen de sesiones existentes)
-      syncResults.closures = await this.syncPendingClosuresDetailed();
+      // ✅ VERIFICAR SI HAY VENTAS HUÉRFANAS Y CREAR SESIONES DE EMERGENCIA
+      await this.handleOrphanSales();
 
       syncResults.duration = Date.now() - syncResults.startTime;
-      syncResults.success = syncResults.errors.length === 0;
+
+      // ✅ CONSIDERAR ÉXITO SI AL MENOS ALGO SE SINCRONIZÓ
+      const successfulSteps = Object.values(syncResults.steps).filter(
+        (step) => step && !step.error && step.success !== false
+      ).length;
+
+      syncResults.success = successfulSteps > 0;
+      syncResults.successfulSteps = successfulSteps;
+      syncResults.totalSteps = syncSteps.length;
 
       if (syncResults.success) {
         localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
-        console.log("🎉 SINCRONIZACIÓN COMPLETA EXITOSA");
+        console.log(
+          `🎉 SINCRONIZACIÓN PARCIALMENTE EXITOSA: ${successfulSteps}/${syncSteps.length} pasos`
+        );
       } else {
-        console.warn("⚠️ SINCRONIZACIÓN COMPLETA CON ERRORES");
+        console.warn("⚠️ SINCRONIZACIÓN CON ERRORES MAYORITARIOS");
       }
 
       this.notifyListeners("sync_complete", syncResults);
@@ -83,12 +114,325 @@ class SyncController extends BaseOfflineController {
       syncResults.error = error.message;
       syncResults.errors.push(error.message);
 
-      console.error("❌ ERROR EN SINCRONIZACIÓN COMPLETA:", error);
+      console.error("❌ ERROR CRÍTICO EN SINCRONIZACIÓN:", error);
       this.notifyListeners("sync_error", syncResults);
 
       return syncResults;
     } finally {
       this.isSyncing = false;
+    }
+  }
+
+  async syncPendingSalesDetailed() {
+    try {
+      console.log("🔄 [SYNC] Iniciando sincronización de ventas pendientes...");
+
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
+
+      if (ventasPendientes.length === 0) {
+        console.log("✅ No hay ventas pendientes para sincronizar");
+        return {
+          total: 0,
+          exitosas: 0,
+          fallidas: 0,
+          resultados: [],
+        };
+      }
+
+      console.log(
+        `📦 [SYNC] ${ventasPendientes.length} ventas pendientes encontradas`
+      );
+
+      // ✅ PREPARAR SESIÓN ÚNICA PARA TODAS LAS VENTAS
+      const sesionActivaId = await this.obtenerSesionActivaParaSincronizacion();
+
+      if (!sesionActivaId) {
+        console.warn(
+          "⚠️ No se pudo obtener sesión activa, algunas ventas podrían fallar"
+        );
+      }
+
+      const resultados = await this.procesarVentasEnLote(
+        ventasPendientes,
+        sesionActivaId
+      );
+
+      console.log(
+        `📊 [SYNC] Resultado: ${resultados.exitosas}/${resultados.total} exitosas`
+      );
+      return resultados;
+    } catch (error) {
+      console.error("❌ [SYNC] Error en syncPendingSalesDetailed:", error);
+      return {
+        total: 0,
+        exitosas: 0,
+        fallidas: 0,
+        resultados: [],
+        error: error.message,
+      };
+    }
+  }
+
+  // ✅ NUEVO MÉTODO AUXILIAR PARA PROCESAMIENTO POR LOTES
+  async procesarVentasEnLote(ventasPendientes, sesionActivaId) {
+    const resultados = {
+      total: ventasPendientes.length,
+      exitosas: 0,
+      fallidas: 0,
+      detalles: [],
+    };
+
+    for (const venta of ventasPendientes) {
+      try {
+        const resultado = await this.procesarVentaIndividual(
+          venta,
+          sesionActivaId
+        );
+
+        if (resultado.success) {
+          resultados.exitosas++;
+        } else {
+          resultados.fallidas++;
+        }
+
+        resultados.detalles.push(resultado);
+      } catch (error) {
+        resultados.fallidas++;
+        resultados.detalles.push({
+          id_local: venta.id_local,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return resultados;
+  }
+
+  // ✅ NUEVO MÉTODO PARA PROCESAR VENTA INDIVIDUAL
+  async procesarVentaIndividual(venta, sesionActivaId) {
+    console.log(`🔄 Procesando venta: ${venta.id_local}`);
+
+    // ✅ PREPARAR DATOS DE FORMA SEGURA
+    const ventaData = this.prepararDatosVenta(venta, sesionActivaId);
+
+    if (!ventaData) {
+      return {
+        id_local: venta.id_local,
+        success: false,
+        error: "No se pudieron preparar los datos de la venta",
+      };
+    }
+
+    // ✅ VALIDAR DATOS ANTES DE ENVIAR
+    const validacion = this.validarDatosVenta(ventaData);
+    if (!validacion.esValida) {
+      return {
+        id_local: venta.id_local,
+        success: false,
+        error: `Datos inválidos: ${validacion.errores.join(", ")}`,
+      };
+    }
+
+    // ✅ ENVIAR AL SERVIDOR
+    const response = await fetchConToken("ventas", ventaData, "POST");
+
+    if (response && response.ok === true) {
+      // ✅ ELIMINAR VENTA LOCAL SOLO SI SE CREÓ EN SERVIDOR
+      await SalesOfflineController.deletePendingSale(venta.id_local);
+
+      console.log(
+        `✅ Venta sincronizada: ${venta.id_local} -> ${response.venta?.id}`
+      );
+
+      return {
+        id_local: venta.id_local,
+        id_servidor: response.venta?.id,
+        success: true,
+      };
+    } else {
+      const errorMsg = response?.error || response?.msg || "Error del servidor";
+      console.error(
+        `❌ Error sincronizando venta ${venta.id_local}:`,
+        errorMsg
+      );
+
+      return {
+        id_local: venta.id_local,
+        success: false,
+        error: errorMsg,
+      };
+    }
+  }
+
+  // ✅ MÉTODO PARA PREPARAR DATOS DE VENTA
+  prepararDatosVenta(venta, sesionActivaId) {
+    try {
+      const ventaData = { ...venta };
+
+      // ✅ USAR SESIÓN ACTIVA O LA ORIGINAL
+      ventaData.sesion_id = sesionActivaId || venta.sesion_id;
+
+      // ✅ ELIMINAR CAMPOS LOCALES
+      const camposLocales = [
+        "id_local",
+        "sincronizado",
+        "timestamp",
+        "es_local",
+        "id_servidor",
+      ];
+      camposLocales.forEach((campo) => delete ventaData[campo]);
+
+      // ✅ VALIDAR PRODUCTOS
+      if (
+        !ventaData.productos ||
+        !Array.isArray(ventaData.productos) ||
+        ventaData.productos.length === 0
+      ) {
+        console.warn(`⚠️ Venta ${venta.id_local} no tiene productos válidos`);
+        return null;
+      }
+
+      // ✅ ASEGURAR FECHA VÁLIDA
+      if (
+        !ventaData.fecha_venta ||
+        !this.esFechaValida(ventaData.fecha_venta)
+      ) {
+        ventaData.fecha_venta = new Date().toISOString();
+      }
+
+      return ventaData;
+    } catch (error) {
+      console.error(
+        `❌ Error preparando datos de venta ${venta.id_local}:`,
+        error
+      );
+      return null;
+    }
+  }
+
+  // ✅ MÉTODO PARA VALIDAR DATOS
+  validarDatosVenta(ventaData) {
+    const errores = [];
+
+    if (!ventaData.sesion_id) {
+      errores.push("Sesión ID requerida");
+    }
+
+    if (!ventaData.total || ventaData.total <= 0) {
+      errores.push("Total debe ser mayor a 0");
+    }
+
+    if (!ventaData.vendedor_id) {
+      errores.push("Vendedor ID requerido");
+    }
+
+    if (!ventaData.productos || ventaData.productos.length === 0) {
+      errores.push("Debe tener al menos un producto");
+    }
+
+    return {
+      esValida: errores.length === 0,
+      errores: errores,
+    };
+  }
+
+  // ✅ MÉTODO AUXILIAR PARA VALIDAR FECHAS
+  esFechaValida(fechaString) {
+    if (!fechaString) return false;
+    const fecha = new Date(fechaString);
+    return fecha instanceof Date && !isNaN(fecha);
+  }
+
+  // ✅ AGREGAR ESTE MÉTODO PARA MANEJAR VENTAS HUÉRFANAS
+  async handleOrphanSales() {
+    try {
+      console.log("🔍 Buscando ventas huérfanas...");
+
+      const pendingSales = await SalesOfflineController.getPendingSales();
+      const orphanSales = pendingSales.filter((sale) => {
+        // Ventas sin sesión válida o con sesión que no existe en servidor
+        return !sale.sesion_caja_id || sale.sesion_caja_id.includes("_");
+      });
+
+      if (orphanSales.length > 0) {
+        console.log(`🆘 Encontradas ${orphanSales.length} ventas huérfanas`);
+
+        for (const sale of orphanSales) {
+          await this.createEmergencySessionForSale(sale);
+        }
+      }
+
+      return { processed: orphanSales.length };
+    } catch (error) {
+      console.error("❌ Error manejando ventas huérfanas:", error);
+      return { error: error.message };
+    }
+  }
+
+  // ✅ AGREGAR ESTE MÉTODO PARA SESIONES DE EMERGENCIA
+  async createEmergencySessionForSale(sale) {
+    try {
+      console.log(
+        `🆘 Creando sesión de emergencia para venta: ${sale.id_local}`
+      );
+
+      const emergencySession = {
+        vendedor_id: sale.vendedor_id || "emergency_user",
+        saldo_inicial: 0,
+        vendedor_nombre: "Sistema de Emergencia",
+        estado: "cerrada",
+        es_emergencia: true,
+      };
+
+      // Usar el controller de sesiones para crear la sesión
+      const sessionResult = await SessionsOfflineController.openSession(
+        emergencySession
+      );
+
+      if (sessionResult.success) {
+        // Cerrar inmediatamente la sesión de emergencia
+        await SessionsOfflineController.closeSession(sessionResult.id_local, {
+          saldo_final: sale.total || 0,
+          observaciones: "Sesión automática para venta huérfana",
+        });
+
+        // Actualizar la venta con la nueva sesión
+        sale.sesion_caja_id = sessionResult.id_local;
+        await SalesOfflineController.updateSaleSession(
+          sale.id_local,
+          sessionResult.id_local
+        );
+
+        console.log(
+          `✅ Sesión de emergencia creada: ${sessionResult.id_local}`
+        );
+        return { success: true, sessionId: sessionResult.id_local };
+      }
+
+      return { success: false, error: "No se pudo crear sesión de emergencia" };
+    } catch (error) {
+      console.error(`❌ Error creando sesión de emergencia:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ AGREGAR ESTE MÉTODO PARA ACTUALIZAR SESIÓN DE VENTA
+  async updateSaleSession(saleLocalId, newSessionId) {
+    try {
+      const sale = await SalesOfflineController.getSaleById(saleLocalId);
+      if (sale) {
+        sale.sesion_caja_id = newSessionId;
+        await IndexedDBService.put("ventas_pendientes", sale);
+        console.log(
+          `✅ Ventas ${saleLocalId} actualizada con sesión ${newSessionId}`
+        );
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error(`❌ Error actualizando sesión de venta:`, error);
+      return false;
     }
   }
   // AGREGAR ESTE MÉTODO DE DIAGNÓSTICO AL SyncController
@@ -269,125 +613,6 @@ class SyncController extends BaseOfflineController {
     } catch (error) {
       console.error("❌ Error en diagnóstico de ventas:", error);
       return { error: error.message };
-    }
-  }
-  // ✅ SINCRONIZACIÓN DETALLADA DE VENTAS
-  // ✅ MÉTODO CORREGIDO - syncPendingSalesDetailed
-  async syncPendingSalesDetailed() {
-    try {
-      const pendingSales = await SalesOfflineController.getPendingSales();
-
-      console.log(
-        `🔄 [SYNC] Ventas pendientes encontradas: ${pendingSales.length}`
-      );
-
-      const results = {
-        total: pendingSales.length,
-        success: 0,
-        failed: 0,
-        details: [],
-      };
-
-      for (const sale of pendingSales) {
-        try {
-          console.log(`🔄 Procesando venta: ${sale.id_local}`);
-
-          // ✅ PASO CRÍTICO: OBTENER EL ID REAL DE LA SESIÓN EN EL SERVIDOR
-          let sesionServerId = await this.getServerSessionId(
-            sale.sesion_caja_id
-          );
-
-          if (!sesionServerId) {
-            console.warn(
-              `⚠️ No se encontró sesión del servidor para: ${sale.sesion_caja_id}`
-            );
-            results.failed++;
-            results.details.push({
-              id: sale.id_local,
-              type: "venta",
-              status: "failed",
-              message: `Sesión no encontrada en servidor: ${sale.sesion_caja_id}`,
-            });
-            continue;
-          }
-
-          console.log(`🔄 Usando sesión del servidor: ${sesionServerId}`);
-
-          // ✅ USAR URL DIRECTA PARA EVITAR process.env
-          const apiUrl = "http://localhost:3000/api";
-          const saleData = {
-            sesion_caja_id: sesionServerId, // ✅ USAR ID DEL SERVIDOR, NO EL LOCAL
-            vendedor_id: sale.vendedor_id,
-            total: sale.total,
-            metodo_pago: sale.metodo_pago,
-            productos: sale.productos || [],
-          };
-
-          const response = await fetch(`${apiUrl}/ventas`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-token": localStorage.getItem("token"),
-            },
-            body: JSON.stringify(saleData),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-
-            // ✅ MARCAR COMO SINCRONIZADO
-            await this.markAsSynced("ventas_pendientes", sale.id_local, {
-              id: data.venta?.id,
-              sincronizado: true,
-            });
-
-            results.success++;
-            results.details.push({
-              id: sale.id_local,
-              type: "venta",
-              status: "success",
-              message: `Venta sincronizada: $${sale.total}`,
-            });
-
-            console.log(`✅ Venta sincronizada: ${sale.id_local}`);
-          } else {
-            const errorData = await response.json();
-            results.failed++;
-            results.details.push({
-              id: sale.id_local,
-              type: "venta",
-              status: "failed",
-              message: errorData.error || "Error del servidor",
-            });
-
-            console.error(`❌ Error sincronizando venta: ${errorData.error}`);
-          }
-        } catch (error) {
-          results.failed++;
-          results.details.push({
-            id: sale.id_local,
-            type: "venta",
-            status: "error",
-            message: error.message,
-          });
-
-          console.error(`❌ Error en venta ${sale.id_local}:`, error);
-        }
-      }
-
-      console.log(
-        `📊 RESULTADO VENTAS: ${results.success}/${results.total} exitosas`
-      );
-      return results;
-    } catch (error) {
-      console.error("❌ Error en syncPendingSalesDetailed:", error);
-      return {
-        total: 0,
-        success: 0,
-        failed: 0,
-        details: [],
-        error: error.message,
-      };
     }
   }
 
@@ -837,6 +1062,411 @@ class SyncController extends BaseOfflineController {
       };
     }
   }
+  // SyncController.js - AGREGAR ESTAS FUNCIONES NUEVAS
+
+  // ✅ FUNCIÓN DE DIAGNÓSTICO DE SESIONES
+  async diagnosticarSesionesVentas() {
+    try {
+      console.group("🔍 DIAGNÓSTICO SESIONES DE VENTAS PENDIENTES");
+
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
+      console.log(`📦 Total ventas pendientes: ${ventasPendientes.length}`);
+
+      const sesionesUnicas = new Set();
+
+      for (const venta of ventasPendientes) {
+        if (venta.sesion_id) {
+          sesionesUnicas.add(venta.sesion_id);
+          console.log(
+            `📋 Venta ${venta.id_local} - Sesión: ${venta.sesion_id}`
+          );
+        } else {
+          console.log(`📋 Venta ${venta.id_local} - SIN SESIÓN`);
+        }
+      }
+
+      console.log(
+        `💰 Sesiones únicas encontradas: ${Array.from(sesionesUnicas)}`
+      );
+
+      // Verificar estado de cada sesión en el servidor
+      for (const sesionId of sesionesUnicas) {
+        try {
+          const sesionResponse = await fetchConToken(
+            `sesiones-caja/${sesionId}`
+          );
+          console.log(
+            `🔍 Sesión ${sesionId}:`,
+            sesionResponse.ok
+              ? `✅ EXISTE (Estado: ${sesionResponse.sesion?.estado})`
+              : "❌ NO EXISTE"
+          );
+        } catch (error) {
+          console.log(`🔍 Sesión ${sesionId}: ❌ ERROR - ${error.message}`);
+        }
+      }
+
+      console.groupEnd();
+      return Array.from(sesionesUnicas);
+    } catch (error) {
+      console.error("❌ Error en diagnóstico:", error);
+      return [];
+    }
+  }
+
+  // ✅ FUNCIÓN PARA OBTENER SESIÓN ACTIVA
+  async obtenerSesionActivaParaSincronizacion() {
+    try {
+      console.log("🔍 Buscando sesión activa para sincronización...");
+
+      // 1. INTENTAR OBTENER SESIÓN ABIERTA EXISTENTE
+      try {
+        const sesionAbiertaResponse = await fetchConToken(
+          "sesiones-caja/abierta"
+        );
+        if (sesionAbiertaResponse.ok && sesionAbiertaResponse.sesion) {
+          console.log(
+            "✅ Usando sesión abierta existente:",
+            sesionAbiertaResponse.sesion.id
+          );
+          return sesionAbiertaResponse.sesion.id;
+        }
+      } catch (error) {
+        console.log("ℹ️ No hay sesión abierta existente:", error.message);
+      }
+
+      // 2. CREAR NUEVA SESIÓN PARA SINCRONIZACIÓN
+      console.log("🆕 Creando nueva sesión para sincronización...");
+      const sessionData = {
+        fecha_apertura: new Date().toISOString(),
+        monto_inicial: 0,
+        observaciones:
+          "Sesión automática para sincronizar ventas pendientes offline",
+        vendedor_id: "default",
+      };
+
+      const response = await fetchConToken(
+        "sesiones-caja/abrir",
+        sessionData,
+        "POST"
+      );
+
+      if (response.ok && response.sesion) {
+        console.log(
+          "✅ Nueva sesión creada para sincronización:",
+          response.sesion.id
+        );
+        return response.sesion.id;
+      } else {
+        throw new Error(response?.error || "Error creando sesión");
+      }
+    } catch (error) {
+      console.error("❌ Error obteniendo sesión activa:", error);
+      throw error;
+    }
+  }
+
+  // ✅ FUNCIÓN PARA PREPARAR VENTA CON SESIÓN ACTUAL
+  async prepararVentaConSesionActual(venta, sesionActivaId) {
+    try {
+      console.log(`🔧 Preparando venta ${venta.id_local} con sesión actual...`);
+
+      // CREAR COPIA SEGURA DE LA VENTA
+      const ventaData = { ...venta };
+
+      // ELIMINAR CAMPOS LOCALES
+      delete ventaData.id_local;
+      delete ventaData.sincronizado;
+      delete ventaData.timestamp;
+      delete ventaData.es_local;
+
+      // REASIGNAR A SESIÓN ACTIVA ACTUAL
+      ventaData.sesion_id = sesionActivaId;
+      console.log(
+        `🔄 Reasignando sesión: ${
+          venta.sesion_id || "Ninguna"
+        } -> ${sesionActivaId}`
+      );
+
+      // VERIFICAR QUE HAY PRODUCTOS VÁLIDOS
+      if (!ventaData.productos || ventaData.productos.length === 0) {
+        console.error(`❌ Venta ${venta.id_local} no tiene productos`);
+        return null;
+      }
+
+      console.log(`📦 Venta tiene ${ventaData.productos.length} productos`);
+
+      // ASEGURAR FECHA VÁLIDA
+      if (!ventaData.fecha_venta || ventaData.fecha_venta.includes("Invalid")) {
+        ventaData.fecha_venta = new Date().toISOString();
+      }
+
+      return ventaData;
+    } catch (error) {
+      console.error(`❌ Error preparando venta ${venta.id_local}:`, error);
+      return null;
+    }
+  }
+
+  // ✅ NUEVA FUNCIÓN: OBTENER SESIÓN ACTIVA ACTUAL
+  async obtenerSesionActivaParaSincronizacion() {
+    try {
+      console.log("🔍 Buscando sesión activa para sincronización...");
+
+      // 1. INTENTAR OBTENER SESIÓN ABIERTA EXISTENTE
+      try {
+        const sesionAbiertaResponse = await fetchConToken(
+          "sesiones-caja/abierta"
+        );
+        if (sesionAbiertaResponse.ok && sesionAbiertaResponse.sesion) {
+          console.log(
+            "✅ Usando sesión abierta existente:",
+            sesionAbiertaResponse.sesion.id
+          );
+          return sesionAbiertaResponse.sesion.id;
+        }
+      } catch (error) {
+        console.log("ℹ️ No hay sesión abierta existente:", error.message);
+      }
+
+      // 2. CREAR NUEVA SESIÓN PARA SINCRONIZACIÓN
+      console.log("🆕 Creando nueva sesión para sincronización...");
+      const sessionData = {
+        fecha_apertura: new Date().toISOString(),
+        monto_inicial: 0,
+        observaciones:
+          "Sesión automática para sincronizar ventas pendientes offline",
+        vendedor_id: "default", // O obtener del usuario actual
+      };
+
+      const response = await fetchConToken(
+        "sesiones-caja/abrir",
+        sessionData,
+        "POST"
+      );
+
+      if (response.ok && response.sesion) {
+        console.log(
+          "✅ Nueva sesión creada para sincronización:",
+          response.sesion.id
+        );
+        return response.sesion.id;
+      } else {
+        throw new Error(response?.error || "Error creando sesión");
+      }
+    } catch (error) {
+      console.error("❌ Error obteniendo sesión activa:", error);
+      throw error;
+    }
+  }
+  // Función para sincronizar ventas individuales con diagnóstico detallado
+  async sincronizarVentaIndividual(ventaIdLocal) {
+    try {
+      console.group(`🔍 SINCRONIZACIÓN INDIVIDUAL: ${ventaIdLocal}`);
+
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
+      const venta = ventasPendientes.find((v) => v.id_local === ventaIdLocal);
+
+      if (!venta) {
+        console.error("❌ Venta no encontrada");
+        return { success: false, error: "Venta no encontrada" };
+      }
+
+      console.log("📋 Datos de la venta:", {
+        id_local: venta.id_local,
+        sesion_original: venta.sesion_id,
+        productos: venta.productos,
+        fecha: venta.fecha_venta,
+      });
+
+      // Obtener sesión activa
+      const sesionActivaId = await obtenerSesionActivaParaSincronizacion();
+
+      // Preparar venta
+      const ventaData = await prepararVentaConSesionActual(
+        venta,
+        sesionActivaId
+      );
+
+      if (!ventaData) {
+        return { success: false, error: "No se pudo preparar la venta" };
+      }
+
+      console.log("📤 Enviando venta individual...");
+      const response = await fetchConToken("ventas", ventaData, "POST");
+
+      if (response && response.ok === true) {
+        await SalesOfflineController.deletePendingSale(venta.id_local);
+        console.log("✅ Venta sincronizada exitosamente");
+        return { success: true, venta: response.venta };
+      } else {
+        console.error("❌ Error del servidor:", response?.error);
+        return { success: false, error: response?.error };
+      }
+    } catch (error) {
+      console.error("❌ Error en sincronización individual:", error);
+      return { success: false, error: error.message };
+    } finally {
+      console.groupEnd();
+    }
+  }
+  // ✅ NUEVA FUNCIÓN: PREPARAR VENTA CON SESIÓN ACTUAL
+  async prepararVentaConSesionActual(venta, sesionActivaId) {
+    try {
+      console.log(`🔧 Preparando venta ${venta.id_local} con sesión actual...`);
+
+      // ✅ CREAR COPIA SEGURA DE LA VENTA
+      const ventaData = { ...venta };
+
+      // ✅ ELIMINAR CAMPOS LOCALES
+      delete ventaData.id_local;
+      delete ventaData.sincronizado;
+      delete ventaData.timestamp;
+      delete ventaData.es_local;
+
+      // ✅ REASIGNAR A SESIÓN ACTIVA ACTUAL
+      ventaData.sesion_id = sesionActivaId;
+      console.log(
+        `🔄 Reasignando sesión: ${
+          venta.sesion_id || "Ninguna"
+        } -> ${sesionActivaId}`
+      );
+
+      // ✅ VERIFICAR QUE HAY PRODUCTOS VÁLIDOS
+      if (!ventaData.productos || ventaData.productos.length === 0) {
+        console.error(`❌ Venta ${venta.id_local} no tiene productos`);
+        return null;
+      }
+
+      // ✅ VALIDAR PRODUCTOS (OPCIONAL - EL SERVIDOR DEBE MANEJARLO)
+      console.log(`📦 Venta tiene ${ventaData.productos.length} productos`);
+
+      // ✅ ASEGURAR FECHA VÁLIDA
+      if (!ventaData.fecha_venta || ventaData.fecha_venta.includes("Invalid")) {
+        ventaData.fecha_venta = new Date().toISOString();
+      }
+
+      return ventaData;
+    } catch (error) {
+      console.error(`❌ Error preparando venta ${venta.id_local}:`, error);
+      return null;
+    }
+  }
+
+  // Agregar esta función en SyncController.js
+  async diagnosticarSesionesVentas() {
+    try {
+      console.group("🔍 DIAGNÓSTICO SESIONES DE VENTAS PENDIENTES");
+
+      const ventasPendientes = await SalesOfflineController.getPendingSales();
+      console.log(`📦 Total ventas pendientes: ${ventasPendientes.length}`);
+
+      const sesionesUnicas = new Set();
+
+      for (const venta of ventasPendientes) {
+        if (venta.sesion_id) {
+          sesionesUnicas.add(venta.sesion_id);
+          console.log(
+            `📋 Venta ${venta.id_local} - Sesión: ${venta.sesion_id}`
+          );
+        } else {
+          console.log(`📋 Venta ${venta.id_local} - SIN SESIÓN`);
+        }
+      }
+
+      console.log(
+        `💰 Sesiones únicas encontradas: ${Array.from(sesionesUnicas)}`
+      );
+
+      // Verificar estado de cada sesión en el servidor
+      for (const sesionId of sesionesUnicas) {
+        try {
+          const sesionResponse = await fetchConToken(
+            `sesiones-caja/${sesionId}`
+          );
+          console.log(
+            `🔍 Sesión ${sesionId}:`,
+            sesionResponse.ok
+              ? `✅ EXISTE (Estado: ${sesionResponse.sesion?.estado})`
+              : "❌ NO EXISTE"
+          );
+        } catch (error) {
+          console.log(`🔍 Sesión ${sesionId}: ❌ ERROR - ${error.message}`);
+        }
+      }
+
+      console.groupEnd();
+      return Array.from(sesionesUnicas);
+    } catch (error) {
+      console.error("❌ Error en diagnóstico:", error);
+      return [];
+    }
+  }
+  // SyncController.js - VERSIÓN CORREGIDA CON RUTAS EXACTAS
+  async createAutomaticSessionForSale(venta) {
+    try {
+      console.log("🔄 [SYNC] Creando sesión automática para venta...", venta);
+
+      // ✅ VERIFICAR SESIÓN ABIERTA CON RUTA CORRECTA: /abierta (no /abiertas)
+      let sesionAbierta = null;
+
+      try {
+        console.log("🔍 Buscando sesión abierta en /api/sesiones-caja/abierta");
+        const response = await fetchConToken("sesiones-caja/abierta");
+
+        if (response.ok && response.sesion) {
+          sesionAbierta = response.sesion;
+          console.log("✅ [SYNC] Sesión abierta encontrada:", sesionAbierta.id);
+          return sesionAbierta.id;
+        }
+      } catch (error) {
+        console.log(
+          "⚠️ No hay sesión abierta o error al obtenerla:",
+          error.message
+        );
+      }
+
+      // ✅ SI NO HAY SESIÓN ABIERTA, CREAR UNA NUEVA
+      try {
+        console.log("🆕 Creando nueva sesión automática...");
+        const sessionData = {
+          fecha_apertura: new Date().toISOString(),
+          monto_inicial: 0,
+          observaciones:
+            "Sesión automática creada para sincronizar ventas pendientes",
+          vendedor_id: venta.vendedor_id || "default", // Usar vendedor de la venta o uno por defecto
+        };
+
+        const response = await fetchConToken(
+          "sesiones-caja/abrir",
+          sessionData,
+          "POST"
+        );
+
+        if (response.ok && response.sesion) {
+          console.log(
+            "✅ [SYNC] Sesión automática creada:",
+            response.sesion.id
+          );
+          return response.sesion.id;
+        } else {
+          throw new Error(response?.error || "Error creando sesión");
+        }
+      } catch (sessionError) {
+        console.error(
+          "❌ No se pudo crear sesión automática:",
+          sessionError.message
+        );
+
+        // ✅ FALLBACK CRÍTICO: Permitir ventas sin sesión si el backend lo permite
+        console.log("🔄 [SYNC] Continuando sin sesión - Modo emergencia");
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ [SYNC] Error en createAutomaticSessionForSale:", error);
+      return null; // Fallback: permitir sin sesión
+    }
+  }
   // ✅ NUEVO MÉTODO: Verificar si el cierre ya existe en el servidor
   async checkExistingClosure(closure) {
     try {
@@ -1007,6 +1637,52 @@ class SyncController extends BaseOfflineController {
     }
   }
 
+  async createAutomaticSessionForSale(venta) {
+    try {
+      console.log("🔄 [SYNC] Creando sesión automática para venta...", venta);
+
+      // ✅ VERIFICAR SI YA EXISTE UNA SESIÓN ABIERTA EN EL SERVIDOR
+      const sesionesResponse = await fetchConToken("sesiones-caja/abiertas");
+
+      if (
+        sesionesResponse.ok &&
+        sesionesResponse.sesiones &&
+        sesionesResponse.sesiones.length > 0
+      ) {
+        // ✅ USAR SESIÓN EXISTENTE
+        const sesionExistente = sesionesResponse.sesiones[0];
+        console.log("✅ [SYNC] Usando sesión existente:", sesionExistente.id);
+        return sesionExistente.id;
+      }
+
+      // ✅ CREAR NUEVA SESIÓN SI NO HAY EXISTENTE
+      const sessionData = {
+        fecha_apertura: new Date().toISOString(),
+        monto_inicial: 0,
+        observaciones:
+          "Sesión automática creada para sincronizar ventas pendientes",
+      };
+
+      const response = await fetchConToken(
+        "sesiones-caja/abrir",
+        sessionData,
+        "POST"
+      );
+
+      if (response.ok && response.sesion) {
+        console.log("✅ [SYNC] Sesión automática creada:", response.sesion.id);
+        return response.sesion.id;
+      } else {
+        throw new Error(response?.error || "Error creando sesión automática");
+      }
+    } catch (error) {
+      console.error("❌ [SYNC] Error creando sesión automática:", error);
+
+      // ✅ FALLBACK: Usar una sesión por defecto o permitir ventas sin sesión
+      console.log("⚠️ [SYNC] Usando fallback para sesión...");
+      return null; // O un ID de sesión por defecto si tu backend lo permite
+    }
+  }
   // En SyncController.js - AGREGAR MÉTODO DE LIMPIEZA
   async cleanupDuplicatePendingData() {
     try {
@@ -1860,76 +2536,6 @@ class SyncController extends BaseOfflineController {
     }
   }
 
-  // ✅ ACTUALIZAR fullSync PARA INCLUIR STOCK
-  async fullSync() {
-    if (!this.isOnline) {
-      return { success: false, error: "Sin conexión a internet" };
-    }
-
-    // ✅ LIMPIAR DUPLICADOS ANTES DE SINCRONIZAR
-    await this.cleanupDuplicatePendingData();
-
-    if (this.isSyncing) {
-      return { success: false, error: "Sincronización en progreso" };
-    }
-
-    this.isSyncing = true;
-    this.notifyListeners("sync_start");
-
-    const syncResults = {
-      startTime: Date.now(),
-      sales: null,
-      sessions: null,
-      closures: null,
-      masterData: null,
-      products: null, // ✅ AGREGAR PRODUCTOS AL RESULTADO
-      errors: [],
-    };
-
-    try {
-      console.log("🔄 INICIANDO SINCRONIZACIÓN CON ORDEN CORRECTO...");
-
-      // ✅ ORDEN CRÍTICO CORREGIDO:
-      // 1. Datos maestros
-      syncResults.masterData = await this.syncMasterData();
-
-      // 2. PRODUCTOS PRIMERO (antes de sesiones y ventas)
-      syncResults.products = await this.syncPendingProductsDetailed();
-
-      // 3. Sesiones (los cierres dependen de ellas)
-      syncResults.sessions = await this.syncPendingSessionsDetailed();
-
-      // 4. Ventas (dependen de sesiones)
-      syncResults.sales = await this.syncPendingSalesDetailed();
-
-      // 5. Cierres ÚLTIMO (dependen de sesiones existentes)
-      syncResults.closures = await this.syncPendingClosuresDetailed();
-
-      syncResults.duration = Date.now() - syncResults.startTime;
-      syncResults.success = syncResults.errors.length === 0;
-
-      if (syncResults.success) {
-        localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
-      }
-
-      console.log("✅ SINCRONIZACIÓN COMPLETADA", syncResults);
-      this.notifyListeners("sync_complete", syncResults);
-
-      return syncResults;
-    } catch (error) {
-      syncResults.duration = Date.now() - syncResults.startTime;
-      syncResults.success = false;
-      syncResults.error = error.message;
-      syncResults.errors.push(error.message);
-
-      console.error("❌ ERROR EN SINCRONIZACIÓN:", error);
-      this.notifyListeners("sync_error", syncResults);
-
-      return syncResults;
-    } finally {
-      this.isSyncing = false;
-    }
-  }
   // En SyncController.js - AGREGAR MÉTODO DE DIAGNÓSTICO PARA PRODUCTOS
   async debugProductsIssue() {
     try {

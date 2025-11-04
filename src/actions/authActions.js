@@ -1,4 +1,4 @@
-// actions/authActions.js - VERSIÓN CORREGIDA Y COMPLETA
+// actions/authActions.js - VERSIÓN FINAL CORREGIDA
 import { types } from "../types/types";
 import Swal from "sweetalert2";
 import { fetchSinToken, fetchConToken } from "../helpers/fetch";
@@ -7,6 +7,7 @@ import { loadCategories } from "./categoriesActions";
 import AuthOfflineController from "../controllers/offline/AuthOfflineController/AuthOfflineController";
 import SyncController from "../controllers/offline/SyncController/SyncController";
 
+// ✅ ACTIONS BÁSICAS
 export const startLoading = () => ({
   type: types.authStartLoading,
 });
@@ -19,10 +20,161 @@ export const checkingFinish = () => ({
   type: types.authCheckingFinish,
 });
 
-// ✅ CORREGIDO: LOGIN CON NUEVOS CONTROLLERS
+export const clearError = () => ({
+  type: types.authClearError,
+});
+
+// ✅ FUNCIÓN AUXILIAR PARA VERIFICACIÓN OFFLINE
+async function verifyOfflineAuth(dispatch, userData) {
+  try {
+    const offlineUser = await AuthOfflineController.getUserByUsername(
+      userData.username
+    );
+
+    if (offlineUser && offlineUser.token) {
+      console.log("✅ Usuario encontrado en datos offline");
+
+      // Verificación básica del token
+      try {
+        const tokenParts = offlineUser.token.split(".");
+        if (tokenParts.length === 3) {
+          const tokenPayload = JSON.parse(atob(tokenParts[1]));
+          const isTokenValid = tokenPayload.exp * 1000 > Date.now();
+
+          if (isTokenValid) {
+            dispatch({
+              type: types.authLogin,
+              payload: userData,
+            });
+
+            console.log("✅ Autenticación offline exitosa");
+
+            // Mostrar alerta si estamos offline
+            if (!navigator.onLine) {
+              setTimeout(() => {
+                Swal.fire({
+                  icon: "info",
+                  title: "Modo Offline",
+                  text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
+                  timer: 3000,
+                  showConfirmButton: false,
+                });
+              }, 500);
+            }
+          } else {
+            console.warn("⚠️ Token expirado en modo offline");
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+          }
+        }
+      } catch (tokenError) {
+        console.warn("⚠️ Error verificando token offline:", tokenError);
+        // Si hay error, asumimos válido para permitir trabajo offline
+        dispatch({
+          type: types.authLogin,
+          payload: userData,
+        });
+      }
+    } else {
+      console.warn("⚠️ Usuario no encontrado en datos offline");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
+  } catch (error) {
+    console.error("❌ Error en verifyOfflineAuth:", error);
+    throw error;
+  }
+}
+
+// ✅ START CHECKING - FUNCIÓN PRINCIPAL
+// actions/authActions.js - VERSIÓN CORREGIDA (solo la parte de verificación)
+export const startChecking = () => {
+  return async (dispatch) => {
+    console.log("🔍 Iniciando verificación de autenticación...");
+
+    const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+
+    console.log("📋 Estado de credenciales:", {
+      hasToken: !!token,
+      hasUser: !!user,
+      isOnline: navigator.onLine,
+    });
+
+    if (!token || !user) {
+      console.log("❌ No hay credenciales guardadas");
+      dispatch(checkingFinish());
+      return;
+    }
+
+    try {
+      const userData = JSON.parse(user);
+
+      if (navigator.onLine) {
+        // ✅ MODO ONLINE: Verificar con servidor
+        console.log("🌐 Verificando token con servidor...");
+        try {
+          // ✅ USAR LA RUTA CORRECTA
+          const response = await fetchConToken("auth/verify-token");
+
+          if (response.ok === true) {
+            console.log("✅ Token válido - Usuario autenticado");
+
+            // ✅ ACTUALIZAR DATOS DEL USUARIO POR SI CAMBIARON
+            const updatedUser = {
+              ...userData,
+              ...(response.usuario || {}),
+            };
+
+            localStorage.setItem("user", JSON.stringify(updatedUser));
+
+            dispatch({
+              type: types.authLogin,
+              payload: updatedUser,
+            });
+          } else {
+            throw new Error(response.error || "Token inválido");
+          }
+        } catch (onlineError) {
+          console.warn(
+            "⚠️ Error verificando token online:",
+            onlineError.message
+          );
+
+          // Si es error 401, limpiar credenciales
+          if (
+            onlineError.message.includes("401") ||
+            onlineError.message.includes("Token no válido")
+          ) {
+            console.log("🔄 Token inválido - Limpiando credenciales");
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            dispatch(checkingFinish());
+            return;
+          }
+
+          // Para otros errores (red, etc.), intentar offline
+          await verifyOfflineAuth(dispatch, userData);
+        }
+      } else {
+        // ✅ MODO OFFLINE: Verificar localmente
+        console.log("📱 Modo offline - Verificando credenciales locales");
+        await verifyOfflineAuth(dispatch, userData);
+      }
+
+      dispatch(checkingFinish());
+    } catch (error) {
+      console.error("❌ Error en startChecking:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      dispatch(checkingFinish());
+    }
+  };
+};
+
+// ✅ LOGIN PRINCIPAL
 export const startLogin = (username, password) => {
   return async (dispatch) => {
-    // ✅ USAR LOS TYPES CORRECTOS
     dispatch({ type: types.authStartLoading });
 
     try {
@@ -53,7 +205,8 @@ export const startLogin = (username, password) => {
               "✅ Login online exitoso - Token guardado:",
               token ? "✅" : "❌"
             );
-            // ✅ ✅ ✅ CORRECCIÓN CRÍTICA: GUARDAR USUARIO EN INDEXEDDB
+
+            // ✅ GUARDAR USUARIO EN INDEXEDDB
             console.log("💾 Guardando usuario en IndexedDB para offline...");
             try {
               const saveResult = await AuthOfflineController.saveUser(
@@ -75,6 +228,7 @@ export const startLogin = (username, password) => {
             } catch (saveError) {
               console.error("❌ Error guardando usuario offline:", saveError);
             }
+
             // ✅ DISPATCH INMEDIATO
             dispatch({
               type: types.authLogin,
@@ -88,7 +242,6 @@ export const startLogin = (username, password) => {
               console.log("✅ Token verificado correctamente");
             } catch (tokenError) {
               console.error("❌ El token no funciona:", tokenError);
-              // No lanzar error, continuar de todos modos
             }
 
             // ✅ CARGAR DATOS DESPUÉS DEL LOGIN
@@ -146,7 +299,6 @@ export const startLogin = (username, password) => {
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
 
-        // ✅ DISPATCH CORRECTO PARA OFFLINE
         dispatch({
           type: types.authLogin,
           payload: user,
@@ -181,33 +333,81 @@ export const startLogin = (username, password) => {
 
       return { success: false, error: error.message };
     } finally {
-      // ✅ FINALIZAR LOADING CORRECTAMENTE
       dispatch({ type: types.authFinishLoading });
     }
   };
 };
 
-// ✅ NUEVO: ACTION PARA LOGIN OFFLINE DIRECTO
-export const offlineLogin = (userData) => ({
-  type: types.authLogin,
-  payload: userData,
-});
+// ✅ OFFLINE CHECKING
+export const startOfflineChecking = () => {
+  return async (dispatch) => {
+    console.log("🔍 Iniciando verificación offline...");
 
-// ✅ CORREGIDO: SINCRONIZAR USUARIOS
+    const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+
+    if (!token || !user) {
+      console.log("❌ No hay credenciales guardadas para offline");
+      dispatch(checkingFinish());
+      return;
+    }
+
+    try {
+      const userData = JSON.parse(user);
+
+      // Verificar si el usuario existe en IndexedDB
+      const offlineUser = await AuthOfflineController.getUserByUsername(
+        userData.username
+      );
+
+      if (offlineUser) {
+        console.log("✅ Credenciales offline válidas - Autenticando");
+
+        dispatch({
+          type: types.authLogin,
+          payload: userData,
+        });
+
+        dispatch(checkingFinish());
+
+        // Mostrar alerta de modo offline
+        setTimeout(() => {
+          Swal.fire({
+            icon: "info",
+            title: "Modo Offline",
+            text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
+            timer: 3000,
+            showConfirmButton: false,
+          });
+        }, 1000);
+      } else {
+        console.warn("❌ Usuario no encontrado en datos offline");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        dispatch(checkingFinish());
+      }
+    } catch (error) {
+      console.error("❌ Error en verificación offline:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      dispatch(checkingFinish());
+    }
+  };
+};
+
+// ✅ SINCRONIZAR USUARIOS
 export const syncOfflineUsers = () => {
   return async (dispatch) => {
-    // ✅ VERIFICAR CONEXIÓN ANTES DE INTENTAR SINCRONIZAR
     if (!navigator.onLine) {
       console.log("📴 Sin conexión - No se puede sincronizar usuarios");
       return {
         success: false,
         error: "Sin conexión a internet",
-        silent: true, // ✅ NUEVO: Indicar que es un error silencioso
+        silent: true,
       };
     }
 
     try {
-      // ✅ SOLO MOSTRAR SWAL SI HAY CONEXIÓN
       Swal.fire({
         title: "Sincronizando...",
         text: "Actualizando datos de usuarios offline",
@@ -222,7 +422,6 @@ export const syncOfflineUsers = () => {
       Swal.close();
 
       if (result.success) {
-        // Obtener estadísticas actualizadas
         const users = await AuthOfflineController.getAllOfflineUsers();
         const stats = {
           totalRecords: users.length,
@@ -231,12 +430,10 @@ export const syncOfflineUsers = () => {
           usersByRole: {},
         };
 
-        // Calcular estadísticas
         users.forEach((user) => {
           stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
         });
 
-        // ✅ SOLO MOSTRAR MENSAJE DE ÉXITO SI NO ESTÁ EN MODO OFFLINE
         if (navigator.onLine) {
           await Swal.fire({
             icon: "success",
@@ -255,7 +452,6 @@ export const syncOfflineUsers = () => {
       console.error("Error sincronizando usuarios:", error);
       Swal.close();
 
-      // ✅ NO MOSTRAR ERROR SI ESTAMOS OFFLINE (ES NORMAL)
       if (navigator.onLine) {
         await Swal.fire({
           icon: "error",
@@ -268,38 +464,13 @@ export const syncOfflineUsers = () => {
       return {
         success: false,
         error: error.message,
-        silent: !navigator.onLine, // ✅ SILENCIOSO SI ESTÁ OFFLINE
+        silent: !navigator.onLine,
       };
     }
   };
 };
 
-// ✅ NUEVO: OBTENER ESTADÍSTICAS DE USUARIOS
-export const getOfflineUsersStats = () => {
-  return async (dispatch) => {
-    try {
-      const users = await AuthOfflineController.getAllOfflineUsers();
-      const stats = {
-        totalRecords: users.length,
-        uniqueUsers: users.length,
-        duplicates: 0,
-        usersByRole: {},
-        lastSync: users.length > 0 ? users[0].savedAt : null,
-      };
-
-      users.forEach((user) => {
-        stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
-      });
-
-      return stats;
-    } catch (error) {
-      console.error("Error obteniendo estadísticas:", error);
-      return null;
-    }
-  };
-};
-
-// ✅ ACTION PARA LOGOUT
+// ✅ LOGOUT
 export const startLogout = () => {
   return async (dispatch) => {
     const result = await Swal.fire({
@@ -336,277 +507,27 @@ export const startLogout = () => {
   };
 };
 
-// ✅ ACTION PARA VERIFICAR AUTENTICACIÓN
-// ✅ CORRECCIÓN EN startChecking - REEMPLAZA ESTA FUNCIÓN
-export const startChecking = () => {
-  return async (dispatch) => {
-    const token = localStorage.getItem("token");
-    const user = localStorage.getItem("user");
-
-    console.log("🔍 Verificando autenticación...", {
-      hasToken: !!token,
-      hasUser: !!user,
-      isOnline: navigator.onLine,
-    });
-
-    if (!token || !user) {
-      console.log("📝 No hay credenciales guardadas");
-      dispatch(checkingFinish());
-      return;
-    }
-
-    try {
-      const userData = JSON.parse(user);
-
-      // ✅ MODO OFFLINE: Verificación simplificada
-      if (!navigator.onLine) {
-        console.log("📱 Modo offline - Verificación con IndexedDB");
-
-        // Verificar que el usuario existe en IndexedDB
-        const offlineUser = await AuthOfflineController.getUserByUsername(
-          userData.username
-        );
-
-        if (offlineUser && offlineUser.token) {
-          console.log("✅ Usuario encontrado en datos offline - Autenticando");
-
-          // ✅ VERIFICAR QUE EL TOKEN NO ESTÉ EXPIRADO
-          try {
-            const tokenParts = offlineUser.token.split(".");
-            if (tokenParts.length === 3) {
-              const tokenPayload = JSON.parse(atob(tokenParts[1]));
-              const isTokenValid = tokenPayload.exp * 1000 > Date.now();
-
-              if (isTokenValid) {
-                dispatch({
-                  type: types.authLogin,
-                  payload: userData,
-                });
-                dispatch(checkingFinish());
-                return;
-              } else {
-                console.warn("⚠️ Token expirado en modo offline");
-                // Limpiar credenciales expiradas
-                localStorage.removeItem("token");
-                localStorage.removeItem("user");
-              }
-            }
-          } catch (tokenError) {
-            console.warn("⚠️ Error verificando token offline:", tokenError);
-          }
-        }
-
-        console.warn(
-          "⚠️ Usuario no encontrado en datos offline o token inválido"
-        );
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        dispatch(checkingFinish());
-        return;
-      }
-
-      // ✅ MODO ONLINE: Verificación estándar
-      try {
-        // Verificar token con el servidor o decodificarlo
-        const response = await fetchConToken("auth/verify");
-        if (response.ok) {
-          dispatch({
-            type: types.authLogin,
-            payload: userData,
-          });
-        } else {
-          throw new Error("Token inválido");
-        }
-      } catch (error) {
-        console.warn("⚠️ Error verificando token online:", error);
-        // Intentar con decodificación local
-        try {
-          const tokenParts = token.split(".");
-          if (tokenParts.length === 3) {
-            const tokenPayload = JSON.parse(atob(tokenParts[1]));
-            const isTokenValid = tokenPayload.exp * 1000 > Date.now();
-
-            if (isTokenValid) {
-              dispatch({
-                type: types.authLogin,
-                payload: userData,
-              });
-            } else {
-              throw new Error("Token expirado");
-            }
-          }
-        } catch (localError) {
-          console.warn("⚠️ Token inválido, limpiando credenciales");
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-        }
-      }
-
-      dispatch(checkingFinish());
-    } catch (error) {
-      console.error("❌ Error en startChecking:", error);
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      dispatch(checkingFinish());
-    }
-  };
-};
-// ✅ AGREGAR ESTE NUEVO ACTION EN authActions.js
-export const verifyOfflineAuth = () => {
+// ✅ OBTENER ESTADÍSTICAS
+export const getOfflineUsersStats = () => {
   return async (dispatch) => {
     try {
-      const token = localStorage.getItem("token");
-      const user = localStorage.getItem("user");
+      const users = await AuthOfflineController.getAllOfflineUsers();
+      const stats = {
+        totalRecords: users.length,
+        uniqueUsers: users.length,
+        duplicates: 0,
+        usersByRole: {},
+        lastSync: users.length > 0 ? users[0].savedAt : null,
+      };
 
-      if (!token || !user) {
-        return { success: false, error: "No hay credenciales guardadas" };
-      }
+      users.forEach((user) => {
+        stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
+      });
 
-      const userData = JSON.parse(user);
-
-      // Verificar en IndexedDB
-      const offlineUser = await AuthOfflineController.getUserByUsername(
-        userData.username
-      );
-
-      if (!offlineUser) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        return {
-          success: false,
-          error: "Usuario no encontrado en datos offline",
-        };
-      }
-
-      // Verificar token
-      if (offlineUser.token) {
-        const tokenParts = offlineUser.token.split(".");
-        if (tokenParts.length === 3) {
-          const tokenPayload = JSON.parse(atob(tokenParts[1]));
-          const isTokenValid = tokenPayload.exp * 1000 > Date.now();
-
-          if (isTokenValid) {
-            dispatch({
-              type: types.authLogin,
-              payload: userData,
-            });
-            return { success: true, user: userData };
-          }
-        }
-      }
-
-      // Token inválido o expirado
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      return { success: false, error: "Sesión expirada" };
+      return stats;
     } catch (error) {
-      console.error("❌ Error en verifyOfflineAuth:", error);
-      return { success: false, error: error.message };
+      console.error("Error obteniendo estadísticas:", error);
+      return null;
     }
   };
 };
-// ✅ AGREGAR ESTA FUNCIÓN PARA DIAGNÓSTICO
-export const diagnoseOfflineAuth = async () => {
-  console.group("🔍 DIAGNÓSTICO LOGIN OFFLINE");
-
-  // 1. Verificar localStorage
-  const token = localStorage.getItem("token");
-  const user = localStorage.getItem("user");
-  console.log("📋 LocalStorage:", { hasToken: !!token, hasUser: !!user });
-
-  // 2. Verificar IndexedDB
-  let users = []; // ✅ DEFINIR LA VARIABLE
-  try {
-    users = await AuthOfflineController.getAllOfflineUsers(); // ✅ ASIGNAR VALOR
-    console.log("💾 IndexedDB - Usuarios:", users.length);
-    console.log(
-      "👥 Usuarios en BD:",
-      users.map((u) => ({
-        username: u.username,
-        hasToken: !!u.token,
-        activo: u.activo,
-      }))
-    );
-  } catch (error) {
-    console.error("❌ Error accediendo IndexedDB:", error);
-  }
-
-  // 3. Verificar conexión
-  console.log("🌐 Conexión:", navigator.onLine ? "ONLINE" : "OFFLINE");
-
-  console.groupEnd();
-
-  return {
-    hasLocalStorage: !!(token && user),
-    offlineUsersCount: users.length, // ✅ AHORA users ESTÁ DEFINIDA
-    isOnline: navigator.onLine,
-  };
-};
-
-// actions/authActions.js - AGREGAR ESTE NUEVO ACTION
-export const startOfflineChecking = () => {
-  return async (dispatch) => {
-    console.log("🔍 Iniciando verificación offline...");
-
-    const token = localStorage.getItem("token");
-    const user = localStorage.getItem("user");
-
-    if (!token || !user) {
-      console.log("❌ No hay credenciales guardadas para offline");
-      dispatch(checkingFinish());
-      return;
-    }
-
-    try {
-      const userData = JSON.parse(user);
-
-      // Verificar si el usuario existe en IndexedDB
-      const offlineUser = await AuthOfflineController.getUserByUsername(
-        userData.username
-      );
-
-      if (offlineUser) {
-        console.log("✅ Credenciales offline válidas - Autenticando");
-
-        dispatch({
-          type: types.authLogin,
-          payload: userData,
-        });
-
-        // ✅ CORRECCIÓN CRÍTICA: LLAMAR A checkingFinish CUANDO ES EXITOSO
-        dispatch(checkingFinish());
-
-        // Mostrar alerta de modo offline
-        setTimeout(() => {
-          Swal.fire({
-            icon: "info",
-            title: "Modo Offline",
-            text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-        }, 1000);
-      } else {
-        console.warn("❌ Usuario no encontrado en datos offline");
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        dispatch(checkingFinish());
-      }
-    } catch (error) {
-      console.error("❌ Error en verificación offline:", error);
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      dispatch(checkingFinish());
-    }
-  };
-};
-// ✅ ACTION PARA MANEJO DE ERRORES
-export const clearError = () => ({
-  type: types.authClearError,
-});
-
-// ✅ NUEVO: ACTUALIZAR ESTADO DE CONEXIÓN
-export const updateConnectionStatus = (isOnline) => ({
-  type: types.connectionStatusUpdate,
-  payload: { isOnline },
-});

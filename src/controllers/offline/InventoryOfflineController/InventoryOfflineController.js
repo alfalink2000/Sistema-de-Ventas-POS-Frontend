@@ -59,63 +59,63 @@ class InventoryOfflineController extends BaseOfflineController {
   async getPendingStockUpdates() {
     try {
       console.log(
-        "🔍 [OFFLINE] Buscando actualizaciones pendientes de stock..."
+        "🔍 [INVENTORY] Buscando actualizaciones de stock pendientes..."
       );
 
-      // ✅ OPCIÓN 1: Obtener TODOS los registros y filtrar manualmente (MÁS SEGURO)
-      const allUpdates = await IndexedDBService.getAll(this.storeName);
+      // ✅ USAR EL MÉTODO UNIFICADO DE IndexedDBService
+      const pendingUpdates = await IndexedDBService.getPendingRecords(
+        this.storeName
+      );
+
       console.log(
-        `📦 [OFFLINE] ${allUpdates.length} registros totales en ${this.storeName}`
+        `📦 [INVENTORY] ${pendingUpdates.length} actualizaciones pendientes encontradas`
       );
 
-      // ✅ FILTRAR MANUALMENTE - Evitar problemas con índices booleanos
-      const pendingUpdates = allUpdates.filter((update) => {
-        const isPending =
-          update.sincronizado === false ||
-          update.sincronizado === undefined ||
-          update.sincronizado === null;
-        return isPending;
+      // ✅ FILTRADO ADICIONAL PARA STOCK ESPECÍFICAMENTE
+      const validStockUpdates = pendingUpdates.filter((update) => {
+        // Verificar que tenga los campos mínimos requeridos
+        const hasRequiredFields =
+          update.producto_id &&
+          update.stock_nuevo !== undefined &&
+          update.stock_anterior !== undefined;
+
+        // Verificar que no sea una actualización duplicada muy reciente
+        const isNotDuplicate = !this.isDuplicateUpdate(update, pendingUpdates);
+
+        return hasRequiredFields && isNotDuplicate;
       });
 
-      console.log(
-        `📦 [OFFLINE] ${pendingUpdates.length} actualizaciones pendientes encontradas (filtro manual)`
-      );
-
-      // ✅ LOG DETALLADO PARA DEBUG
-      if (pendingUpdates.length === 0 && allUpdates.length > 0) {
+      if (validStockUpdates.length !== pendingUpdates.length) {
         console.warn(
-          "⚠️ [OFFLINE] Hay registros pero ninguno marcado como pendiente:"
+          `⚠️ [INVENTORY] Se filtraron ${
+            pendingUpdates.length - validStockUpdates.length
+          } actualizaciones inválidas`
         );
-        allUpdates.forEach((update) => {
-          console.log(
-            `   - ${update.id_local}: sincronizado = ${update.sincronizado}`
-          );
-        });
       }
 
-      return pendingUpdates;
+      return validStockUpdates;
     } catch (error) {
       console.error(
-        "❌ [OFFLINE] Error crítico obteniendo actualizaciones pendientes:",
+        "❌ [INVENTORY] Error obteniendo actualizaciones pendientes:",
         error
       );
-
-      // ✅ FALLBACK EXTREMO
-      try {
-        const allUpdates = await IndexedDBService.getAll(this.storeName);
-        const pendingUpdates = allUpdates.filter(
-          (update) =>
-            update.sincronizado === false || update.sincronizado === undefined
-        );
-        console.log(
-          `📦 [OFFLINE] Fallback: ${pendingUpdates.length} pendientes encontrados`
-        );
-        return pendingUpdates;
-      } catch (fallbackError) {
-        console.error("❌ [OFFLINE] Error en fallback extremo:", fallbackError);
-        return [];
-      }
+      return [];
     }
+  }
+
+  // ✅ NUEVO MÉTODO PARA DETECTAR DUPLICADOS
+  isDuplicateUpdate(currentUpdate, allUpdates) {
+    // Buscar actualizaciones duplicadas para el mismo producto en un corto período
+    const duplicates = allUpdates.filter(
+      (update) =>
+        update.producto_id === currentUpdate.producto_id &&
+        update.id_local !== currentUpdate.id_local &&
+        Math.abs(
+          new Date(update.timestamp) - new Date(currentUpdate.timestamp)
+        ) < 5000 // 5 segundos
+    );
+
+    return duplicates.length > 0;
   }
 
   // ✅ MARCAR ACTUALIZACIÓN COMO SINCRONIZADA

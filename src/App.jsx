@@ -1,7 +1,8 @@
+// App.jsx - VERSIÓN CORREGIDA
 import { useEffect } from "react";
 import { Provider, useDispatch } from "react-redux";
 import { store } from "./store/store";
-import { startChecking } from "./actions/authActions";
+import { startChecking } from "./actions/authActions"; // ✅ DESCOMENTADO
 import AppRouter from "./components/AppRouter";
 import PWAInstallPrompt from "./components/ui/PWAInstallPrompt/PWAInstallPrompt";
 import "./index.css";

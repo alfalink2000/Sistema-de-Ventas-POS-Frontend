@@ -26,11 +26,17 @@ const Reports = () => {
   const { closures, loading } = useSelector((state) => state.closures);
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
-
+  // Reports.jsx - VERSIÓN CORREGIDA
   useEffect(() => {
-    // Cargar cierres al montar el componente
-    dispatch(loadClosures(100));
-  }, [dispatch]);
+    console.log("🔄 Reports: Verificando necesidad de cargar cierres...");
+
+    // ✅ Solo cargar si no hay datos o si está online
+    if (closures.length === 0 || isOnline) {
+      dispatch(loadClosures(50)); // ✅ Cargar menos registros inicialmente
+    } else {
+      console.log("✅ Reports: Usando cierres existentes:", closures.length);
+    }
+  }, [dispatch, isOnline]); // ✅ Dependencia de isOnline para recargar cuando hay conexión
 
   const handleSync = async () => {
     if (!isOnline) return;

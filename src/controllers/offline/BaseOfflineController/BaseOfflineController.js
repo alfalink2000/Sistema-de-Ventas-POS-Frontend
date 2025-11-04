@@ -27,11 +27,108 @@ class BaseOfflineController {
     console.log("📴 Conexión perdida - BaseOfflineController");
   }
 
-  // ✅ GENERAR ID LOCAL MEJORADO
+  // ✅ REEMPLAZAR CON ESTE MÉTODO UNIFICADO:
   async generateLocalId(prefix) {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000000);
-    return `${prefix}_${timestamp}_${random}`;
+    try {
+      // ✅ ESTRATEGIA UNIFICADA Y ROBUSTA
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substr(2, 12); // Más caracteres
+      const localId = `${prefix}_${timestamp}_${randomStr}`;
+
+      // ✅ VALIDACIÓN
+      if (!localId || localId.length < 10) {
+        throw new Error(`ID local generado inválido: ${localId}`);
+      }
+
+      console.log(`🔑 ID local generado: ${localId}`);
+      return localId;
+    } catch (error) {
+      console.error("❌ Error generando ID local:", error);
+      // ✅ FALLBACK SUPER ROBUSTO
+      const fallbackId = `emergency_${prefix}_${Date.now()}_${
+        crypto.randomUUID?.() || Math.random().toString(36).substr(2, 16)
+      }`;
+      console.log(`🔄 Usando fallback ID: ${fallbackId}`);
+      return fallbackId;
+    }
+  }
+
+  // ✅ AGREGAR ESTE MÉTODO NUEVO:
+  async validateOfflineData(data, schema = { required: [] }) {
+    try {
+      const errors = [];
+      const warnings = [];
+
+      // ✅ VALIDAR CAMPOS REQUERIDOS
+      for (const field of schema.required) {
+        if (
+          data[field] === undefined ||
+          data[field] === null ||
+          data[field] === ""
+        ) {
+          errors.push(`Campo requerido faltante: ${field}`);
+        }
+      }
+
+      // ✅ VALIDAR TIPOS DE DATOS COMUNES
+      if (data.total !== undefined && typeof data.total !== "number") {
+        errors.push("Campo 'total' debe ser numérico");
+      }
+
+      if (
+        data.stock !== undefined &&
+        (typeof data.stock !== "number" || data.stock < 0)
+      ) {
+        errors.push("Campo 'stock' debe ser número positivo");
+      }
+
+      if (
+        data.precio !== undefined &&
+        (typeof data.precio !== "number" || data.precio <= 0)
+      ) {
+        errors.push("Campo 'precio' debe ser número mayor a 0");
+      }
+
+      // ✅ VALIDAR FECHAS
+      if (data.fecha_venta && !this.isValidDate(data.fecha_venta)) {
+        warnings.push("Fecha de venta inválida, usando fecha actual");
+        data.fecha_venta = new Date().toISOString();
+      }
+
+      if (data.fecha_apertura && !this.isValidDate(data.fecha_apertura)) {
+        warnings.push("Fecha de apertura inválida, usando fecha actual");
+        data.fecha_apertura = new Date().toISOString();
+      }
+
+      // ✅ VALIDAR IDs
+      if (data.id_local && data.id_local.length < 5) {
+        errors.push("ID local inválido (muy corto)");
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings,
+        correctedData: data,
+      };
+    } catch (error) {
+      console.error("❌ Error en validación de datos:", error);
+      return {
+        isValid: false,
+        errors: [error.message],
+        warnings: [],
+        correctedData: data,
+      };
+    }
+  }
+
+  // ✅ AGREGAR HELPER PARA FECHAS
+  isValidDate(dateString) {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    return (
+      date instanceof Date && !isNaN(date) && date.toString() !== "Invalid Date"
+    );
   }
 
   async validateRequiredFields(data, requiredFields) {

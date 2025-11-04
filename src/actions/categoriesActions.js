@@ -4,6 +4,32 @@ import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import CategoriesOfflineController from "../controllers/offline/CategoriesOfflineController/CategoriesOfflineController";
 
+export const loadCategoriesIfNeeded = (forceRefresh = false) => {
+  return async (dispatch, getState) => {
+    const state = getState();
+
+    // ✅ CORREGIDO: Usar state.categories.categories en lugar de state.categories.data
+    const shouldSkip =
+      !forceRefresh &&
+      state.categories.categories && // ✅ Cambiado de .data a .categories
+      state.categories.categories.length > 0 &&
+      !state.categories.loading &&
+      state.categories.timestamp &&
+      Date.now() - state.categories.timestamp < 5 * 60 * 1000;
+
+    if (shouldSkip) {
+      console.log("✅ Categorías recientes en estado, omitiendo carga");
+      return {
+        success: true,
+        fromCache: true,
+        data: state.categories.categories, // ✅ Cambiado aquí también
+      };
+    }
+
+    return dispatch(loadCategories(forceRefresh));
+  };
+};
+
 export const loadCategories = () => {
   return async (dispatch) => {
     console.log("🔄 [CATEGORIES] Iniciando carga de categorías...");
@@ -18,9 +44,8 @@ export const loadCategories = () => {
           `✅ [CATEGORIES] ${categories.length} categorías cargadas desde cache`
         );
 
-        // ✅ USAR EL TYPE CORRECTO: categoriesLoad
         dispatch({
-          type: types.categoriesLoad, // ← CORREGIDO
+          type: types.categoriesLoad,
           payload: categories,
         });
 
@@ -31,9 +56,8 @@ export const loadCategories = () => {
           error
         );
 
-        // Enviar array vacío
         dispatch({
-          type: types.categoriesLoad, // ← CORREGIDO
+          type: types.categoriesLoad,
           payload: [],
         });
 
@@ -47,9 +71,11 @@ export const loadCategories = () => {
 
       const response = await fetchConToken("categorias");
 
-      if (response.ok) {
-        const data = await response.json();
-        const categories = data.categorias || [];
+      console.log("📥 [CATEGORIES] Respuesta del servidor:", response);
+
+      // ✅ CORRECCIÓN: fetchConToken ya parsea la respuesta, no usar response.json()
+      if (response.ok === true) {
+        const categories = response.categorias || [];
 
         console.log(
           `✅ [CATEGORIES] ${categories.length} categorías cargadas desde servidor`
@@ -64,7 +90,7 @@ export const loadCategories = () => {
         }
 
         dispatch({
-          type: types.categoriesLoad, // ← CORREGIDO
+          type: types.categoriesLoad,
           payload: categories,
         });
       } else {
@@ -81,7 +107,7 @@ export const loadCategories = () => {
         const categories = await CategoriesOfflineController.getCategories();
 
         dispatch({
-          type: types.categoriesLoad, // ← CORREGIDO
+          type: types.categoriesLoad,
           payload: categories,
         });
 
@@ -93,7 +119,7 @@ export const loadCategories = () => {
 
         // Último recurso: array vacío
         dispatch({
-          type: types.categoriesLoad, // ← CORREGIDO
+          type: types.categoriesLoad,
           payload: [],
         });
       }

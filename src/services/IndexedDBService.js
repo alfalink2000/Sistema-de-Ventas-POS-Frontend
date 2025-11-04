@@ -3,7 +3,7 @@ import { openDB } from "idb";
 class IndexedDBService {
   constructor() {
     this.dbName = "OfflinePOS";
-    this.dbVersion = 4;
+    this.dbVersion = 5;
     this.db = null;
     this.initialized = false;
   }
@@ -153,7 +153,81 @@ class IndexedDBService {
     }
   }
 
-  // ✅ MÉTODO ESPECÍFICO PARA OBTENER REGISTROS NO SINCRONIZADOS
+  async debugProductSearch(productId) {
+    try {
+      console.log(`🔍 DEBUG PRODUCT SEARCH: ${productId}`);
+
+      if (!this.initialized) {
+        await this.init();
+      }
+
+      const result = {
+        productId,
+        storeExists: this.db.objectStoreNames.contains("productos"),
+        directGet: null,
+        allProducts: null,
+        error: null,
+      };
+
+      // 1. Intentar get directo
+      try {
+        result.directGet = await this.get("productos", productId);
+        console.log(`🔍 Direct get result:`, result.directGet);
+      } catch (error) {
+        result.directGet = { error: error.message };
+      }
+
+      // 2. Obtener todos los productos
+      try {
+        result.allProducts = await this.getAll("productos");
+        console.log(`🔍 All products:`, result.allProducts);
+      } catch (error) {
+        result.allProducts = { error: error.message };
+      }
+
+      // 3. Buscar en todos los productos
+      if (result.allProducts && Array.isArray(result.allProducts)) {
+        result.foundInAll = result.allProducts.find((p) => p.id === productId);
+        result.foundByName = result.allProducts.find(
+          (p) => p.nombre?.toLowerCase().includes("coca") // Buscar por nombre parcial
+        );
+      }
+
+      console.log(`🔍 DEBUG RESULT:`, result);
+      return result;
+    } catch (error) {
+      console.error(`❌ Error en debugProductSearch:`, error);
+      return { error: error.message };
+    }
+  }
+  async verifyProductExistence(productId) {
+    try {
+      console.log(`🔍 VERIFY PRODUCT: ${productId}`);
+
+      if (!this.initialized) {
+        await this.init();
+      }
+
+      const product = await this.get("productos", productId);
+      console.log(`📦 VERIFY RESULT:`, product);
+
+      return {
+        exists: !!product,
+        product: product,
+        details: product
+          ? {
+              id: product.id,
+              nombre: product.nombre,
+              stock: product.stock,
+            }
+          : null,
+      };
+    } catch (error) {
+      console.error(`❌ VERIFY ERROR:`, error);
+      return { exists: false, error: error.message };
+    }
+  }
+
   async getPendingRecords(storeName) {
     try {
       if (!this.initialized) {
@@ -170,11 +244,34 @@ class IndexedDBService {
         .objectStore(storeName);
       const allData = await store.getAll();
 
-      // Filtrar manualmente registros no sincronizados
-      return allData.filter((item) => item.sincronizado === false);
+      // ✅ FILTRADO MEJORADO Y CONSISTENTE
+      return allData.filter((item) => {
+        if (!item) return false;
+
+        // Múltiples verificaciones para "no sincronizado"
+        const isNotSynced =
+          item.sincronizado === false ||
+          item.sincronizado === undefined ||
+          item.sincronizado === null ||
+          !item.hasOwnProperty("sincronizado");
+
+        // Verificar que no esté marcado como eliminado
+        const isNotDeleted = item.eliminado !== true && item.activo !== false;
+
+        return isNotSynced && isNotDeleted;
+      });
     } catch (error) {
       console.error(`❌ Error en getPendingRecords(${storeName}):`, error);
-      return [];
+
+      // ✅ FALLBACK MEJORADO
+      try {
+        const allData = await this.getAll(storeName);
+        return allData.filter(
+          (item) => item && (item.sincronizado === false || !item.sincronizado)
+        );
+      } catch (fallbackError) {
+        return [];
+      }
     }
   }
 

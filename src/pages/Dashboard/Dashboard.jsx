@@ -1,4 +1,4 @@
-// pages/Dashboard/Dashboard.jsx
+// pages/Dashboard/Dashboard.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -11,7 +11,7 @@ import {
   FiBarChart2,
   FiCreditCard,
 } from "react-icons/fi";
-import { loadProducts } from "../../actions/productsActions";
+import { loadProductsIfNeeded } from "../../actions/productsActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
 import styles from "./Dashboard.module.css";
 
@@ -22,7 +22,8 @@ const Dashboard = ({ onViewChange }) => {
   const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    dispatch(loadProducts());
+    // ✅ Usar loadProductsIfNeeded para evitar recargas innecesarias
+    dispatch(loadProductsIfNeeded());
     if (user?.id) {
       dispatch(loadOpenSesion(user.id));
     }
@@ -37,13 +38,39 @@ const Dashboard = ({ onViewChange }) => {
   ).length;
   const outOfStockProducts = safeProducts.filter((p) => p.stock === 0).length;
 
-  // ✅ CORREGIR: Función para manejar acciones rápidas
+  // ✅ CORREGIDO: Función para manejar acciones rápidas
   const handleQuickAction = (view) => {
-    console.log(`🔄 Navegando a: ${view}`);
+    console.log(`🔄 Dashboard: Navegando a: ${view}`);
+
+    // ✅ CONVERTIR EL VIEW AL FORMATO QUE USA EL SIDEBAR
+    let path = "";
+    switch (view) {
+      case "sales":
+        path = "/sales";
+        break;
+      case "products":
+        path = "/products";
+        break;
+      case "inventory":
+        path = "/inventory";
+        break;
+      case "caja":
+        path = "/caja";
+        break;
+      case "reports":
+        path = "/reports";
+        break;
+      default:
+        path = "/dashboard";
+    }
+
+    console.log(`📍 Dashboard: Redirigiendo a: ${path}`);
+
     if (onViewChange) {
-      onViewChange(view);
+      // ✅ EL SIDEBAR ESPERA EL PATH COMPLETO (ej: "/sales")
+      onViewChange(path);
     } else {
-      console.error("❌ onViewChange no está definido");
+      console.error("❌ Dashboard: onViewChange no está definido");
     }
   };
 

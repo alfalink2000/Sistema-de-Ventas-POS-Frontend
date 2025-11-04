@@ -9,70 +9,56 @@ class ProductsOfflineController extends BaseOfflineController {
     this.storeName = "productos_pendientes";
     this.cacheStore = "productos";
   }
-  // ✅ MÉTODO DE DEBUG DETALLADO - Agregar al ProductsOfflineController
-  async debugCreateProductFlow(productData) {
+  // ✅ FUNCIÓN DE EMERGENCIA PARA LIMPIAR DUPLICADOS
+  async emergencyCleanDuplicates() {
     try {
-      console.log("🔍 DEBUG CREATE PRODUCT FLOW - INICIO");
-      console.log("📥 Datos recibidos en createProductPending:", productData);
-      console.log("📋 Tipo de datos:", typeof productData);
       console.log(
-        "🎯 Estructura completa:",
-        JSON.stringify(productData, null, 2)
+        "🚨 EJECUTANDO LIMPIEZA DE EMERGENCIA - ELIMINANDO DUPLICADOS"
       );
 
-      // Verificar campos críticos
-      console.log("✅ Verificación de campos:");
-      console.log(
-        "   - nombre:",
-        productData.nombre,
-        "(exists:",
-        !!productData.nombre,
-        ")"
-      );
-      console.log(
-        "   - precio:",
-        productData.precio,
-        "(exists:",
-        !!productData.precio,
-        ")"
-      );
-      console.log(
-        "   - categoria_id:",
-        productData.categoria_id,
-        "(exists:",
-        !!productData.categoria_id,
-        ")"
-      );
-      console.log(
-        "   - descripcion:",
-        productData.descripcion,
-        "(exists:",
-        !!productData.descripcion,
-        ")"
-      );
+      const allProducts = await IndexedDBService.getAll("productos");
+      console.log(`📦 Productos antes de limpieza: ${allProducts.length}`);
 
-      // Verificar si es FormData
-      if (productData instanceof FormData) {
-        console.log("📦 Es FormData - mostrando entries:");
-        for (let [key, value] of productData.entries()) {
-          console.log(`   ${key}:`, value);
+      // Eliminar duplicados por ID
+      const uniqueProducts = [];
+      const seenIds = new Set();
+
+      for (const product of allProducts) {
+        if (!product || !product.id) continue;
+
+        if (!seenIds.has(product.id)) {
+          seenIds.add(product.id);
+          uniqueProducts.push(product);
+        } else {
+          console.log(
+            `🗑️ Eliminando duplicado: ${product.id} - ${product.nombre}`
+          );
+          await IndexedDBService.delete("productos", product.id);
         }
       }
 
-      console.log("🔍 DEBUG CREATE PRODUCT FLOW - FIN");
+      // Si hay más productos únicos de los esperados, limpiar todo y empezar de nuevo
+      if (uniqueProducts.length > 6) {
+        console.log("🔄 Demasiados productos únicos, limpiando todo...");
+        await IndexedDBService.clear("productos");
 
-      return {
-        nombre: productData.nombre,
-        precio: productData.precio,
-        categoria_id: productData.categoria_id,
-        descripcion: productData.descripcion,
-        esFormData: productData instanceof FormData,
-      };
+        // Recargar solo los 6 productos correctos
+        const correctProducts = uniqueProducts.slice(0, 6);
+        for (const product of correctProducts) {
+          await IndexedDBService.add("productos", product);
+        }
+      }
+
+      console.log(
+        `✅ Limpieza completada. Productos únicos: ${uniqueProducts.length}`
+      );
+      return uniqueProducts;
     } catch (error) {
-      console.error("❌ Error en debug:", error);
-      return { error: error.message };
+      console.error("❌ Error en limpieza de emergencia:", error);
+      return [];
     }
   }
+
   // ✅ VALIDAR STOCK SIMPLE (método que falta)
   async validateStockForSaleSimple(productos) {
     try {
@@ -265,15 +251,64 @@ class ProductsOfflineController extends BaseOfflineController {
       return [];
     }
   }
-  // ✅ OBTENER TODOS LOS PRODUCTOS
+  // ✅ MÉTODO CORREGIDO - OBTENER TODOS LOS PRODUCTOS
   async getAllProducts() {
     try {
-      return await IndexedDBService.getAll(this.storeName);
+      console.log(
+        "🔍 [PRODUCTS] Obteniendo todos los productos de IndexedDB..."
+      );
+
+      // ✅ VERIFICAR PRIMERO SI EL STORE EXISTE
+      const storeExists = await IndexedDBService.storeExists("productos");
+      if (!storeExists) {
+        console.warn("⚠️ El store 'productos' no existe en IndexedDB");
+        return [];
+      }
+
+      // ✅ OBTENER DIRECTAMENTE TODOS LOS PRODUCTOS
+      const products = await IndexedDBService.getAll("productos");
+
+      console.log(
+        `📦 [PRODUCTS] ${products.length} productos obtenidos de IndexedDB`
+      );
+
+      // ✅ FILTRAR PRODUCTOS VÁLIDOS
+      const validProducts = products.filter(
+        (product) =>
+          product && product.id && product.nombre && product.activo !== false
+      );
+
+      console.log(
+        `✅ [PRODUCTS] ${validProducts.length} productos válidos después de filtro`
+      );
+
+      // ✅ DEBUG: Mostrar primeros 3 productos
+      if (validProducts.length > 0) {
+        console.log("🔍 Primeros 3 productos en IndexedDB:");
+        validProducts.slice(0, 3).forEach((p, i) => {
+          console.log(
+            `   ${i + 1}. ${p.nombre} (ID: ${p.id}, Stock: ${p.stock})`
+          );
+        });
+      }
+
+      return validProducts;
     } catch (error) {
-      console.error("Error obteniendo productos:", error);
-      return [];
+      console.error("❌ [PRODUCTS] Error crítico obteniendo productos:", error);
+
+      // ✅ INTENTAR RECUPERACIÓN DE EMERGENCIA
+      try {
+        console.log("🔄 Intentando recuperación de emergencia...");
+        const allData = await IndexedDBService.getAll("productos");
+        console.log(`📊 Datos crudos obtenidos: ${allData.length} registros`);
+        return allData.filter((item) => item && typeof item === "object");
+      } catch (fallbackError) {
+        console.error("❌ Error en recuperación de emergencia:", fallbackError);
+        return [];
+      }
     }
-  } // ✅ SINCRONIZAR PRODUCTOS PENDIENTES
+  }
+  // ✅ SINCRONIZAR PRODUCTOS PENDIENTES
   async syncPendingProducts() {
     try {
       const pendingProducts = await IndexedDBService.getPendingRecords(
@@ -308,25 +343,336 @@ class ProductsOfflineController extends BaseOfflineController {
     }
   }
 
+  // ✅ GUARDAR PRODUCTOS EN INDEXEDDB
+  // ✅ GUARDAR PRODUCTOS EN INDEXEDDB - VERSIÓN MEJORADA
+  async saveProducts(products) {
+    try {
+      console.log(`💾 Guardando ${products.length} productos en IndexedDB...`);
+
+      if (!products || products.length === 0) {
+        console.warn("⚠️ No hay productos para guardar");
+        return { success: false, error: "No hay productos para guardar" };
+      }
+
+      // ✅ PRIMERO: LIMPIAR PRODUCTOS EXISTENTES
+      await this.clearProducts();
+      console.log("✅ Productos anteriores limpiados");
+
+      let savedCount = 0;
+      let errorCount = 0;
+
+      for (const product of products) {
+        try {
+          // Validar producto mínimo
+          if (!product.id || !product.nombre) {
+            console.warn("⚠️ Producto inválido, saltando:", product);
+            errorCount++;
+            continue;
+          }
+
+          // ✅ USAR put EN LUGAR DE add PARA EVITAR DUPLICADOS
+          const productForOffline = {
+            id: product.id.toString(), // ✅ MANTENER ID ORIGINAL
+            nombre: product.nombre,
+            precio: parseFloat(product.precio) || 0,
+            precio_compra:
+              parseFloat(product.precio_compra) || product.precio * 0.8,
+            stock: parseInt(product.stock) || 0,
+            categoria_id: product.categoria_id?.toString() || "1",
+            codigo: product.codigo || product.id,
+            activo: product.activo !== false,
+            descripcion: product.descripcion || "",
+            last_sync: new Date().toISOString(),
+            imagen: product.imagen || null,
+            created_at: product.created_at || new Date().toISOString(),
+            updated_at: product.updated_at || new Date().toISOString(),
+            sincronizado: true, // ✅ MARCAR COMO SINCRONIZADO
+          };
+
+          console.log(
+            `💾 Guardando producto: ${productForOffline.nombre} (${productForOffline.id})`
+          );
+
+          // ✅ USAR put EN LUGAR DE add - SOBREESCRIBE SI EXISTE
+          const success = await IndexedDBService.put(
+            "productos",
+            productForOffline
+          );
+
+          if (success) {
+            savedCount++;
+          } else {
+            errorCount++;
+            console.error(`❌ Error guardando producto: ${product.nombre}`);
+          }
+        } catch (productError) {
+          errorCount++;
+          console.error(
+            `❌ Error procesando producto ${product.id}:`,
+            productError
+          );
+        }
+      }
+
+      console.log(
+        `✅ ${savedCount} productos guardados en IndexedDB, ${errorCount} errores`
+      );
+      return {
+        success: savedCount > 0,
+        saved: savedCount,
+        errors: errorCount,
+      };
+    } catch (error) {
+      console.error("❌ Error guardando productos en IndexedDB:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // ✅ NUEVO: OBTENER PRODUCTO POR ID
+  // ✅ OBTENER PRODUCTO POR ID
+  // ✅ OBTENER PRODUCTO POR ID - MÁS ROBUSTO
   async getProductById(productId) {
     try {
-      console.log(`📦 [PRODUCTS OFFLINE] Obteniendo producto: ${productId}`);
-
-      const producto = await IndexedDBService.get(this.cacheStore, productId);
-
-      if (
-        !producto ||
-        producto.activo === false ||
-        producto.eliminado === true
-      ) {
+      if (!productId) {
+        console.warn("⚠️ ID de producto vacío");
         return null;
       }
 
-      return producto;
+      const id = productId.toString();
+      console.log(`🔍 Buscando producto en IndexedDB: ${id}`);
+
+      const product = await IndexedDBService.get(this.storeName, id);
+
+      if (!product) {
+        console.warn(`⚠️ Producto no encontrado en IndexedDB: ${id}`);
+
+        // Debug: listar todos los IDs disponibles
+        const allProducts = await this.getAllProducts();
+        const availableIds = allProducts.map((p) => p.id);
+        console.log(`📋 IDs disponibles en IndexedDB:`, availableIds);
+
+        return null;
+      }
+
+      console.log(
+        `✅ Producto encontrado: ${product.nombre} (Stock: ${product.stock})`
+      );
+      return product;
     } catch (error) {
       console.error(`❌ Error obteniendo producto ${productId}:`, error);
       return null;
+    }
+  }
+  // ✅ ACTUALIZAR STOCK OFFLINE
+  async updateStockOffline(productId, quantity) {
+    try {
+      const product = await this.getProductById(productId);
+
+      if (!product) {
+        throw new Error(`Producto ${productId} no encontrado`);
+      }
+
+      const newStock = product.stock - quantity;
+
+      if (newStock < 0) {
+        throw new Error(
+          `Stock insuficiente: ${product.stock} disponible, ${quantity} requerido`
+        );
+      }
+
+      // Actualizar producto
+      const updatedProduct = {
+        ...product,
+        stock: newStock,
+        last_updated: new Date().toISOString(),
+      };
+
+      await IndexedDBService.put(this.storeName, updatedProduct);
+
+      console.log(`✅ Stock actualizado: ${product.nombre} -> ${newStock}`);
+      return { success: true, newStock };
+    } catch (error) {
+      console.error(`❌ Error actualizando stock offline:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ SINCRONIZAR PRODUCTOS CON SERVIDOR - VERSIÓN MEJORADA
+  async syncProducts() {
+    if (!this.isOnline) {
+      return { success: false, error: "Sin conexión", silent: true };
+    }
+
+    try {
+      console.log("🔄 Sincronizando productos con servidor...");
+
+      const apiUrl = window.API_URL || "http://localhost:3000/api";
+      const response = await fetch(`${apiUrl}/productos`, {
+        headers: {
+          "x-token": localStorage.getItem("token"),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // ✅ VERIFICACIÓN SEGURA DE LA RESPUESTA
+      if (data && data.ok && data.productos) {
+        console.log(
+          `📥 Recibidos ${data.productos.length} productos del servidor`
+        );
+
+        // Limpiar antes de guardar nuevos
+        await this.clearProducts();
+
+        // Guardar nuevos productos
+        const saveResult = await this.saveProducts(data.productos);
+
+        if (saveResult && saveResult.success) {
+          console.log(
+            `✅ Sincronización completada: ${saveResult.saved} productos guardados`
+          );
+          return {
+            success: true,
+            count: saveResult.saved,
+            errors: saveResult.errors,
+          };
+        } else {
+          throw new Error(
+            `Error guardando productos: ${
+              saveResult?.error || "Error desconocido"
+            }`
+          );
+        }
+      } else {
+        throw new Error(data?.error || "Error en respuesta del servidor");
+      }
+    } catch (error) {
+      console.error("❌ Error sincronizando productos:", error);
+      return { success: false, error: error.message };
+    }
+  }
+  async emergencyCleanup() {
+    try {
+      console.log("🚨 EJECUTANDO LIMPIEZA DE EMERGENCIA EN INDEXEDDB");
+
+      // 1. Obtener todos los productos
+      const allProducts = await IndexedDBService.getAll("productos");
+      console.log(`📦 Productos antes de limpieza: ${allProducts.length}`);
+
+      // 2. Eliminar duplicados
+      const uniqueProducts = [];
+      const seenIds = new Set();
+
+      for (const product of allProducts) {
+        if (!product || !product.id) continue;
+
+        if (!seenIds.has(product.id)) {
+          seenIds.add(product.id);
+          uniqueProducts.push(product);
+        } else {
+          console.log(
+            `🗑️ Eliminando duplicado: ${product.id} - ${product.nombre}`
+          );
+          await IndexedDBService.delete("productos", product.id);
+        }
+      }
+
+      // 3. Limpiar y guardar únicos
+      await IndexedDBService.clear("productos");
+
+      for (const product of uniqueProducts) {
+        await IndexedDBService.add("productos", product);
+      }
+
+      console.log(
+        `✅ Limpieza completada. Productos únicos: ${uniqueProducts.length}`
+      );
+      return uniqueProducts;
+    } catch (error) {
+      console.error("❌ Error en limpieza de emergencia:", error);
+      return [];
+    }
+  }
+  // ✅ VERIFICAR SI HAY PRODUCTOS EN INDEXEDDB
+  async hasProducts() {
+    try {
+      const products = await this.getAllProducts();
+      const hasProducts = products.length > 0;
+      console.log(
+        `📊 Estado productos IndexedDB: ${
+          hasProducts ? "CON PRODUCTOS" : "VACÍO"
+        }`
+      );
+      return hasProducts;
+    } catch (error) {
+      console.error("❌ Error verificando productos:", error);
+      return false;
+    }
+  }
+  // ✅ OBTENER ESTADÍSTICAS DETALLADAS
+  async getDetailedStats() {
+    try {
+      const products = await this.getAllProducts();
+      const activeProducts = products.filter((p) => p.activo);
+      const lowStockProducts = products.filter((p) => p.stock < 10);
+
+      const stats = {
+        total: products.length,
+        active: activeProducts.length,
+        lowStock: lowStockProducts.length,
+        lastSync: products[0]?.last_sync || "Nunca",
+        sampleProducts: products
+          .slice(0, 3)
+          .map((p) => ({ id: p.id, nombre: p.nombre })),
+      };
+
+      console.log("📊 Estadísticas detalladas productos:", stats);
+      return stats;
+    } catch (error) {
+      return {
+        total: 0,
+        active: 0,
+        lowStock: 0,
+        lastSync: "Error",
+        sampleProducts: [],
+      };
+    }
+  }
+  // ✅ LIMPIAR PRODUCTOS (para resincronización)
+  async clearProducts() {
+    try {
+      console.log("🗑️ Limpiando productos en IndexedDB...");
+      await IndexedDBService.clear(this.storeName);
+      console.log("✅ Productos limpiados correctamente");
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Error limpiando productos:", error);
+      return { success: false, error: error.message };
+    }
+  }
+  // ✅ OBTENER ESTADÍSTICAS
+  async getStats() {
+    try {
+      const products = await this.getAllProducts();
+      const activeProducts = products.filter((p) => p.activo);
+
+      return {
+        total: products.length,
+        active: activeProducts.length,
+        lowStock: products.filter((p) => p.stock < 10).length,
+        lastSync: products[0]?.last_sync || "Nunca",
+      };
+    } catch (error) {
+      return {
+        total: 0,
+        active: 0,
+        lowStock: 0,
+        lastSync: "Error",
+      };
     }
   }
 
@@ -434,61 +780,63 @@ class ProductsOfflineController extends BaseOfflineController {
     try {
       console.log("🔄 [PRODUCTS OFFLINE] Creando producto pendiente...");
 
-      // ✅ PRIMERO: DEBUG DETALLADO
-      const debugResult = await this.debugCreateProductFlow(productData);
-      console.log("📊 Resultado del debug:", debugResult);
-
-      // ✅ VERIFICAR SI LOS DATOS SON VÁLIDOS
-      if (!productData || typeof productData !== "object") {
-        throw new Error("Datos del producto inválidos o vacíos");
-      }
+      // ✅ USAR NUEVA VALIDACIÓN ESTANDARIZADA
+      const validationSchema = {
+        required: ["nombre", "precio", "categoria_id"],
+      };
 
       // ✅ EXTRAER DATOS DE FormData SI ES NECESARIO
-      let datosExtraidos = { ...productData };
+      let datosParaValidar = { ...productData };
 
       if (productData instanceof FormData) {
         console.log("🔄 Detectado FormData - extrayendo datos...");
-        datosExtraidos = {};
+        datosParaValidar = {};
         for (let [key, value] of productData.entries()) {
-          datosExtraidos[key] = value;
+          datosParaValidar[key] = value;
         }
-        console.log("📦 Datos extraídos de FormData:", datosExtraidos);
+        console.log("📦 Datos extraídos de FormData:", datosParaValidar);
       }
 
+      // ✅ VALIDAR DATOS CON EL NUEVO SISTEMA
+      const validationResult = await this.validateOfflineData(
+        datosParaValidar,
+        validationSchema
+      );
+
+      if (!validationResult.isValid) {
+        throw new Error(
+          `Datos inválidos: ${validationResult.errors.join(", ")}`
+        );
+      }
+
+      if (validationResult.warnings.length > 0) {
+        console.warn(
+          "⚠️ Advertencias en validación:",
+          validationResult.warnings
+        );
+      }
+
+      const datosValidados = validationResult.correctedData;
+
+      // ✅ GENERAR ID CON EL SISTEMA UNIFICADO
       const idLocal = await this.generateLocalId("producto");
 
-      // ✅ VERIFICAR CAMPOS CRÍTICOS CON DATOS EXTRAÍDOS
-      if (!datosExtraidos.nombre || datosExtraidos.nombre.trim() === "") {
-        console.error("❌ Nombre vacío en datosExtraidos:", datosExtraidos);
-        throw new Error("El nombre del producto es requerido");
-      }
-
-      if (!datosExtraidos.precio || parseFloat(datosExtraidos.precio) <= 0) {
-        console.error("❌ Precio inválido en datosExtraidos:", datosExtraidos);
-        throw new Error("El precio debe ser mayor a 0");
-      }
-
-      if (!datosExtraidos.categoria_id) {
-        console.error("❌ Categoría vacía en datosExtraidos:", datosExtraidos);
-        throw new Error("La categoría es requerida");
-      }
-
-      // ✅ CONTINUAR CON EL PROCESO NORMAL...
+      // ✅ PREPARAR DATOS COMPLETOS CON VALORES POR DEFECTO SEGUROS
       const datosCompletos = {
-        nombre: datosExtraidos.nombre.trim(),
-        precio: parseFloat(datosExtraidos.precio),
+        nombre: datosValidados.nombre.trim(),
+        precio: parseFloat(datosValidados.precio),
         precio_compra:
-          parseFloat(datosExtraidos.precio_compra) ||
-          parseFloat(datosExtraidos.precio) * 0.7,
-        categoria_id: datosExtraidos.categoria_id,
+          parseFloat(datosValidados.precio_compra) ||
+          parseFloat(datosValidados.precio) * 0.7,
+        categoria_id: datosValidados.categoria_id,
         descripcion:
-          datosExtraidos.descripcion?.trim() || datosExtraidos.nombre.trim(),
-        stock: parseInt(datosExtraidos.stock) || 0,
-        stock_minimo: parseInt(datosExtraidos.stock_minimo) || 5,
-        codigo_barras: datosExtraidos.codigo_barras || "",
-        imagen_url: datosExtraidos.imagen_url || null,
+          datosValidados.descripcion?.trim() || datosValidados.nombre.trim(),
+        stock: parseInt(datosValidados.stock) || 0,
+        stock_minimo: parseInt(datosValidados.stock_minimo) || 5,
+        codigo_barras: datosValidados.codigo_barras || "",
+        imagen_url: datosValidados.imagen_url || null,
         activo:
-          datosExtraidos.activo !== undefined ? datosExtraidos.activo : true,
+          datosValidados.activo !== undefined ? datosValidados.activo : true,
         id_local: idLocal,
         sincronizado: false,
         fecha_creacion: new Date().toISOString(),
@@ -496,6 +844,7 @@ class ProductsOfflineController extends BaseOfflineController {
 
       console.log("📦 Datos completos preparados:", datosCompletos);
 
+      // ✅ CREAR REGISTRO PENDIENTE
       const pendingProduct = {
         id_local: idLocal,
         operacion: "crear",
@@ -506,22 +855,55 @@ class ProductsOfflineController extends BaseOfflineController {
         ultimo_error: null,
       };
 
-      await IndexedDBService.add(this.storeName, pendingProduct);
+      // ✅ GUARDAR EN OPERACIONES PENDIENTES
+      const successPending = await IndexedDBService.add(
+        this.storeName,
+        pendingProduct
+      );
 
-      // Guardar en cache
-      await IndexedDBService.add(this.cacheStore, {
-        id: idLocal,
+      if (!successPending) {
+        throw new Error("No se pudo guardar la operación pendiente");
+      }
+
+      // ✅ GUARDAR EN CACHE PARA USO INMEDIATO
+      const productForCache = {
+        id: idLocal, // Usar ID local como clave primaria temporal
         ...datosCompletos,
-      });
+      };
 
+      const successCache = await IndexedDBService.add(
+        this.cacheStore,
+        productForCache
+      );
+
+      if (!successCache) {
+        console.warn(
+          "⚠️ No se pudo guardar en cache, pero la operación pendiente se guardó"
+        );
+      }
+
+      // ✅ NOTIFICAR CAMBIOS
       window.dispatchEvent(new CustomEvent("productsPendingUpdatesChanged"));
       window.dispatchEvent(new CustomEvent("product_created_offline"));
 
-      console.log("✅ Producto pendiente creado exitosamente");
-      return { success: true, id_local: idLocal };
+      console.log("✅ Producto pendiente creado exitosamente:", {
+        id_local: idLocal,
+        nombre: datosCompletos.nombre,
+        precio: datosCompletos.precio,
+      });
+
+      return {
+        success: true,
+        id_local: idLocal,
+        product_data: datosCompletos,
+      };
     } catch (error) {
       console.error("❌ Error creando producto pendiente:", error);
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+        step: "createProductPending",
+      };
     }
   }
   // ✅ ACTUALIZAR PRODUCTO PENDIENTE
@@ -906,56 +1288,65 @@ class ProductsOfflineController extends BaseOfflineController {
       return { error: error.message };
     }
   }
-  async debugPendingProductStructure(localId) {
+  async debugProductOperation(localId, operationType = "general") {
     try {
+      console.log(`🔍 [DEBUG] Operación: ${operationType} - ID: ${localId}`);
+
       const pending = await IndexedDBService.get(this.storeName, localId);
-
-      console.log("🔍 DIAGNÓSTICO DETALLADO DEL PRODUCTO PENDIENTE:");
-      console.log("📋 ID:", localId);
-      console.log("🎯 Operación:", pending.operacion);
-      console.log("📦 Estructura COMPLETA:");
-      console.log(JSON.stringify(pending, null, 2));
-
-      console.log("🔎 Nivel 1 - pendiente.datos:", pending.datos);
-      if (pending.datos) {
-        console.log("🔎 Nivel 2 - pendiente.datos.datos:", pending.datos.datos);
-        console.log("🔎 Tipo de pendiente.datos:", typeof pending.datos);
-        console.log(
-          "🔎 Tipo de pendiente.datos.datos:",
-          typeof pending.datos.datos
-        );
-
-        if (pending.datos.datos) {
-          console.log(
-            "🔎 Campos en pendiente.datos.datos:",
-            Object.keys(pending.datos.datos)
-          );
-          console.log(
-            "🔎 pendiente.datos.datos.nombre:",
-            pending.datos.datos.nombre
-          );
-          console.log(
-            "🔎 pendiente.datos.datos.precio:",
-            pending.datos.datos.precio
-          );
-          console.log(
-            "🔎 pendiente.datos.datos.categoria_id:",
-            pending.datos.datos.categoria_id
-          );
-        }
+      if (!pending) {
+        console.warn(`⚠️ No se encontró operación pendiente: ${localId}`);
+        return null;
       }
 
-      // Mostrar TODOS los campos disponibles
-      console.log("📝 TODOS los campos disponibles en el pendiente:");
-      for (let key in pending) {
-        console.log(`   ${key}:`, pending[key]);
-      }
+      // Diagnóstico completo pero estructurado
+      const diagnosis = {
+        id_local: pending.id_local,
+        operacion: pending.operacion,
+        sincronizado: pending.sincronizado,
+        timestamp: pending.timestamp,
+        intentos: pending.intentos || 0,
+        estructura_datos: this.analyzeDataStructure(pending.datos),
+        problemas_detectados: this.detectDataIssues(pending),
+      };
 
-      return pending;
+      console.log("📊 Diagnóstico completo:", diagnosis);
+      return diagnosis;
     } catch (error) {
-      console.error("❌ Error en diagnóstico:", error);
-      return null;
+      console.error("❌ Error en diagnóstico unificado:", error);
+      return { error: error.message };
     }
+  }
+
+  // ✅ MÉTODOS AUXILIARES PARA EL DIAGNÓSTICO
+  analyzeDataStructure(data) {
+    if (!data) return { error: "Sin datos" };
+
+    return {
+      tipo: typeof data,
+      es_form_data: data instanceof FormData,
+      campos: Object.keys(data),
+      tiene_nombre: !!data.nombre,
+      tiene_precio: !!data.precio,
+      tiene_categoria: !!data.categoria_id,
+    };
+  }
+
+  detectDataIssues(pendingOp) {
+    const issues = [];
+
+    if (!pendingOp.datos) {
+      issues.push("Datos principales faltantes");
+    }
+
+    if (pendingOp.operacion === "crear" && !pendingOp.datos?.nombre) {
+      issues.push("Falta nombre del producto");
+    }
+
+    if (pendingOp.intentos > 3) {
+      issues.push("Demasiados intentos fallidos");
+    }
+
+    return issues;
   }
   // ✅ MÉTODO DE DEBUG - Agregar al ProductsOfflineController
   async debugPendingProduct(localId) {
@@ -1220,37 +1611,44 @@ class ProductsOfflineController extends BaseOfflineController {
   }
   // ✅ SINCRONIZAR OPERACIÓN DE ELIMINACIÓN
   // ✅ SINCRONIZAR OPERACIÓN DE ELIMINACIÓN - VERSIÓN CORREGIDA
-  // En ProductsOfflineController.js - REEMPLAZAR el método syncDeleteOperation
+
   async syncDeleteOperation(pendiente) {
     try {
       console.log(`🔄 [SYNC DELETE] Procesando eliminación:`, {
         id_local: pendiente.id_local,
         producto_id: pendiente.producto_id,
-        producto_id_local: pendiente.producto_id_local,
+        operacion: pendiente.operacion,
       });
 
-      // ✅ USAR DIRECTAMENTE EL producto_id (que ahora es el backend ID)
-      const backendProductId = pendiente.producto_id;
+      // ✅ OBTENER ID BACKEND DE FORMA CONFIABLE
+      const backendProductId = await this.obtenerBackendIdConfiable(pendiente);
 
       if (!backendProductId) {
-        console.warn(`⚠️ No hay backend ID para eliminar`);
+        console.warn(`⚠️ No se pudo obtener ID backend para eliminación`);
         return {
           success: true,
-          message: "Producto sin ID backend - considerado eliminado",
+          message: "Producto sin ID backend válido - considerado eliminado",
         };
       }
+
+      console.log(
+        `🔍 Verificando existencia del producto: ${backendProductId}`
+      );
 
       // ✅ VERIFICAR EXISTENCIA
       const productoExiste = await this.verifyProductExists(backendProductId);
       if (!productoExiste) {
-        console.log(`✅ Producto ya no existe: ${backendProductId}`);
+        console.log(
+          `✅ Producto ya no existe en servidor: ${backendProductId}`
+        );
         return {
           success: true,
           message: "Producto ya eliminado en servidor",
         };
       }
 
-      // ✅ ELIMINAR
+      // ✅ EJECUTAR ELIMINACIÓN
+      console.log(`🗑️ Eliminando producto en servidor: ${backendProductId}`);
       const response = await fetchConToken(
         `productos/${backendProductId}`,
         {},
@@ -1258,18 +1656,60 @@ class ProductsOfflineController extends BaseOfflineController {
       );
 
       if (response && response.ok === true) {
-        console.log(`✅ Producto eliminado: ${backendProductId}`);
+        console.log(`✅ Producto eliminado exitosamente: ${backendProductId}`);
+
+        // ✅ ELIMINAR TAMBIÉN DEL INVENTARIO SI EXISTE
+        await this.deleteProductFromInventory(backendProductId);
+
         return {
           success: true,
           message: "Producto eliminado correctamente",
         };
       } else {
-        throw new Error(response?.msg || "Error del servidor");
+        const errorMsg =
+          response?.msg || response?.error || "Error del servidor";
+        throw new Error(errorMsg);
       }
     } catch (error) {
       console.error(`💥 Error en syncDeleteOperation:`, error);
-      return { success: false, error: error.message };
+
+      // ✅ REGISTRAR INTENTO FALLIDO
+      await this.recordSyncAttempt(pendiente);
+
+      return {
+        success: false,
+        error: error.message,
+      };
     }
+  }
+
+  // ✅ NUEVO MÉTODO AUXILIAR PARA OBTENER ID BACKEND
+  async obtenerBackendIdConfiable(pendiente) {
+    // Prioridad 1: Usar producto_id si es un ID backend válido
+    if (pendiente.producto_id && pendiente.producto_id.toString().length < 20) {
+      return pendiente.producto_id;
+    }
+
+    // Prioridad 2: Buscar en cache por producto_id_local
+    if (pendiente.producto_id_local) {
+      const backendId = await this.getBackendProductId(
+        pendiente.producto_id_local
+      );
+      if (backendId) return backendId;
+    }
+
+    // Prioridad 3: Buscar en operaciones sincronizadas
+    const allOps = await IndexedDBService.getAll(this.storeName);
+    const syncedOp = allOps.find(
+      (op) =>
+        op.sincronizado === true && op.producto_id === pendiente.producto_id
+    );
+
+    if (syncedOp && syncedOp.id) {
+      return syncedOp.id;
+    }
+
+    return null;
   }
   // En ProductsOfflineController.js - AGREGAR método de debug
   async debugGetBackendProductId(localProductId) {

@@ -3,10 +3,7 @@ import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import LoginForm from "../../components/features/auth/LoginForm/LoginForm";
 import OfflineDataStatus from "../../components/offline/OfflineDataStatus/OfflineDataStatus";
-import {
-  syncOfflineUsers,
-  diagnoseOfflineAuth,
-} from "../../actions/authActions";
+import { syncOfflineUsers } from "../../actions/authActions";
 import styles from "./Login.module.css";
 
 const Login = () => {
@@ -44,11 +41,6 @@ const Login = () => {
       window.removeEventListener("offline", handleOffline);
     };
   }, [dispatch, isSyncing]);
-
-  // Llama esta función en tu componente Login para diagnosticar
-  useEffect(() => {
-    diagnoseOfflineAuth();
-  }, []);
 
   return (
     <div className={styles.loginContainer}>

@@ -57,9 +57,16 @@ const Users = () => {
     };
   }, [dispatch, retryCount]);
 
+  // Users.jsx - VERSIÓN CORREGIDA
   useEffect(() => {
-    dispatch(loadUsers());
-  }, [dispatch]);
+    if (isOnline) {
+      console.log("🌐 Users: Online - cargando usuarios desde API");
+      dispatch(loadUsers());
+    } else {
+      console.log("📴 Users: Offline - no se pueden cargar usuarios");
+      // Podrías cargar usuarios cacheados si los tienes
+    }
+  }, [dispatch, isOnline]); // ✅ Solo cargar cuando hay conexión
 
   // ✅ MANEJAR REINTENTO DE CARGA
   const handleRetry = () => {

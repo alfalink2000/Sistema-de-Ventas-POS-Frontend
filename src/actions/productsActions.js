@@ -4,7 +4,7 @@ import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
 import ProductsOfflineController from "../controllers/offline/ProductsOfflineController/ProductsOfflineController";
-
+import { cacheManager } from "../utils/cacheManager";
 // Servicio para operaciones offline (reemplaza el hook)
 class OfflineProductsService {
   static async getProductsOffline(filters = {}) {
@@ -221,150 +221,53 @@ class OfflineProductsService {
   }
 }
 
-export const loadProducts = (filters = {}) => {
+// actions/categoriesActions.js - AGREGAR ESTA FUNCIÓN
+export const loadCategoriesIfNeeded = (forceRefresh = false) => {
+  return async (dispatch, getState) => {
+    const state = getState();
+
+    const shouldSkip =
+      !forceRefresh &&
+      state.categories.data &&
+      state.categories.data.length > 0 &&
+      !state.categories.loading &&
+      state.categories.timestamp &&
+      Date.now() - state.categories.timestamp < 5 * 60 * 1000;
+
+    if (shouldSkip) {
+      console.log("✅ Categorías recientes en estado, omitiendo carga");
+      return {
+        success: true,
+        fromCache: true,
+        data: state.categories.data,
+      };
+    }
+
+    return dispatch(loadCategories(forceRefresh));
+  };
+};
+// ✅ NUEVA ACCIÓN: Sincronizar productos para offline
+export const syncProductsForOffline = () => {
   return async (dispatch) => {
-    console.log("🔄 [PRODUCTS] Iniciando carga de productos...", {
-      online: navigator.onLine,
-      filters,
-    });
-
-    dispatch({ type: types.productsStartLoading });
-
     try {
-      let productos = [];
-      let fromCache = false;
-
-      if (navigator.onLine) {
-        // ✅ CON CONEXIÓN: Sincronizar y cargar desde servidor
-        console.log("🌐 [PRODUCTS] Cargando desde servidor...");
-
-        const response = await fetchConToken("productos");
-        console.log("📦 [PRODUCTS] Respuesta completa del backend:", response);
-
-        if (response && response.ok === true) {
-          // 🔍 DEBUG DETALLADO
-          console.log(
-            "🔍 [PRODUCTS] Estructura de respuesta:",
-            Object.keys(response)
-          );
-
-          // ✅ BUSCAR PRODUCTOS EN DIFERENTES ESTRUCTURAS
-          if (response.productos && Array.isArray(response.productos)) {
-            productos = response.productos;
-            console.log("✅ [PRODUCTS] Usando response.productos");
-          } else if (Array.isArray(response)) {
-            productos = response;
-            console.log("✅ [PRODUCTS] Usando response directo (array)");
-          } else if (response.data && Array.isArray(response.data)) {
-            productos = response.data;
-            console.log("✅ [PRODUCTS] Usando response.data");
-          } else {
-            console.warn("⚠️ [PRODUCTS] Estructura de respuesta no reconocida");
-
-            // 🔍 BUSCAR CUALQUIER ARRAY EN LA RESPUESTA
-            for (const key in response) {
-              if (Array.isArray(response[key])) {
-                productos = response[key];
-                console.log(`✅ [PRODUCTS] Usando response.${key}`);
-                break;
-              }
-            }
-          }
-
-          console.log(
-            `✅ [PRODUCTS] ${productos.length} productos cargados desde servidor`
-          );
-
-          if (productos.length === 0) {
-            console.warn("⚠️ [PRODUCTS] Array de productos está vacío");
-          }
-        } else {
-          console.error("❌ [PRODUCTS] Respuesta no exitosa:", response);
-          fromCache = true;
-          productos = await OfflineProductsService.getProductsOffline(filters);
-        }
-      } else {
-        // ✅ SIN CONEXIÓN: Cargar desde cache offline
-        console.log("📱 [PRODUCTS] Modo offline - cargando desde cache local");
-        fromCache = true;
-        productos = await OfflineProductsService.getProductsOffline(filters);
+      if (!navigator.onLine) {
+        return { success: false, error: "Se requiere conexión a internet" };
       }
 
-      console.log(
-        `🔍 [PRODUCTS] Productos finales a mostrar: ${productos.length}`
-      );
+      const result = await ProductsOfflineController.syncProducts();
 
-      // ✅ ENRIQUECER DATOS PARA EL FRONTEND
-      const productosEnriquecidos = productos.map((producto) => ({
-        ...producto,
-        estado_stock:
-          producto.stock <= 0
-            ? "agotado"
-            : producto.stock <= producto.stock_minimo
-            ? "bajo"
-            : "normal",
-        necesita_reposicion: producto.stock <= producto.stock_minimo,
-        ganancia_estimada: producto.precio - producto.precio_compra,
-        margen_ganancia:
-          producto.precio_compra > 0
-            ? (
-                ((producto.precio - producto.precio_compra) /
-                  producto.precio_compra) *
-                100
-              ).toFixed(1)
-            : 0,
-      }));
+      if (result.success) {
+        // Recargar productos en Redux
+        await dispatch(loadProducts());
+      }
 
-      console.log(
-        "📊 [PRODUCTS] Enviando productos al reducer:",
-        productosEnriquecidos.length
-      );
-
-      dispatch({
-        type: types.productsLoad,
-        payload: productosEnriquecidos,
-      });
-
-      console.log("🎉 [PRODUCTS] Carga completada exitosamente");
-      return productosEnriquecidos;
+      return result;
     } catch (error) {
-      console.error("❌ [PRODUCTS] Error cargando productos:", error);
-
-      // ✅ FALLBACK: Intentar cargar desde cache offline
-      try {
-        console.log("🔄 [PRODUCTS] Intentando fallback a cache offline...");
-        const productosOffline =
-          await OfflineProductsService.getProductsOffline(filters);
-
-        console.log(
-          `📱 [PRODUCTS] Fallback: ${productosOffline.length} productos desde cache offline`
-        );
-
-        dispatch({
-          type: types.productsLoad,
-          payload: productosOffline,
-        });
-
-        return productosOffline;
-      } catch (offlineError) {
-        console.error(
-          "❌ [PRODUCTS] Error incluso en modo offline:",
-          offlineError
-        );
-
-        dispatch({
-          type: types.productsLoad,
-          payload: [],
-        });
-
-        return [];
-      }
-    } finally {
-      dispatch({ type: types.productsFinishLoading });
+      console.error("❌ Error sincronizando productos:", error);
+      return { success: false, error: error.message };
     }
   };
 };
-
 // ✅ CREAR PRODUCTO CON SOPORTE OFFLINE
 export const createProduct = (productData) => {
   return async (dispatch) => {
@@ -632,6 +535,187 @@ export const updateProduct = (productId, productData) => {
 
       return { success: false, error: error.message };
     }
+  };
+};
+export const loadProducts = (forceRefresh = false) => {
+  return async (dispatch, getState) => {
+    const currentState = getState();
+
+    if (
+      !forceRefresh &&
+      currentState.products.products &&
+      currentState.products.products.length > 0 &&
+      !currentState.products.loading
+    ) {
+      console.log("✅ Productos ya cargados, omitiendo...");
+      return {
+        success: true,
+        fromCache: true,
+        data: currentState.products.products,
+      };
+    }
+
+    dispatch({ type: types.productsStartLoading });
+
+    try {
+      const cacheKey = "products_data";
+      let products = [];
+      let fromCache = false;
+      let source = "";
+
+      if (!forceRefresh) {
+        const cachedResult = await cacheManager.getWithCache(
+          cacheKey,
+          async () => {
+            return await fetchProductsFromSource();
+          },
+          forceRefresh
+        );
+
+        products = cachedResult.data;
+        fromCache = cachedResult.fromCache;
+        source = fromCache ? "cache" : navigator.onLine ? "api" : "indexeddb";
+
+        console.log(`📦 Productos cargados desde: ${source}`, {
+          count: products.length,
+          fromCache,
+        });
+      } else {
+        products = await fetchProductsFromSource();
+        source = navigator.onLine ? "api" : "indexeddb";
+        console.log(`🔄 Recarga forzada desde: ${source}`, {
+          count: products.length,
+        });
+      }
+
+      // ✅ CORREGIDO: Enviar solo el array de productos
+      dispatch({
+        type: types.productsLoad,
+        payload: products, // ← ENVIAR ARRAY DIRECTO, NO OBJETO
+      });
+
+      return {
+        success: true,
+        fromCache,
+        data: products,
+        source,
+      };
+    } catch (error) {
+      console.error("❌ Error cargando productos:", error);
+
+      const fallbackResult = await handleProductsFallback(dispatch);
+      return {
+        success: false,
+        error: error.message,
+        fallbackUsed: true,
+        ...fallbackResult,
+      };
+    } finally {
+      dispatch({ type: types.productsFinishLoading });
+    }
+  };
+};
+
+// ✅ FUNCIÓN PRIVADA PARA OBTENER PRODUCTOS
+async function fetchProductsFromSource() {
+  if (navigator.onLine) {
+    // Online: cargar desde API y guardar en IndexedDB
+    const response = await fetchConToken("productos");
+
+    if (response.ok && response.productos) {
+      const products = response.productos;
+
+      // ✅ GUARDAR EN INDEXEDDB (en segundo plano, no bloquear)
+      ProductsOfflineController.saveProducts(products)
+        .then((result) => {
+          if (result.success) {
+            console.log("✅ Productos guardados en IndexedDB para offline");
+          } else {
+            console.error("❌ Error guardando en IndexedDB:", result.error);
+          }
+        })
+        .catch((error) => {
+          console.error("❌ Error en guardado background:", error);
+        });
+
+      return products;
+    } else {
+      throw new Error("Error en respuesta de API");
+    }
+  } else {
+    // Offline: cargar desde IndexedDB
+    console.log("📱 Modo offline: cargando desde IndexedDB");
+    let products = await ProductsOfflineController.getAllProducts();
+
+    if (products.length === 0) {
+      // Intentar limpieza de emergencia
+      await ProductsOfflineController.emergencyCleanup();
+      products = await ProductsOfflineController.getAllProducts();
+    }
+
+    if (products.length === 0) {
+      throw new Error("No hay productos disponibles offline");
+    }
+
+    return products;
+  }
+}
+
+async function handleProductsFallback(dispatch) {
+  try {
+    console.log("🔄 Intentando fallback desde IndexedDB...");
+    const offlineProducts = await ProductsOfflineController.getAllProducts();
+
+    if (offlineProducts.length > 0) {
+      // ✅ CORREGIDO: Enviar array directo
+      dispatch({
+        type: types.productsLoad,
+        payload: offlineProducts, // ← ARRAY DIRECTO
+      });
+
+      return {
+        success: true,
+        data: offlineProducts,
+        source: "fallback",
+      };
+    }
+  } catch (fallbackError) {
+    console.error("❌ Fallback también falló:", fallbackError);
+  }
+
+  // Último recurso: array vacío
+  dispatch({
+    type: types.productsLoad,
+    payload: [], // ← ARRAY VACÍO DIRECTO
+  });
+
+  return { success: false, data: [], source: "empty" };
+}
+
+// // ✅ CORREGIDO: Cambiar state.products.data por state.products.products
+export const loadProductsIfNeeded = (forceRefresh = false) => {
+  return async (dispatch, getState) => {
+    const state = getState();
+
+    const shouldSkip =
+      !forceRefresh &&
+      state.products.products &&
+      state.products.products.length > 0 &&
+      !state.products.loading &&
+      state.products.timestamp &&
+      Date.now() - state.products.timestamp < 5 * 60 * 1000;
+
+    if (shouldSkip) {
+      console.log("✅ Productos recientes en estado, omitiendo carga");
+      return {
+        success: true,
+        fromCache: true,
+        data: state.products.products,
+        source: "state",
+      };
+    }
+
+    return dispatch(loadProducts(forceRefresh));
   };
 };
 

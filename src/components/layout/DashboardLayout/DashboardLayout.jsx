@@ -1,5 +1,5 @@
-// components/layout/DashboardLayout/DashboardLayout.jsx
-import { useState } from "react";
+// components/layout/DashboardLayout/DashboardLayout.jsx - VERSIÓN CORREGIDA
+import React, { useState } from "react"; // ✅ AGREGAR IMPORT DE React
 import { useSelector } from "react-redux";
 import Header from "../Header/Header";
 import Sidebar from "../Sidebar/Sidebar";
@@ -13,12 +13,27 @@ const DashboardLayout = ({ children, onViewChange, currentView }) => {
     setSidebarOpen(!sidebarOpen);
   };
 
+  // ✅ FUNCIÓN MEJORADA PARA NAVEGACIÓN
   const handleNavigation = (path) => {
+    console.log(`📍 DashboardLayout: Navegando a ${path}`);
     if (onViewChange) {
-      const view = path.replace("/", "") || "sales";
+      const view = path.replace("/", "") || "dashboard";
       onViewChange(view);
     }
   };
+
+  // ✅ PASAR onViewChange AL DASHBOARD - MÉTODO SIMPLIFICADO
+  const enhancedChildren = React.Children.map(children, (child) => {
+    if (React.isValidElement(child)) {
+      // ✅ Solo pasar onViewChange si el componente es Dashboard
+      if (child.type && child.type.name === "Dashboard") {
+        return React.cloneElement(child, {
+          onViewChange: handleNavigation,
+        });
+      }
+    }
+    return child;
+  });
 
   return (
     <div className={styles.dashboard}>
@@ -36,9 +51,9 @@ const DashboardLayout = ({ children, onViewChange, currentView }) => {
         <Header
           user={user}
           onToggleSidebar={toggleSidebar}
-          sidebarOpen={sidebarOpen} // ✅ Pasar el estado del sidebar
+          sidebarOpen={sidebarOpen}
         />
-        <main className={styles.content}>{children}</main>
+        <main className={styles.content}>{enhancedChildren || children}</main>
       </div>
     </div>
   );

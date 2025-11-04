@@ -1,4 +1,5 @@
 // components/features/sales/ProductGridSales/ProductGridSales.jsx
+import React from "react"; // ✅ AGREGAR ESTA IMPORTACIÓN
 import { useDispatch } from "react-redux";
 import { addToCart } from "../../../../actions/cartActions";
 import { FiPackage, FiShoppingCart } from "react-icons/fi";
@@ -88,6 +89,60 @@ const ProductCardSales = ({ product }) => {
 };
 
 const ProductGridSales = ({ products, loading, error, compact = false }) => {
+  // ✅ FUNCIÓN PARA ELIMINAR DUPLICADOS
+  const getUniqueProducts = (productsArray) => {
+    if (!productsArray || !Array.isArray(productsArray)) return [];
+
+    const seen = new Set();
+    const uniqueProducts = [];
+
+    productsArray.forEach((product) => {
+      if (!product?.id) return;
+
+      // Crear una clave única combinando ID y nombre
+      const productKey = `${product.id}-${product.nombre}`;
+
+      if (!seen.has(productKey)) {
+        seen.add(productKey);
+        uniqueProducts.push(product);
+      } else {
+        console.warn(`⚠️ Producto duplicado eliminado:`, {
+          id: product.id,
+          nombre: product.nombre,
+          key: productKey,
+        });
+      }
+    });
+
+    return uniqueProducts;
+  };
+
+  // ✅ PRODUCTOS ÚNICOS
+  const uniqueProducts = getUniqueProducts(products);
+
+  // ✅ DEBUG: Mostrar información de duplicados
+  React.useEffect(() => {
+    if (products && products.length > uniqueProducts.length) {
+      console.warn(
+        `🔄 Se eliminaron ${
+          products.length - uniqueProducts.length
+        } productos duplicados`
+      );
+      console.log("📋 Productos únicos:", uniqueProducts.length);
+      console.log("📋 Productos originales:", products.length);
+
+      // Mostrar IDs duplicados
+      const duplicateIds = products.filter(
+        (product, index, self) =>
+          index !== self.findIndex((p) => p.id === product.id)
+      );
+      console.log(
+        "🚫 IDs duplicados:",
+        duplicateIds.map((p) => ({ id: p.id, nombre: p.nombre }))
+      );
+    }
+  }, [products, uniqueProducts.length]);
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -107,7 +162,7 @@ const ProductGridSales = ({ products, loading, error, compact = false }) => {
     );
   }
 
-  if (!products || products.length === 0) {
+  if (!uniqueProducts || uniqueProducts.length === 0) {
     return (
       <div className={styles.emptyContainer}>
         <div className={styles.emptyIcon}>📦</div>
@@ -119,8 +174,13 @@ const ProductGridSales = ({ products, loading, error, compact = false }) => {
 
   return (
     <div className={`${styles.productGrid} ${compact ? styles.compact : ""}`}>
-      {products.map((product) => (
-        <ProductCardSales key={product.id} product={product} />
+      {uniqueProducts.map((product) => (
+        <ProductCardSales
+          key={`${product.id}-${product.nombre}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`} // ✅ KEY ÚNICA
+          product={product}
+        />
       ))}
     </div>
   );

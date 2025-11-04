@@ -7,6 +7,7 @@ import ProductModal from "../../components/features/products/ProductModal/Produc
 import CategoryModal from "../../components/features/categories/CategoryModal";
 import {
   loadProducts,
+  loadProductsIfNeeded,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -45,15 +46,33 @@ const Products = () => {
   const [categoriesExpanded, setCategoriesExpanded] = useState(false);
 
   const dispatch = useDispatch();
-  const { products, loading, error } = useSelector((state) => state.products);
+  const { products, loading, dataLoaded, error } = useSelector(
+    (state) => state.products
+  );
   const { categories: categoriesFromStore, loading: categoriesLoading } =
     useSelector((state) => state.categories);
   const { user: currentUser } = useSelector((state) => state.auth); // ✅ OBTENER USUARIO ACTUAL
 
+  // ✅ EFFECT UNIFICADO Y CORREGIDO
   useEffect(() => {
-    dispatch(loadProducts());
+    console.log("🔄 Products: Iniciando carga de datos...");
+
+    // Cargar productos de manera inteligente
+    dispatch(loadProductsIfNeeded());
+
+    // Siempre cargar categorías (son livianas)
     dispatch(loadCategories());
   }, [dispatch]);
+
+  // ✅ VERIFICAR SI LOS DATOS SE CARGARON CORRECTAMENTE
+  useEffect(() => {
+    console.log("📊 Products: Estado actual:", {
+      productsCount: products?.length || 0,
+      categoriesCount: categories?.length || 0,
+      loading,
+      dataLoaded,
+    });
+  }, [products, categories, loading, dataLoaded]);
 
   useEffect(() => {
     if (categoriesFromStore && categoriesFromStore.length > 0) {
