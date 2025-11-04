@@ -221,31 +221,6 @@ class OfflineProductsService {
   }
 }
 
-// actions/categoriesActions.js - AGREGAR ESTA FUNCIÓN
-export const loadCategoriesIfNeeded = (forceRefresh = false) => {
-  return async (dispatch, getState) => {
-    const state = getState();
-
-    const shouldSkip =
-      !forceRefresh &&
-      state.categories.data &&
-      state.categories.data.length > 0 &&
-      !state.categories.loading &&
-      state.categories.timestamp &&
-      Date.now() - state.categories.timestamp < 5 * 60 * 1000;
-
-    if (shouldSkip) {
-      console.log("✅ Categorías recientes en estado, omitiendo carga");
-      return {
-        success: true,
-        fromCache: true,
-        data: state.categories.data,
-      };
-    }
-
-    return dispatch(loadCategories(forceRefresh));
-  };
-};
 // ✅ NUEVA ACCIÓN: Sincronizar productos para offline
 export const syncProductsForOffline = () => {
   return async (dispatch) => {

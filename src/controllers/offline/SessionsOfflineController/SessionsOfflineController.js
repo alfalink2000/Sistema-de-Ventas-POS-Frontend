@@ -204,7 +204,7 @@ class SessionsOfflineController extends BaseOfflineController {
   }
 
   // ✅ ABRIR SESIÓN OFFLINE - CORREGIDO
-  // En SessionsOfflineController.js - AGREGAR VERIFICACIÓN TEMPORAL
+
   async openSession(sessionData) {
     try {
       await this.validateRequiredFields(sessionData, [
@@ -212,37 +212,82 @@ class SessionsOfflineController extends BaseOfflineController {
         "saldo_inicial",
       ]);
 
+      console.log("🔍 Verificando vendedor_id:", sessionData.vendedor_id);
+
       // ✅ VERIFICAR DUPLICADOS MEJORADO
       const duplicateCheck = await this.checkForDuplicateSessions(
         sessionData.vendedor_id
       );
-      if (duplicateCheck.hasDuplicates) {
+
+      if (duplicateCheck.hasDuplicates && duplicateCheck.keptSession) {
+        console.log("🔄 Sesión duplicada encontrada, retornando existente");
         return {
-          success: false,
-          error: "Ya existe una sesión activa para este vendedor",
-          existingSession: duplicateCheck.keptSession,
+          success: true,
+          sesion: duplicateCheck.keptSession,
+          id_local: duplicateCheck.keptSession.id_local,
+          wasExisting: true,
         };
       }
 
-      // ✅ GENERAR ID LOCAL ROBUSTO
-      const localId = `ses_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+      // ✅ **SOLUCIÓN CRÍTICA**: Si estamos ONLINE, crear en servidor primero
+      let serverSessionId = null;
+      let sesionCompleta = null;
 
-      const sesionCompleta = {
-        ...sessionData,
-        id_local: localId, // ✅ CLAVE PRIMARIA
-        fecha_apertura: new Date().toISOString(),
-        estado: "abierta",
-        sincronizado: false,
-        es_local: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      if (navigator.onLine) {
+        try {
+          console.log("🌐 Creando sesión en servidor primero...");
+          const response = await fetchConToken(
+            "sesiones-caja/abrir",
+            sessionData,
+            "POST"
+          );
 
-      console.log("💾 Guardando sesión:", {
-        id_local: localId,
-        vendedor: sessionData.vendedor_id,
+          if (response?.ok && response.sesion) {
+            serverSessionId = response.sesion.id;
+            console.log("✅ Sesión creada en servidor:", serverSessionId);
+
+            // ✅ **USAR EL ID DEL SERVIDOR COMO ID LOCAL**
+            sesionCompleta = {
+              ...sessionData,
+              ...response.sesion, // Incluir todos los datos del servidor
+              id_local: serverSessionId, // ← **CRÍTICO: Mismo ID que servidor**
+              id: serverSessionId, // ← **CRÍTICO: Mismo ID que servidor**
+              sincronizado: true,
+              es_local: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+          }
+        } catch (serverError) {
+          console.warn(
+            "⚠️ No se pudo crear en servidor, creando local:",
+            serverError
+          );
+        }
+      }
+
+      // ✅ Si no se pudo crear en servidor o estamos offline, crear local
+      if (!sesionCompleta) {
+        const localId = `ses_local_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+
+        sesionCompleta = {
+          ...sessionData,
+          id_local: localId,
+          fecha_apertura: new Date().toISOString(),
+          estado: "abierta",
+          sincronizado: false,
+          es_local: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+
+      console.log("💾 Guardando sesión offline:", {
+        id_local: sesionCompleta.id_local,
+        id: sesionCompleta.id,
+        vendedor_id: sessionData.vendedor_id,
       });
 
       const result = await IndexedDBService.add(this.storeName, sesionCompleta);
@@ -254,10 +299,12 @@ class SessionsOfflineController extends BaseOfflineController {
       return {
         success: true,
         sesion: sesionCompleta,
-        id_local: localId,
+        id_local: sesionCompleta.id_local,
+        wasExisting: false,
+        createdOnServer: !!serverSessionId,
       };
     } catch (error) {
-      console.error("❌ Error abriendo sesión:", error);
+      console.error("❌ Error abriendo sesión offline:", error);
       return { success: false, error: error.message };
     }
   }

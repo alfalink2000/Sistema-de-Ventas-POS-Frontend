@@ -111,6 +111,54 @@ class AuthOfflineController extends BaseOfflineController {
       };
     }
   }
+
+  // ✅ OBTENER USUARIO ACTUAL DESDE LOCALSTORAGE
+  async getCurrentUser() {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        console.warn("❌ No hay usuario en localStorage");
+        return null;
+      }
+
+      const user = JSON.parse(userStr);
+      console.log("🔍 Usuario actual desde localStorage:", user);
+
+      // Verificar si existe en IndexedDB
+      const offlineUser = await this.getUserByUsername(user.username);
+      if (offlineUser) {
+        return { ...user, ...offlineUser };
+      }
+
+      return user;
+    } catch (error) {
+      console.error("❌ Error obteniendo usuario actual:", error);
+      return null;
+    }
+  }
+
+  // ✅ OBTENER VENDEDOR_ID ACTUAL
+  async getCurrentVendedorId() {
+    try {
+      const currentUser = await this.getCurrentUser();
+      if (!currentUser) {
+        throw new Error("No hay usuario autenticado");
+      }
+
+      // El vendedor_id puede estar en diferentes propiedades
+      const vendedorId = currentUser.vendedor_id || currentUser.id;
+
+      if (!vendedorId) {
+        throw new Error("Usuario no tiene vendedor_id");
+      }
+
+      console.log("📋 Vendedor ID actual:", vendedorId);
+      return vendedorId;
+    } catch (error) {
+      console.error("❌ Error obteniendo vendedor_id:", error);
+      throw error;
+    }
+  }
   // controllers/offline/AuthOfflineController/AuthOfflineController.js - AGREGAR MÉTODO
   async getOfflineUsersCount() {
     try {

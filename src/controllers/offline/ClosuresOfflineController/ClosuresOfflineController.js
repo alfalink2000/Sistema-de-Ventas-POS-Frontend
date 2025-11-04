@@ -1,7 +1,8 @@
-// src/controllers/offline/ClosuresOfflineController.js
+// ClosuresOfflineController.js - VERSIÓN CORREGIDA
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
 import IndexedDBService from "../../../services/IndexedDBService";
 import SalesOfflineController from "../SalesOfflineController/SalesOfflineController";
+import SessionsOfflineController from "../SessionsOfflineController/SessionsOfflineController";
 
 class ClosuresOfflineController extends BaseOfflineController {
   constructor() {
@@ -49,7 +50,177 @@ class ClosuresOfflineController extends BaseOfflineController {
       return { success: false, error: error.message };
     }
   }
-  // En ClosuresOfflineController.js - AGREGAR ESTE MÉTODO
+
+  // ✅ CALCULAR TOTALES - VERSIÓN CORREGIDA (SIN CONSTRUCTOR)
+  async calculateSessionTotals(sesionId) {
+    try {
+      console.log(`🧮 [CLOSURES] Iniciando cálculo para sesión: ${sesionId}`);
+
+      // ✅ OBTENER SESIÓN DIRECTAMENTE DESDE INDEXEDDB (sin usar SessionsOfflineController)
+      let sesion = null;
+      let saldoInicial = 0;
+
+      try {
+        // Buscar sesión directamente en IndexedDB
+        sesion = await IndexedDBService.get("sesiones_caja_offline", sesionId);
+
+        // Si no se encuentra por id_local, buscar en todas las sesiones
+        if (!sesion) {
+          const todasSesiones = await IndexedDBService.getAll(
+            "sesiones_caja_offline"
+          );
+          sesion = todasSesiones.find(
+            (s) =>
+              s.id === sesionId ||
+              s.id_local === sesionId ||
+              s.id_servidor === sesionId
+          );
+        }
+
+        saldoInicial = sesion?.saldo_inicial || 0;
+        console.log("📋 Sesión encontrada, saldo inicial:", saldoInicial);
+      } catch (sessionError) {
+        console.warn("⚠️ No se pudo obtener sesión, usando saldo inicial 0");
+        saldoInicial = 0;
+      }
+
+      // ✅ OBTENER VENTAS
+      const ventas = await SalesOfflineController.getSalesBySession(sesionId);
+      console.log(`🛒 Ventas encontradas: ${ventas.length}`);
+
+      let totales = {
+        cantidad_ventas: 0,
+        total_ventas: 0,
+        total_efectivo: 0,
+        total_tarjeta: 0,
+        total_transferencia: 0,
+        ganancia_bruta: 0,
+        costo_total: 0,
+        saldo_inicial: saldoInicial,
+      };
+
+      // ✅ PROCESAR CADA VENTA
+      for (const venta of ventas) {
+        if (venta.estado !== "cancelada") {
+          totales.cantidad_ventas++;
+          const ventaTotal = parseFloat(venta.total || 0);
+          totales.total_ventas += ventaTotal;
+
+          // Método de pago
+          switch (venta.metodo_pago) {
+            case "efectivo":
+              totales.total_efectivo += ventaTotal;
+              break;
+            case "tarjeta":
+              totales.total_tarjeta += ventaTotal;
+              break;
+            case "transferencia":
+              totales.total_transferencia += ventaTotal;
+              break;
+          }
+
+          // ✅ CALCULAR GANANCIAS
+          if (venta.productos && Array.isArray(venta.productos)) {
+            for (const producto of venta.productos) {
+              try {
+                const productInfo = await IndexedDBService.get(
+                  "productos",
+                  producto.producto_id
+                );
+                const precioCompraReal =
+                  productInfo?.precio_compra || producto.precio_compra || 0;
+
+                const gananciaProducto =
+                  (producto.precio_unitario - precioCompraReal) *
+                  producto.cantidad;
+                const costoProducto = precioCompraReal * producto.cantidad;
+
+                totales.ganancia_bruta += gananciaProducto;
+                totales.costo_total += costoProducto;
+              } catch (productError) {
+                console.error(
+                  `❌ Error procesando producto ${producto.producto_id}:`,
+                  productError
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // ✅ CALCULAR SALDO FINAL TEÓRICO
+      totales.saldo_final_teorico =
+        totales.saldo_inicial + totales.total_efectivo;
+
+      // Redondear a 2 decimales
+      Object.keys(totales).forEach((key) => {
+        if (typeof totales[key] === "number") {
+          totales[key] = Math.round(totales[key] * 100) / 100;
+        }
+      });
+
+      console.log("💰 TOTALES CALCULADOS:", totales);
+      return totales;
+    } catch (error) {
+      console.error("❌ Error calculando totales:", error);
+      return {
+        cantidad_ventas: 0,
+        total_ventas: 0,
+        total_efectivo: 0,
+        total_tarjeta: 0,
+        total_transferencia: 0,
+        ganancia_bruta: 0,
+        costo_total: 0,
+        saldo_inicial: 0,
+        saldo_final_teorico: 0,
+      };
+    }
+  }
+
+  // ✅ MÉTODO ALTERNATIVO: Obtener sesión usando SessionsOfflineController (si existe)
+  async getSessionInfo(sesionId) {
+    try {
+      // Intentar usar SessionsOfflineController si está disponible y funciona
+      if (
+        SessionsOfflineController &&
+        typeof SessionsOfflineController.getSessionById === "function"
+      ) {
+        return await SessionsOfflineController.getSessionById(sesionId);
+      } else {
+        // Fallback: buscar directamente en IndexedDB
+        let sesion = await IndexedDBService.get(
+          "sesiones_caja_offline",
+          sesionId
+        );
+        if (!sesion) {
+          const todasSesiones = await IndexedDBService.getAll(
+            "sesiones_caja_offline"
+          );
+          sesion = todasSesiones.find(
+            (s) =>
+              s.id === sesionId ||
+              s.id_local === sesionId ||
+              s.id_servidor === sesionId
+          );
+        }
+        return sesion;
+      }
+    } catch (error) {
+      console.warn("⚠️ Error obteniendo sesión, usando fallback:", error);
+      // Fallback final
+      const todasSesiones = await IndexedDBService.getAll(
+        "sesiones_caja_offline"
+      );
+      return todasSesiones.find(
+        (s) =>
+          s.id === sesionId ||
+          s.id_local === sesionId ||
+          s.id_servidor === sesionId
+      );
+    }
+  }
+
+  // ✅ MARCAR COMO SINCRONIZADO
   async markAsSynced(localId, serverData) {
     try {
       const closure = await IndexedDBService.get(this.storeName, localId);
@@ -61,7 +232,7 @@ class ClosuresOfflineController extends BaseOfflineController {
       const updatedClosure = {
         ...closure,
         ...serverData,
-        id: serverData.id, // Guardar ID del servidor
+        id: serverData.id,
         sincronizado: true,
         fecha_sincronizacion: new Date().toISOString(),
       };
@@ -77,104 +248,7 @@ class ClosuresOfflineController extends BaseOfflineController {
       return false;
     }
   }
-  // En ClosuresOfflineController.js - ACTUALIZAR ESTE MÉTODO
-  async calculateSessionTotals(sesionId) {
-    try {
-      const ventas = await SalesOfflineController.getSalesBySession(sesionId);
 
-      let totales = {
-        cantidad_ventas: 0,
-        total_ventas: 0,
-        total_efectivo: 0,
-        total_tarjeta: 0,
-        total_transferencia: 0,
-        ganancia_bruta: 0,
-        costo_total: 0, // ✅ NUEVO: Agregar costo total
-      };
-
-      for (const venta of ventas) {
-        if (venta.estado !== "cancelada") {
-          totales.cantidad_ventas++;
-          totales.total_ventas += parseFloat(venta.total || 0);
-
-          // Método de pago
-          switch (venta.metodo_pago) {
-            case "efectivo":
-              totales.total_efectivo += parseFloat(venta.total || 0);
-              break;
-            case "tarjeta":
-              totales.total_tarjeta += parseFloat(venta.total || 0);
-              break;
-            case "transferencia":
-              totales.total_transferencia += parseFloat(venta.total || 0);
-              break;
-          }
-
-          // ✅ CALCULAR GANANCIA REAL CON DETALLES
-          if (venta.productos && Array.isArray(venta.productos)) {
-            for (const producto of venta.productos) {
-              const precioCompra =
-                producto.precio_compra || producto.precio_unitario * 0.8;
-              const gananciaProducto =
-                (producto.precio_unitario - precioCompra) * producto.cantidad;
-              totales.ganancia_bruta += gananciaProducto;
-              totales.costo_total += precioCompra * producto.cantidad;
-            }
-          }
-        }
-      }
-
-      // Redondear a 2 decimales
-      Object.keys(totales).forEach((key) => {
-        if (typeof totales[key] === "number") {
-          totales[key] = Math.round(totales[key] * 100) / 100;
-        }
-      });
-
-      console.log("💰 Totales calculados offline:", totales);
-      return totales;
-    } catch (error) {
-      console.error("Error calculando totales:", error);
-      return {
-        cantidad_ventas: 0,
-        total_ventas: 0,
-        total_efectivo: 0,
-        total_tarjeta: 0,
-        total_transferencia: 0,
-        ganancia_bruta: 0,
-        costo_total: 0,
-      };
-    }
-  }
-
-  // ✅ OBTENER DETALLES CON INFORMACIÓN DE COSTO
-  async getSaleDetailsWithCost(ventaIdLocal) {
-    try {
-      const detalles = await SalesOfflineController.getSaleDetails(
-        ventaIdLocal
-      );
-      const detallesConCosto = [];
-
-      for (const detalle of detalles) {
-        // Buscar información completa del producto
-        const producto = await IndexedDBService.get(
-          "productos",
-          detalle.producto_id
-        );
-
-        detallesConCosto.push({
-          ...detalle,
-          precio_compra: producto?.precio_compra || 0,
-          producto_nombre: producto?.nombre || detalle.producto_nombre,
-        });
-      }
-
-      return detallesConCosto;
-    } catch (error) {
-      console.error("Error obteniendo detalles con costo:", error);
-      return [];
-    }
-  }
   // ✅ OBTENER CIERRES PENDIENTES
   async getPendingClosures() {
     try {
@@ -197,6 +271,51 @@ class ClosuresOfflineController extends BaseOfflineController {
     } catch (error) {
       console.error("Error obteniendo cierre por sesión:", error);
       return null;
+    }
+  }
+
+  // ✅ DIAGNÓSTICO EN TIEMPO REAL
+  async realTimeDiagnosis(sesionId) {
+    try {
+      console.log("🔍 DIAGNÓSTICO EN TIEMPO REAL DEL CIERRE");
+
+      // 1. Verificar sesión
+      const sesion = await this.getSessionInfo(sesionId);
+
+      // 2. Verificar ventas
+      const ventas = await SalesOfflineController.getSalesBySession(sesionId);
+
+      // 3. Calcular manualmente
+      let calculoManual = {
+        total_ventas: 0,
+        total_efectivo: 0,
+        cantidad_ventas: 0,
+      };
+
+      ventas.forEach((venta) => {
+        calculoManual.total_ventas += parseFloat(venta.total || 0);
+        calculoManual.cantidad_ventas++;
+
+        if (venta.metodo_pago === "efectivo") {
+          calculoManual.total_efectivo += parseFloat(venta.total || 0);
+        }
+      });
+
+      return {
+        sesionEncontrada: !!sesion,
+        saldoInicial: sesion?.saldo_inicial || 0,
+        ventasParaSesion: ventas.length,
+        calculoManual: calculoManual,
+        detallesVentas: ventas.map((v) => ({
+          id: v.id_local,
+          total: v.total,
+          metodo_pago: v.metodo_pago,
+          productos: v.productos?.length || 0,
+        })),
+      };
+    } catch (error) {
+      console.error("❌ Error en diagnóstico:", error);
+      return { error: error.message };
     }
   }
 }

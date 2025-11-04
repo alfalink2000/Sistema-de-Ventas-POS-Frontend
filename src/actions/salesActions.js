@@ -133,89 +133,36 @@ export const loadSales = (limite = 50, pagina = 1) => {
 // ✅ FUNCIÓN PRINCIPAL CREATE SALE MEJORADA
 // salesActions.js - CORREGIR DUPLICACIÓN DE STOCK
 export const createSale = (saleData) => {
-  return async (dispatch, getState) => {
-    // ✅ VARIABLE PARA CONTROLAR SI YA SE ACTUALIZÓ EL STOCK
-    let stockActualizado = false;
-
+  return async (dispatch) => {
     try {
-      console.log("🔄 [SALES] Creando venta...", {
-        productos: saleData.productos?.length || 0,
-        online: navigator.onLine,
-      });
+      console.log("🔄 [SALES] Creando venta...");
 
-      // ✅ VALIDACIÓN DE STOCK (SOLO VALIDACIÓN, NO ACTUALIZACIÓN)
-      console.log("🔍 [SALES] Iniciando validación de stock...");
+      // ✅ SOLUCIÓN: Control centralizado de stock
+      let stockActualizado = false;
 
-      const stockValidation = await validateStockForSale(saleData.productos);
-      console.log("📊 [SALES] Resultado validación:", stockValidation);
-
-      if (!stockValidation.valid) {
-        const errorMsg = `Error de stock:\n${stockValidation.errors.join(
-          "\n"
-        )}`;
-        console.error("❌ [SALES] Error de stock:", errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      let resultado;
-      const isOnline = navigator.onLine;
-
-      if (isOnline) {
-        // ✅ MODO ONLINE: El servidor actualiza el stock
-        console.log("🌐 [SALES] Creando venta en servidor...");
+      if (navigator.onLine) {
+        // Online: servidor maneja el stock
         const response = await fetchConToken("ventas", saleData, "POST");
-
-        if (response && response.ok === true) {
-          resultado = response.venta || response;
-          console.log("✅ [SALES] Venta creada en servidor:", resultado?.id);
-        } else {
-          throw new Error(
-            response?.msg || response?.error || "Error del servidor"
-          );
+        if (response.ok) {
+          // No actualizar stock aquí - el servidor ya lo hizo
+          dispatch({ type: types.saleAddNew, payload: response.venta });
+          return { success: true, venta: response.venta };
         }
       } else {
-        // ✅ MODO OFFLINE: Actualizar stock localmente UNA SOLA VEZ
-        console.log("📱 [SALES] Creando venta offline...");
-        resultado = await saveSaleOffline(saleData);
-        console.log(
-          "✅ [SALES] Venta guardada localmente:",
-          resultado.id_local
-        );
-
-        // ✅ ACTUALIZAR STOCK SOLO UNA VEZ
+        // Offline: actualizar stock UNA SOLA VEZ
         if (!stockActualizado) {
-          console.log("🔄 [SALES] Actualizando stock localmente...");
           await updateStockAfterSale(saleData.productos);
-          stockActualizado = true; // Marcar como actualizado
+          stockActualizado = true;
+
+          const resultado = await SalesOfflineController.createSaleOffline(
+            saleData
+          );
+          dispatch({ type: types.saleAddNew, payload: resultado.venta });
+          return { success: true, venta: resultado.venta };
         }
       }
-
-      dispatch({ type: types.saleAddNew, payload: resultado });
-
-      // ✅ MOSTRAR MENSAJE DE ÉXITO
-      const mensaje = isOnline
-        ? `Venta #${resultado.id} registrada exitosamente`
-        : `Venta local #${resultado.id_local} guardada. Stock actualizado localmente. Se sincronizará cuando recuperes la conexión`;
-
-      await Swal.fire({
-        icon: isOnline ? "success" : "info",
-        title: isOnline ? "¡Venta Exitosa!" : "Venta Guardada (Offline)",
-        text: mensaje,
-        timer: 4000,
-        showConfirmButton: true,
-      });
-
-      return { success: true, venta: resultado };
     } catch (error) {
-      console.error("❌ [SALES] Error creando venta:", error);
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error en Venta",
-        text: error.message || "Error al procesar la venta",
-        confirmButtonText: "Entendido",
-      });
-
+      console.error("❌ Error creando venta:", error);
       return { success: false, error: error.message };
     }
   };

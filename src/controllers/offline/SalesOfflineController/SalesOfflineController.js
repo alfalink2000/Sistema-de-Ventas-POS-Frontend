@@ -10,6 +10,37 @@ class SalesOfflineController extends BaseOfflineController {
     this.detailsStore = "detalles_venta_pendientes";
   }
 
+  // ✅ ELIMINAR VENTA PENDIENTE
+  // En SalesOfflineController.js - CORREGIR deletePendingSale
+  async deletePendingSale(localId) {
+    try {
+      console.log(`🗑️ Eliminando venta pendiente: ${localId}`);
+
+      // ✅ PRIMERO: Eliminar detalles de la venta
+      const detalles = await this.getSaleDetails(localId);
+      console.log(`📋 Eliminando ${detalles.length} detalles...`);
+
+      for (const detalle of detalles) {
+        await IndexedDBService.delete(this.detailsStore, detalle.id_local);
+        console.log(`✅ Detalle eliminado: ${detalle.id_local}`);
+      }
+
+      // ✅ LUEGO: Eliminar venta principal
+      const result = await IndexedDBService.delete(this.salesStore, localId);
+
+      if (!result) {
+        console.warn(`⚠️ No se pudo eliminar venta principal: ${localId}`);
+        return false;
+      }
+
+      console.log(`✅ Venta ${localId} y sus detalles eliminados`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error eliminando venta ${localId}:`, error);
+      return false;
+    }
+  }
+
   // ✅ CREAR VENTA OFFLINE (MÉTODO PRINCIPAL)
   async createSaleOffline(saleData) {
     try {
@@ -23,9 +54,16 @@ class SalesOfflineController extends BaseOfflineController {
         "sesion_caja_id",
       ]);
 
-      // Validar productos
-      if (!saleData.productos || saleData.productos.length === 0) {
-        throw new Error("La venta debe contener al menos un producto");
+      // ✅ **CRÍTICO**: Verificar si la sesión es local o del servidor
+      let sesionIdParaVenta = saleData.sesion_caja_id;
+      let esSesionLocal = false;
+
+      // Si la sesión empieza con "ses_local_", es una sesión local pura
+      if (sesionIdParaVenta && sesionIdParaVenta.startsWith("ses_local_")) {
+        esSesionLocal = true;
+        console.log("📱 Usando sesión LOCAL para venta offline");
+      } else {
+        console.log("🌐 Sesión parece ser del servidor:", sesionIdParaVenta);
       }
 
       // Generar ID local único
@@ -38,14 +76,18 @@ class SalesOfflineController extends BaseOfflineController {
         fecha_venta: new Date().toISOString(),
         sincronizado: false,
         es_local: true,
+        es_sesion_local: esSesionLocal, // ← **NUEVO: Marcar si la sesión es local**
         estado: "completada",
         fecha_creacion: new Date().toISOString(),
-        // Asegurar que los IDs sean strings
-        sesion_caja_id: saleData.sesion_caja_id.toString(),
+        sesion_caja_id: sesionIdParaVenta.toString(),
         vendedor_id: saleData.vendedor_id.toString(),
       };
 
-      console.log("💾 Guardando venta principal...", ventaCompleta);
+      console.log("💾 Guardando venta offline:", {
+        id_local: localId,
+        sesion_caja_id: sesionIdParaVenta,
+        es_sesion_local: esSesionLocal,
+      });
 
       // Guardar venta principal
       const ventaGuardada = await IndexedDBService.add(
@@ -66,6 +108,7 @@ class SalesOfflineController extends BaseOfflineController {
         success: true,
         venta: ventaCompleta,
         id_local: localId,
+        es_sesion_local: esSesionLocal,
       };
     } catch (error) {
       console.error("❌ Error creando venta offline:", error);
@@ -81,7 +124,7 @@ class SalesOfflineController extends BaseOfflineController {
     return await this.createSaleOffline(saleData);
   }
 
-  // ✅ CREAR DETALLES DE VENTA
+  // En SalesOfflineController.js - ACTUALIZAR createSaleDetails
   async createSaleDetails(ventaIdLocal, productos) {
     try {
       console.log(`📦 Creando detalles para venta ${ventaIdLocal}...`);
@@ -89,24 +132,35 @@ class SalesOfflineController extends BaseOfflineController {
       for (const [index, producto] of productos.entries()) {
         const detalleId = await this.generateLocalId("detalle");
 
+        // ✅ OBTENER PRECIO DE COMPRA REAL DEL PRODUCTO
+        const productInfo = await IndexedDBService.get(
+          "productos",
+          producto.producto_id
+        );
+        const precioCompraReal =
+          productInfo?.precio_compra || producto.precio_compra || 0;
+
         const detalle = {
           id_local: detalleId,
           venta_id_local: ventaIdLocal,
           producto_id: producto.producto_id.toString(),
           cantidad: parseInt(producto.cantidad),
           precio_unitario: parseFloat(producto.precio_unitario),
-          precio_compra: parseFloat(producto.precio_compra || 0), // ✅ GUARDAR PRECIO COMPRA
+          precio_compra: parseFloat(precioCompraReal), // ✅ PRECIO COMPRA REAL
           subtotal: parseFloat(producto.subtotal),
           ganancia:
             (parseFloat(producto.precio_unitario) -
-              parseFloat(producto.precio_compra || 0)) *
+              parseFloat(precioCompraReal)) *
             parseInt(producto.cantidad),
           sincronizado: false,
           fecha_creacion: new Date().toISOString(),
           producto_nombre: producto.nombre || `Producto ${index + 1}`,
         };
 
-        console.log(`💾 Guardando detalle ${detalleId}...`, detalle);
+        console.log(
+          `💾 Guardando detalle ${detalleId} con precio compra:`,
+          precioCompraReal
+        );
 
         const detalleGuardado = await IndexedDBService.add(
           this.detailsStore,
@@ -145,41 +199,84 @@ class SalesOfflineController extends BaseOfflineController {
   }
 
   // ✅ OBTENER VENTAS POR SESIÓN
+  // En SalesOfflineController.js - CORREGIR el método getSalesBySession
   async getSalesBySession(sesionId) {
     try {
-      const ventas = await IndexedDBService.getAll(this.salesStore);
-      const ventasFiltradas = ventas.filter(
-        (venta) =>
-          venta.sesion_caja_id === sesionId ||
-          venta.sesion_caja_id_local === sesionId
+      console.log(
+        `🔍 [SALES OFFLINE] Buscando ventas para sesión: ${sesionId}`
       );
+
+      const ventas = await IndexedDBService.getAll(this.salesStore);
+      console.log(`📊 [SALES OFFLINE] Total ventas en BD: ${ventas.length}`);
+
+      // ✅ BUSCAR POR DIFERENTES FORMATOS DE ID
+      const ventasFiltradas = ventas.filter((venta) => {
+        const matches =
+          venta.sesion_caja_id === sesionId ||
+          venta.sesion_caja_id_local === sesionId ||
+          (venta.sesion_caja_id &&
+            venta.sesion_caja_id.toString() === sesionId.toString()) ||
+          (venta.sesion_caja_id_local &&
+            venta.sesion_caja_id_local.toString() === sesionId.toString());
+
+        if (matches) {
+          console.log(`✅ Venta encontrada para sesión ${sesionId}:`, {
+            venta_id: venta.id_local,
+            sesion_caja_id: venta.sesion_caja_id,
+            sesion_caja_id_local: venta.sesion_caja_id_local,
+            total: venta.total,
+          });
+        }
+
+        return matches;
+      });
+
       console.log(
         `📊 [SALES OFFLINE] ${ventasFiltradas.length} ventas para sesión ${sesionId}`
       );
+
+      // ✅ DEBUG DETALLADO
+      if (ventasFiltradas.length === 0) {
+        console.warn(`⚠️ No se encontraron ventas para sesión: ${sesionId}`);
+        console.log(
+          "🔍 Todas las ventas disponibles:",
+          ventas.map((v) => ({
+            id: v.id_local,
+            sesion_caja_id: v.sesion_caja_id,
+            sesion_caja_id_local: v.sesion_caja_id_local,
+            total: v.total,
+          }))
+        );
+      }
+
       return ventasFiltradas;
     } catch (error) {
       console.error("❌ Error obteniendo ventas por sesión:", error);
       return [];
     }
   }
-
-  // ✅ OBTENER DETALLES DE VENTA
+  // En SalesOfflineController.js - AGREGAR MÉTODO FALTANTE
   async getSaleDetails(ventaIdLocal) {
     try {
+      console.log(`🔍 Obteniendo detalles para venta: ${ventaIdLocal}`);
+
       const detalles = await IndexedDBService.getAll(this.detailsStore);
       const detallesFiltrados = detalles.filter(
         (detalle) => detalle.venta_id_local === ventaIdLocal
       );
+
       console.log(
-        `📊 [SALES OFFLINE] ${detallesFiltrados.length} detalles para venta ${ventaIdLocal}`
+        `📊 ${detallesFiltrados.length} detalles encontrados para venta ${ventaIdLocal}`
       );
       return detallesFiltrados;
     } catch (error) {
-      console.error("❌ Error obteniendo detalles de venta:", error);
+      console.error(
+        `❌ Error obteniendo detalles de venta ${ventaIdLocal}:`,
+        error
+      );
       return [];
     }
   }
-
   // ✅ SINCRONIZAR VENTAS PENDIENTES - VERSIÓN CORREGIDA
   async syncPendingSales() {
     if (!this.isOnline) {

@@ -22,7 +22,6 @@ import {
   syncPendingClosures,
 } from "../../../../actions/closuresActions";
 import ClosuresOfflineController from "../../../../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
-import SyncController from "../../../../controllers/offline/SyncController/SyncController";
 import styles from "./ClosuresHistory.module.css";
 
 const ClosuresHistory = () => {

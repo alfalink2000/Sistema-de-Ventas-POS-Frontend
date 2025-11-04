@@ -88,21 +88,13 @@ async function verifyOfflineAuth(dispatch, userData) {
 
 // ✅ START CHECKING - FUNCIÓN PRINCIPAL
 // actions/authActions.js - VERSIÓN CORREGIDA (solo la parte de verificación)
+// ✅ CORREGIR startChecking
 export const startChecking = () => {
   return async (dispatch) => {
-    console.log("🔍 Iniciando verificación de autenticación...");
-
     const token = localStorage.getItem("token");
     const user = localStorage.getItem("user");
 
-    console.log("📋 Estado de credenciales:", {
-      hasToken: !!token,
-      hasUser: !!user,
-      isOnline: navigator.onLine,
-    });
-
     if (!token || !user) {
-      console.log("❌ No hay credenciales guardadas");
       dispatch(checkingFinish());
       return;
     }
@@ -111,62 +103,37 @@ export const startChecking = () => {
       const userData = JSON.parse(user);
 
       if (navigator.onLine) {
-        // ✅ MODO ONLINE: Verificar con servidor
-        console.log("🌐 Verificando token con servidor...");
-        try {
-          // ✅ USAR LA RUTA CORRECTA
-          const response = await fetchConToken("auth/verify-token");
-
-          if (response.ok === true) {
-            console.log("✅ Token válido - Usuario autenticado");
-
-            // ✅ ACTUALIZAR DATOS DEL USUARIO POR SI CAMBIARON
-            const updatedUser = {
-              ...userData,
-              ...(response.usuario || {}),
-            };
-
-            localStorage.setItem("user", JSON.stringify(updatedUser));
-
-            dispatch({
-              type: types.authLogin,
-              payload: updatedUser,
-            });
-          } else {
-            throw new Error(response.error || "Token inválido");
-          }
-        } catch (onlineError) {
-          console.warn(
-            "⚠️ Error verificando token online:",
-            onlineError.message
+        // Verificar con servidor
+        const response = await fetchConToken("auth/verify-token");
+        if (response.ok === true) {
+          dispatch({ type: types.authLogin, payload: userData });
+        } else {
+          // ❌ PROBLEMA: verifyOfflineAuth NO existe como función separada
+          // ✅ CORRECCIÓN: Usar AuthOfflineController directamente
+          const offlineUser = await AuthOfflineController.getUserByUsername(
+            userData.username
           );
-
-          // Si es error 401, limpiar credenciales
-          if (
-            onlineError.message.includes("401") ||
-            onlineError.message.includes("Token no válido")
-          ) {
-            console.log("🔄 Token inválido - Limpiando credenciales");
+          if (offlineUser && offlineUser.token) {
+            dispatch({ type: types.authLogin, payload: userData });
+          } else {
             localStorage.removeItem("token");
             localStorage.removeItem("user");
-            dispatch(checkingFinish());
-            return;
           }
-
-          // Para otros errores (red, etc.), intentar offline
-          await verifyOfflineAuth(dispatch, userData);
         }
       } else {
-        // ✅ MODO OFFLINE: Verificar localmente
-        console.log("📱 Modo offline - Verificando credenciales locales");
-        await verifyOfflineAuth(dispatch, userData);
+        // ✅ CORREGIDO: Usar método existente
+        const offlineUser = await AuthOfflineController.getUserByUsername(
+          userData.username
+        );
+        if (offlineUser && offlineUser.token) {
+          dispatch({ type: types.authLogin, payload: userData });
+        }
       }
-
-      dispatch(checkingFinish());
     } catch (error) {
-      console.error("❌ Error en startChecking:", error);
+      console.error("Error en startChecking:", error);
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+    } finally {
       dispatch(checkingFinish());
     }
   };

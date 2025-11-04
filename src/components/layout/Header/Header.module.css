@@ -1,4 +1,4 @@
-/* components/layout/Header/Header.module.css - VERSIÓN MEJORADA */
+/* components/layout/Header/Header.module.css - VERSIÓN CORREGIDA */
 
 /* ESTILOS BASE DEL HEADER - COMPACTO */
 .header {
@@ -154,18 +154,8 @@
   animation: pulse 1.5s infinite;
 }
 
-.syncIcon.hasPending {
-  animation: glow 2s infinite;
-}
-
 .syncSpinner {
   animation: spin 1s linear infinite;
-}
-
-.wifiIcon,
-.wifiOffIcon {
-  width: 14px;
-  height: 14px;
 }
 
 .pendingBadge {
@@ -237,11 +227,6 @@
   color: #22c55e;
 }
 
-.trendingIcon {
-  width: 14px;
-  height: 14px;
-}
-
 .earningsInfo {
   display: flex;
   flex-direction: column;
@@ -287,11 +272,6 @@
   color: #bfdbfe;
 }
 
-.dollarIcon {
-  width: 14px;
-  height: 14px;
-}
-
 .noSessionInfo {
   display: flex;
   flex-direction: column;
@@ -305,36 +285,45 @@
   line-height: 1;
 }
 
-/* INFORMACIÓN DEL USUARIO COMPACTA */
+/* ✅ INFORMACIÓN DEL USUARIO - ESTILOS CORREGIDOS */
 .userInfo {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  height: 40px;
-  min-width: 120px;
+  height: 44px;
+  min-width: 140px;
   backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.userInfo:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
 }
 
 .userAvatar {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-weight: 600;
-  font-size: 0.75rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 700;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
 .userInitial {
   line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .userDetails {
@@ -342,20 +331,32 @@
   flex-direction: column;
   gap: 0.1rem;
   flex: 1;
+  min-width: 0;
 }
 
 .userName {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
   color: #ffffff;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  max-width: 100px;
+  letter-spacing: -0.025em;
 }
 
-/* ✅ MODAL DE SINCRONIZACIÓN MEJORADO */
+.userRole {
+  font-size: 0.7rem;
+  color: #bfdbfe;
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ✅ MODAL DE SINCRONIZACIÓN - ESTILOS CORREGIDOS */
 .modalOverlay {
   position: fixed;
   top: 0;
@@ -376,7 +377,7 @@
   border-radius: 20px;
   border: 1px solid #3b82f6;
   width: 95%;
-  max-width: 700px;
+  max-width: 500px;
   max-height: 85vh;
   overflow: hidden;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
@@ -436,7 +437,7 @@
   flex: 1;
 }
 
-/* ✅ SECCIÓN DE ESTADO DE SINCRONIZACIÓN MEJORADA */
+/* ✅ SECCIÓN DE ESTADO DE SINCRONIZACIÓN */
 .syncStatusSection {
   margin-bottom: 2rem;
 }
@@ -513,74 +514,12 @@
   line-height: 1.4;
 }
 
-/* ✅ CONTADORES PENDIENTES MEJORADOS */
-.pendingCounters {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 1rem;
+/* ✅ RESUMEN DE DATOS PENDIENTES */
+.pendingSummary {
   margin-bottom: 2rem;
 }
 
-.counterItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1.25rem 0.75rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-}
-
-.counterItem:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.counterTotal {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1.25rem 0.75rem;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border: 1px solid rgba(239, 68, 68, 0.6);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.counterNumber {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #ffffff;
-  margin-bottom: 0.25rem;
-}
-
-.counterTotal .counterNumber {
-  color: #ffffff;
-  font-size: 1.75rem;
-}
-
-.counterLabel,
-.totalLabel {
-  font-size: 0.75rem;
-  color: #bfdbfe;
-  text-align: center;
-  font-weight: 500;
-}
-
-.totalLabel {
-  color: #ffffff;
-  font-weight: 600;
-}
-
-/* ✅ DETALLES PENDIENTES MEJORADOS */
-.pendingDetails {
-  margin-bottom: 2rem;
-}
-
-.pendingDetails h4 {
+.pendingSummary h4 {
   margin: 0 0 1.5rem 0;
   color: #ffffff;
   font-size: 1.3rem;
@@ -590,107 +529,6 @@
   border-bottom: 2px solid rgba(255, 255, 255, 0.2);
 }
 
-.detailSection {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.detailSection h5 {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0 0 1rem 0;
-  color: #dbeafe;
-  font-size: 1.1rem;
-  font-weight: 600;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.sectionIcon {
-  width: 18px;
-  height: 18px;
-  color: #93c5fd;
-}
-
-.detailItem {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 12px;
-  margin-bottom: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.3s ease;
-}
-
-.detailItem:hover {
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateX(5px);
-}
-
-.detailItem:last-child {
-  margin-bottom: 0;
-}
-
-.itemIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #93c5fd;
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.itemContent {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  flex: 1;
-}
-
-.itemTitle {
-  font-size: 0.9rem;
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.itemDate {
-  font-size: 0.75rem;
-  color: #bfdbfe;
-}
-
-.itemSubtitle {
-  font-size: 0.8rem;
-  color: #93c5fd;
-  font-style: italic;
-}
-
-.itemStatus {
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.4rem 0.8rem;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
-}
-
-.itemStatus.pending {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fef3c7;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
-
-/* SIN DATOS PENDIENTES */
 .noPendingData {
   display: flex;
   align-items: center;
@@ -712,28 +550,75 @@
   color: #22c55e;
 }
 
-/* SECCIÓN DE ERRORES */
-.errorSection {
+.pendingList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pendingItem {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1.5rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.pendingItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(5px);
+}
+
+.itemIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #93c5fd;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ✅ INFORMACIÓN ADICIONAL */
+/* .syncInfo {
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
-  color: #fecaca;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+} */
+
+.infoItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  color: #bfdbfe;
   font-size: 0.9rem;
+}
+
+.infoItem:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.warningMessage {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fef3c7;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  text-align: center;
   font-weight: 500;
 }
 
-.errorIcon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  color: #ef4444;
-}
-
-/* ✅ PIE DEL MODAL MEJORADO */
+/* ✅ PIE DEL MODAL */
 .modalFooter {
   display: flex;
   justify-content: flex-end;
@@ -803,7 +688,7 @@
   animation: spin 1s linear infinite;
 }
 
-/* ✅ NUEVAS ANIMACIONES MEJORADAS */
+/* ✅ ANIMACIONES */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -822,16 +707,6 @@
   50% {
     transform: scale(1.05);
     opacity: 0.8;
-  }
-}
-
-@keyframes glow {
-  0%,
-  100% {
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.9);
   }
 }
 
@@ -895,13 +770,17 @@
     min-width: auto;
   }
 
+  .userInfo {
+    min-width: auto;
+    padding: 0.4rem 0.6rem;
+  }
+
   .userName {
     display: none;
   }
 
-  .userInfo {
-    min-width: auto;
-    padding: 0.4rem;
+  .userRole {
+    font-size: 0.65rem;
   }
 
   .modalOverlay {
@@ -925,24 +804,6 @@
   .modalBody {
     padding: 1.5rem;
     max-height: calc(90vh - 120px);
-  }
-
-  .pendingCounters {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
-  }
-
-  .counterItem,
-  .counterTotal {
-    padding: 1rem 0.5rem;
-  }
-
-  .counterNumber {
-    font-size: 1.25rem;
-  }
-
-  .counterTotal .counterNumber {
-    font-size: 1.5rem;
   }
 
   .modalFooter {
@@ -979,22 +840,12 @@
     display: none;
   }
 
-  .pendingCounters {
-    grid-template-columns: repeat(2, 1fr);
+  .userDetails {
+    display: none;
   }
 
-  .detailSection {
-    padding: 1rem;
-  }
-
-  .detailItem {
-    padding: 0.75rem;
-    gap: 0.75rem;
-  }
-
-  .itemIcon {
-    width: 32px;
-    height: 32px;
-    font-size: 0.875rem;
+  .userInfo {
+    padding: 0.4rem;
+    min-width: auto;
   }
 }

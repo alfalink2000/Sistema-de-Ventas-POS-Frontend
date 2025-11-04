@@ -292,84 +292,38 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   };
 
   // ✅ FUNCIÓN DE DIAGNÓSTICO MEJORADA
+  // En tu componente de cierre de caja
   const handleDiagnosticar = async () => {
-    if (!sesion) return;
+    const diagnostico = await ClosuresOfflineController.realTimeDiagnosis(
+      sesionAbierta.id_local
+    );
+    console.log("🔍 DIAGNÓSTICO COMPLETO:", diagnostico);
 
-    const sesionId = sesion.id_local || sesion.id;
-    console.log("🔍 Ejecutando diagnóstico para sesión:", sesionId);
-
-    try {
-      // Obtener ventas de la sesión
-      const ventasSesion = await SalesOfflineController.getSalesBySession(
-        sesionId
-      );
-
-      // Obtener todas las ventas pendientes
-      const todasVentas = await SalesOfflineController.getPendingSales();
-
-      // Obtener sesión actual
-      const sesionActual = await SessionsOfflineController.getSessionById(
-        sesionId
-      );
-
-      const diagnostico = {
-        sesion: sesionActual,
-        ventasSesion: ventasSesion,
-        todasVentas: todasVentas,
-        resumen: {
-          totalVentas: todasVentas.length,
-          ventasEnSesion: ventasSesion.length,
-          totalDetalles: ventasSesion.reduce((acc, venta) => {
-            return acc + (venta.productos ? venta.productos.length : 0);
-          }, 0),
-        },
-      };
-
-      console.log("📊 Resultado diagnóstico:", diagnostico);
-
-      // Mostrar resultado en alerta detallada
-      await Swal.fire({
-        title: "🔍 Diagnóstico Offline",
-        html: `
-          <div style="text-align: left; font-size: 14px;">
-            <h4>📋 Sesión:</h4>
-            <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; max-height: 200px; overflow: auto;">
-${JSON.stringify(diagnostico.sesion, null, 2)}</pre>
-            
-            <h4>📊 Resumen:</h4>
-            <ul>
-              <li>Total ventas pendientes: ${
-                diagnostico.resumen.totalVentas
-              }</li>
-              <li>Ventas en esta sesión: <strong>${
-                diagnostico.resumen.ventasEnSesion
-              }</strong></li>
-              <li>Total productos vendidos: ${
-                diagnostico.resumen.totalDetalles
-              }</li>
-            </ul>
-            
-            <h4>🎯 Ventas de esta sesión (${ventasSesion.length}):</h4>
-            ${
-              ventasSesion.length > 0
-                ? `<pre style="background: #f0f9ff; padding: 10px; border-radius: 5px; max-height: 300px; overflow: auto;">
-${JSON.stringify(ventasSesion, null, 2)}</pre>`
-                : '<p style="color: red; background: #fee2e2; padding: 10px; border-radius: 5px;">❌ NO SE ENCONTRARON VENTAS PARA ESTA SESIÓN</p>'
-            }
-          </div>
-        `,
-        width: 900,
-        confirmButtonText: "Entendido",
-      });
-    } catch (error) {
-      console.error("Error en diagnóstico:", error);
-      await Swal.fire({
-        icon: "error",
-        title: "Error en diagnóstico",
-        text: error.message,
-        confirmButtonText: "Entendido",
-      });
-    }
+    // Mostrar resultados al usuario
+    Swal.fire({
+      title: "Diagnóstico de Cierre",
+      html: `
+      <div style="text-align: left; font-size: 14px;">
+        <p><strong>Sesión encontrada:</strong> ${
+          diagnostico.sesionEncontrada ? "✅ Sí" : "❌ No"
+        }</p>
+        <p><strong>Saldo inicial:</strong> $${diagnostico.saldoInicial}</p>
+        <p><strong>Total ventas en BD:</strong> ${
+          diagnostico.totalVentasEnBD
+        }</p>
+        <p><strong>Ventas para esta sesión:</strong> ${
+          diagnostico.ventasParaSesion
+        }</p>
+        <p><strong>Total ventas (manual):</strong> $${
+          diagnostico.calculoManual?.total_ventas || 0
+        }</p>
+        <p><strong>Total efectivo (manual):</strong> $${
+          diagnostico.calculoManual?.total_efectivo || 0
+        }</p>
+      </div>
+    `,
+      confirmButtonText: "Entendido",
+    });
   };
 
   if (!sesion) {

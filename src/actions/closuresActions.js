@@ -213,6 +213,7 @@ export const loadTodayClosure = () => {
 };
 
 // ✅ CORREGIDO: CALCULAR TOTALES COMPLETOS CON OFFLINE
+// En closuresActions.js - ACTUALIZAR calculateClosureTotals
 export const calculateClosureTotals = (sesionCajaId) => {
   return async (dispatch, getState) => {
     try {
@@ -224,29 +225,11 @@ export const calculateClosureTotals = (sesionCajaId) => {
       let totales;
 
       if (isOnline) {
-        // Si hay conexión, calcular en backend
-        const response = await fetchConToken(
-          `cierres/calcular-totales/${sesionCajaId}`
-        );
-
-        console.log("📦 [CLOSURES] Respuesta de cálculo:", response?.totales);
-
-        if (response && response.ok === true && response.totales) {
-          totales = {
-            ...response.totales,
-            ganancia_bruta: response.totales.ganancia_bruta || 0,
-            saldo_final_teorico: response.totales.saldo_final_teorico || 0,
-            saldo_inicial: response.totales.saldo_inicial || 0,
-            diferencia: response.totales.diferencia || 0,
-          };
-        } else {
-          throw new Error(response?.error || "Error calculando totales");
-        }
+        // Código existente para online...
       } else {
         // Si no hay conexión, calcular localmente
         console.log("📱 [CLOSURES] Calculando totales localmente...");
 
-        // Determinar si es una sesión local o del servidor
         const { sesionesCaja } = getState();
         const sesion = sesionesCaja.sesiones.find(
           (s) => s.id === sesionCajaId || s.id_local === sesionCajaId
@@ -258,21 +241,18 @@ export const calculateClosureTotals = (sesionCajaId) => {
 
         const sesionIdLocal = sesion.id_local || sesionCajaId;
 
-        // ✅ CORREGIDO: Usar ClosuresOfflineController en lugar de OfflineClosureService
+        // ✅ CALCULAR TOTALES CON EL CONTROLADOR CORREGIDO
         const totalesCalculados =
           await ClosuresOfflineController.calculateSessionTotals(sesionIdLocal);
 
-        // Obtener saldo inicial
-        const saldoInicial = sesion.saldo_inicial || 0;
-
-        // Calcular saldo final teórico
-        const saldoFinalTeorico =
-          saldoInicial + (totalesCalculados.total_efectivo || 0);
+        // ✅ VERIFICAR QUE TENEMOS SALDO INICIAL
+        console.log("📊 Saldo inicial de la sesión:", sesion.saldo_inicial);
+        console.log("📊 Totales calculados:", totalesCalculados);
 
         totales = {
           ...totalesCalculados,
-          saldo_inicial: saldoInicial,
-          saldo_final_teorico: saldoFinalTeorico,
+          saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
+          saldo_final_teorico: totalesCalculados.saldo_final_teorico || 0,
           diferencia: 0, // Se calculará después con el saldo final real
         };
       }
@@ -281,7 +261,12 @@ export const calculateClosureTotals = (sesionCajaId) => {
     } catch (error) {
       console.error("❌ [CLOSURES] Error calculando totales:", error);
 
-      // Devolver totales en cero en caso de error
+      // Devolver totales en cero PERO CON SALDO INICIAL si está disponible
+      const { sesionesCaja } = getState();
+      const sesion = sesionesCaja.sesiones.find(
+        (s) => s.id === sesionCajaId || s.id_local === sesionCajaId
+      );
+
       return {
         cantidad_ventas: 0,
         total_ventas: 0,
@@ -289,8 +274,8 @@ export const calculateClosureTotals = (sesionCajaId) => {
         total_tarjeta: 0,
         total_transferencia: 0,
         ganancia_bruta: 0,
-        saldo_inicial: 0,
-        saldo_final_teorico: 0,
+        saldo_inicial: sesion?.saldo_inicial || 0,
+        saldo_final_teorico: sesion?.saldo_inicial || 0,
         diferencia: 0,
       };
     }
@@ -590,61 +575,27 @@ export const loadClosuresStats = () => {
 };
 
 // ✅ CORREGIDO: Sincronizar cierres pendientes manualmente
+// ✅ CORREGIR syncPendingClosures
 export const syncPendingClosures = () => {
   return async (dispatch) => {
     try {
       if (!navigator.onLine) {
-        await Swal.fire({
-          icon: "warning",
-          title: "Sin conexión",
-          text: "No hay conexión a internet para sincronizar",
-          confirmButtonText: "Entendido",
-        });
+        await Swal.fire({ icon: "warning", title: "Sin conexión" });
         return false;
       }
 
-      await Swal.fire({
-        title: "Sincronizando...",
-        text: "Sincronizando cierres pendientes con el servidor",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
-
-      // ✅ CORREGIDO: Usar fullSync en lugar de forceSync
+      // ✅ USAR SyncController correctamente
       const syncResult = await SyncController.fullSync();
 
-      // Recargar cierres después de sincronizar
-      await dispatch(loadClosures());
-
-      Swal.close();
-
       if (syncResult.success) {
-        await Swal.fire({
-          icon: "success",
-          title: "Sincronización completada",
-          text: "Todos los cierres pendientes se han sincronizado",
-          timer: 2000,
-          showConfirmButton: false,
-        });
+        // Recargar datos actualizados
+        await dispatch(loadClosures());
+        return true;
       } else {
-        throw new Error(syncResult.error || "Error en sincronización");
+        throw new Error(syncResult.error);
       }
-
-      return true;
     } catch (error) {
-      console.error("❌ [CLOSURES] Error sincronizando cierres:", error);
-
-      Swal.close();
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error de sincronización",
-        text: "No se pudieron sincronizar los cierres pendientes",
-        confirmButtonText: "Entendido",
-      });
-
+      console.error("Error sincronizando cierres:", error);
       return false;
     }
   };
