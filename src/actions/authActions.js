@@ -454,6 +454,80 @@ export const startOfflineChecking = () => {
 };
 
 // ✅ SINCRONIZAR USUARIOS
+// export const syncOfflineUsers = () => {
+//   return async (dispatch) => {
+//     if (!navigator.onLine) {
+//       console.log("📴 Sin conexión - No se puede sincronizar usuarios");
+//       return {
+//         success: false,
+//         error: "Sin conexión a internet",
+//         silent: true,
+//       };
+//     }
+
+//     try {
+//       Swal.fire({
+//         title: "Sincronizando...",
+//         text: "Actualizando datos de usuarios offline",
+//         allowOutsideClick: false,
+//         didOpen: () => {
+//           Swal.showLoading();
+//         },
+//       });
+
+//       const result = await AuthOfflineController.syncUsersFromServer();
+
+//       Swal.close();
+
+//       if (result.success) {
+//         const users = await AuthOfflineController.getAllOfflineUsers();
+//         const stats = {
+//           totalRecords: users.length,
+//           uniqueUsers: users.length,
+//           duplicates: 0,
+//           usersByRole: {},
+//         };
+
+//         users.forEach((user) => {
+//           stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
+//         });
+
+//         if (navigator.onLine) {
+//           await Swal.fire({
+//             icon: "success",
+//             title: "Sincronización completada",
+//             text: `✅ ${result.count} usuarios sincronizados\n📊 ${stats.uniqueUsers} usuarios únicos disponibles offline`,
+//             timer: 3000,
+//             showConfirmButton: false,
+//           });
+//         }
+
+//         return { success: true, count: result.count, stats };
+//       } else {
+//         throw new Error(result.error);
+//       }
+//     } catch (error) {
+//       console.error("Error sincronizando usuarios:", error);
+//       Swal.close();
+
+//       if (navigator.onLine) {
+//         await Swal.fire({
+//           icon: "error",
+//           title: "Error de sincronización",
+//           text: error.message || "No se pudieron sincronizar los usuarios",
+//           confirmButtonText: "Entendido",
+//         });
+//       }
+
+//       return {
+//         success: false,
+//         error: error.message,
+//         silent: !navigator.onLine,
+//       };
+//     }
+//   };
+// };
+// ✅ SINCRONIZAR USUARIOS - VERSIÓN MEJORADA
 export const syncOfflineUsers = () => {
   return async (dispatch) => {
     if (!navigator.onLine) {
@@ -492,42 +566,91 @@ export const syncOfflineUsers = () => {
           stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
         });
 
-        if (navigator.onLine) {
-          await Swal.fire({
-            icon: "success",
-            title: "Sincronización completada",
-            text: `✅ ${result.count} usuarios sincronizados\n📊 ${stats.uniqueUsers} usuarios únicos disponibles offline`,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-        }
+        // ✅ MENSAJE MEJORADO - Sin "error de sincronización"
+        await Swal.fire({
+          icon: "success",
+          title: "Datos actualizados",
+          text: `✅ ${result.count} usuarios sincronizados\n📊 ${stats.uniqueUsers} usuarios disponibles offline`,
+          timer: 3000,
+          showConfirmButton: false,
+          background: "#f0f9ff",
+          color: "#1e293b",
+        });
 
         return { success: true, count: result.count, stats };
       } else {
+        // ✅ MENSAJE MÁS AMIGABLE PARA FALLOS
         throw new Error(result.error);
       }
     } catch (error) {
-      console.error("Error sincronizando usuarios:", error);
+      console.error("Error en sincronización de usuarios:", error);
       Swal.close();
 
-      if (navigator.onLine) {
+      // ✅ DETECTAR TIPO DE ERROR Y MOSTRAR MENSAJES APROPIADOS
+      if (
+        error.message.includes("Failed to fetch") ||
+        error.message.includes("Network")
+      ) {
+        // ✅ CONEXIÓN PERDIDA DURANTE LA SINCRONIZACIÓN
         await Swal.fire({
-          icon: "error",
-          title: "Error de sincronización",
-          text: error.message || "No se pudieron sincronizar los usuarios",
+          icon: "warning",
+          title: "Conexión interrumpida",
+          text: "La sincronización se pausó. Los datos locales están seguros. Se reanudará automáticamente cuando recuperes la conexión.",
           confirmButtonText: "Entendido",
+          background: "#fffbf0",
+          color: "#78350f",
+        });
+      } else if (
+        error.message.includes("timeout") ||
+        error.message.includes("Timeout")
+      ) {
+        // ✅ TIEMPO DE ESPERA AGOTADO
+        await Swal.fire({
+          icon: "info",
+          title: "Servidor ocupado",
+          text: "El servidor está tardando en responder. Tus datos locales están seguros. Puedes intentar nuevamente más tarde.",
+          confirmButtonText: "Entendido",
+          background: "#f0f9ff",
+          color: "#1e293b",
+        });
+      } else if (
+        error.message.includes("401") ||
+        error.message.includes("token")
+      ) {
+        // ✅ ERROR DE AUTENTICACIÓN
+        await Swal.fire({
+          icon: "warning",
+          title: "Sesión expirada",
+          text: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
+          confirmButtonText: "Iniciar sesión",
+          background: "#fef2f2",
+          color: "#7f1d1d",
+        }).then(() => {
+          // Redirigir al login
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          window.location.href = "/login";
+        });
+      } else {
+        // ✅ ERROR GENÉRICO CON MENSAJE MÁS AMIGABLE
+        await Swal.fire({
+          icon: "info",
+          title: "Sincronización parcial",
+          text: "Algunos datos podrían no estar actualizados. Puedes seguir trabajando sin conexión sin problemas.",
+          confirmButtonText: "Continuar",
+          background: "#f0f9ff",
+          color: "#1e293b",
         });
       }
 
       return {
         success: false,
         error: error.message,
-        silent: !navigator.onLine,
+        silent: true, // ✅ MARCADO COMO SILENCIOSO PARA NO PROPAGAR EL ERROR
       };
     }
   };
 };
-
 // ✅ LOGOUT
 export const startLogout = () => {
   return async (dispatch) => {

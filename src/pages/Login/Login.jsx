@@ -47,33 +47,6 @@ const Login = () => {
       {/* ✅ HEADER MEJORADO CON ESTADO OFFLINE */}
       <div className={styles.offlineHeader}>
         <OfflineDataStatus />
-
-        {!isOnline && (
-          <div className={styles.offlineBanner}>
-            <div className={styles.offlineContent}>
-              <span className={styles.offlineIcon}>📱</span>
-              <div>
-                <strong>Modo Offline Activado</strong>
-                <p>
-                  Puedes iniciar sesión con credenciales previamente
-                  sincronizadas
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isOnline && isSyncing && (
-          <div className={styles.syncBanner}>
-            <div className={styles.syncContent}>
-              <span className={styles.syncIcon}>🔄</span>
-              <div>
-                <strong>Sincronizando datos...</strong>
-                <p>Actualizando información para modo offline</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className={styles.loginBackground}>

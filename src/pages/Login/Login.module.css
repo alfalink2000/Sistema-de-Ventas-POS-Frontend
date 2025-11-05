@@ -318,3 +318,363 @@ body {
 .loginContainer * {
   box-sizing: border-box;
 }
+
+/* pages/Login/Login.module.css - VERSIÓN MEJORADA CON DEGRADADO AZUL-VERDE PROFESIONAL */
+.loginContainer {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 30%,
+    #4facfe 50%,
+    #00f2fe 70%,
+    #43e97b 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+  padding: 20px;
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* HEADER FIJO PARA OFFLINE STATUS */
+.offlineHeader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.loginContainer {
+  position: relative;
+  padding-top: 80px;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fondo con patrón sutil mejorado */
+.loginBackground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.backgroundPattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+      circle at 20% 80%,
+      rgba(255, 255, 255, 0.15) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(255, 255, 255, 0.1) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 40% 40%,
+      rgba(255, 255, 255, 0.08) 0%,
+      transparent 50%
+    );
+}
+
+/* Tarjeta de login con mejoras visuales */
+.loginCard {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 380px;
+  height: 500px;
+  max-height: 500px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25), 0 10px 20px rgba(0, 0, 0, 0.15),
+    0 4px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(15px);
+}
+
+/* Logo y elementos gráficos mejorados */
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.reactIcon {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #3b82f6 0%, #10b981 100%);
+  border-radius: 50%;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.reactIcon svg {
+  width: 70%;
+  height: 70%;
+  color: white;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.logoText h1 {
+  background: linear-gradient(135deg, #1e40af 0%, #047857 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+.logoText p {
+  color: #4b5563;
+  margin: 6px 0 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: rgba(107, 114, 128, 0.1);
+  padding: 4px 12px;
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
+}
+
+/* Resto de estilos se mantienen igual... */
+
+.onlineStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  color: #6b7280;
+  justify-content: center;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.offlineInfo {
+  padding: 20px;
+  background: rgba(248, 250, 252, 0.8);
+  border-top: 1px solid rgba(226, 232, 240, 0.6);
+  margin-top: auto;
+  flex-shrink: 0;
+  border-radius: 0 0 20px 20px;
+  backdrop-filter: blur(5px);
+}
+
+.offlineInfo h4 {
+  margin: 0 0 12px;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.offlineInfo ul {
+  margin: 0;
+  padding-left: 16px;
+  color: #6b7280;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.offlineInfo li {
+  margin-bottom: 4px;
+}
+
+/* Banner styles (se mantienen igual) */
+.offlineBanner {
+  background: linear-gradient(135deg, #fef3c7, #f59e0b);
+  padding: 12px 20px;
+  border-left: 4px solid #d97706;
+  width: 100%;
+}
+
+.offlineContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #92400e;
+}
+
+.offlineIcon {
+  font-size: 1.5rem;
+}
+
+.syncBanner {
+  background: linear-gradient(135deg, #dbeafe, #3b82f6);
+  padding: 12px 20px;
+  border-left: 4px solid #1d4ed8;
+  width: 100%;
+}
+
+.syncContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #1e40af;
+}
+
+.syncIcon {
+  font-size: 1.5rem;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .loginCard {
+    padding: 20px;
+    max-width: 340px;
+    height: 480px;
+  }
+
+  .reactIcon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .logoText h1 {
+    font-size: 1.375rem;
+  }
+
+  .offlineHeader {
+    position: fixed;
+  }
+}
+
+@media (max-width: 480px) {
+  .loginContainer {
+    padding: 16px;
+    animation: gradientShift 20s ease infinite; /* Más lento en móviles */
+  }
+
+  .loginCard {
+    padding: 18px;
+    max-width: 320px;
+    height: 460px;
+    border-radius: 16px;
+  }
+
+  .reactIcon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .logoText h1 {
+    font-size: 1.25rem;
+  }
+
+  .logoText p {
+    font-size: 0.75rem;
+  }
+
+  .offlineBanner,
+  .syncBanner {
+    padding: 10px 16px;
+  }
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .loginContainer {
+    animation: none;
+    background: linear-gradient(135deg, #667eea 0%, #43e97b 100%);
+  }
+
+  .reactIcon {
+    animation: none;
+  }
+
+  .syncIcon {
+    animation: none;
+  }
+
+  .statusDot {
+    animation: none;
+  }
+}
+
+body {
+  overflow: auto;
+}
+
+.loginContainer * {
+  box-sizing: border-box;
+}

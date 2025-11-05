@@ -2202,28 +2202,78 @@ class ProductsOfflineController extends BaseOfflineController {
       return { total: 0, crear: 0, actualizar: 0, eliminar: 0 };
     }
   }
+  // ✅ MÉTODO CORREGIDO: Sincronización forzada con imágenes
+  // ✅ MÉTODO CORREGIDO: Sincronización forzada
   async forceProductsSyncWithImageDownload() {
     try {
+      console.log("🚀 INICIANDO SINCRONIZACIÓN FORZADA CON IMÁGENES...");
+
       // 1. Obtener productos del servidor
       const productos = await this.fetchProductsFromServer();
 
-      // 2. Guardar productos en IndexedDB
-      await this.saveProductsToIndexedDB(productos);
+      // 2. Validar productos obtenidos
+      if (!productos || !Array.isArray(productos)) {
+        throw new Error("No se recibieron productos válidos del servidor");
+      }
 
-      // 3. ✅ DESCARGAR IMÁGENES (cache transparente)
-      const downloadResult =
-        await ImageDownloadManager.downloadAllProductImages(productos);
+      console.log(`📦 ${productos.length} productos recibidos para procesar`);
+
+      // 3. Guardar productos en IndexedDB
+      const saveResult = await this.saveProducts(productos);
+
+      if (!saveResult.success) {
+        throw new Error(`Error guardando productos: ${saveResult.error}`);
+      }
+
+      console.log(`💾 ${saveResult.saved} productos guardados en IndexedDB`);
+
+      // 4. ✅ DESCARGAR IMÁGENES EN SEGUNDO PLANO (NO BLOQUEANTE)
+      if (productos.length > 0) {
+        setTimeout(async () => {
+          try {
+            console.log(
+              "🖼️ Iniciando descarga de imágenes en segundo plano..."
+            );
+
+            const downloadResult =
+              await ImageDownloadManager.downloadAllProductImages(productos);
+
+            console.log("📊 Resultado descarga imágenes:", {
+              exitosas: downloadResult.success,
+              fallidas: downloadResult.failed,
+              total: downloadResult.total,
+            });
+
+            // ✅ NOTIFICAR RESULTADO DE DESCARGAS
+            if (downloadResult.failed > 0) {
+              console.warn(
+                `⚠️ ${downloadResult.failed} imágenes no se pudieron descargar`
+              );
+            }
+          } catch (imageError) {
+            console.warn("⚠️ Error en descarga de imágenes:", imageError);
+            // No propagar este error para no afectar la sincronización principal
+          }
+        }, 1000);
+      } else {
+        console.log("⏭️ No hay productos con imágenes para descargar");
+      }
 
       return {
         success: true,
         productsCount: productos.length,
-        imagesDownloaded: downloadResult.success,
-        imagesFailed: downloadResult.failed,
+        savedCount: saveResult.saved,
+        errors: saveResult.errors || 0,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error("❌ Error en sincronización con imágenes:", error);
-      return { success: false, error: error.message };
+
+      return {
+        success: false,
+        error: error.message,
+        step: "forceProductsSyncWithImageDownload",
+      };
     }
   }
   // ✅ MÉTODO AUXILIAR: Validar URL de imagen
@@ -2262,33 +2312,91 @@ class ProductsOfflineController extends BaseOfflineController {
       return url.split("/").pop() || "imagen";
     }
   }
-  // ✅ MÉTODO FALTANTE: Obtener productos del servidor
+
+  // ✅ MÉTODO MEJORADO: Obtener productos con múltiples estrategias
   async fetchProductsFromServer() {
     try {
-      console.log(
-        "🔄 ProductsOfflineController: Obteniendo productos del servidor..."
-      );
+      console.log("🔄 Obteniendo productos del servidor...");
 
       const response = await fetchConToken("productos?limite=1000");
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+      // ✅ ANÁLISIS DETALLADO DE LA RESPUESTA
+      this.analyzeResponseStructure(response);
 
-      const data = await response.json();
+      let productos = [];
 
-      if (data && data.ok && data.productos) {
+      // ✅ ESTRATEGIA 1: Respuesta con estructura {ok: true, productos: [...]}
+      if (
+        response &&
+        response.ok === true &&
+        Array.isArray(response.productos)
+      ) {
+        productos = response.productos;
         console.log(
-          `✅ ${data.productos.length} productos obtenidos del servidor`
+          `✅ ${productos.length} productos obtenidos (estructura estándar)`
         );
-        return data.productos;
-      } else {
-        throw new Error("Respuesta inválida del servidor");
       }
+      // ✅ ESTRATEGIA 2: Respuesta directa como array
+      else if (Array.isArray(response)) {
+        productos = response;
+        console.log(
+          `✅ ${productos.length} productos obtenidos (respuesta directa)`
+        );
+      }
+      // ✅ ESTRATEGIA 3: Otra estructura posible
+      else if (response && Array.isArray(response.data)) {
+        productos = response.data;
+        console.log(
+          `✅ ${productos.length} productos obtenidos (estructura data)`
+        );
+      }
+      // ✅ ESTRATEGIA 4: Buscar cualquier array en la respuesta
+      else if (response && typeof response === "object") {
+        // Buscar la primera propiedad que sea un array
+        const arrayKey = Object.keys(response).find((key) =>
+          Array.isArray(response[key])
+        );
+        if (arrayKey) {
+          productos = response[arrayKey];
+          console.log(
+            `✅ ${productos.length} productos obtenidos (clave: ${arrayKey})`
+          );
+        } else {
+          throw new Error("No se encontró array de productos en la respuesta");
+        }
+      } else {
+        throw new Error("Estructura de respuesta desconocida");
+      }
+
+      // ✅ VALIDAR QUE HAYA PRODUCTOS
+      if (!Array.isArray(productos)) {
+        throw new Error("Los productos no son un array válido");
+      }
+
+      console.log(`📦 ${productos.length} productos listos para procesar`);
+      return productos;
     } catch (error) {
       console.error("❌ Error obteniendo productos del servidor:", error);
-      throw error;
+
+      // ✅ PROPAGAR ERROR MEJOR ESTRUCTURADO
+      const enhancedError = new Error(
+        `Error obteniendo productos: ${error.message}`
+      );
+      enhancedError.originalError = error;
+      enhancedError.context = "fetchProductsFromServer";
+      throw enhancedError;
     }
+  }
+  // ✅ MÉTODO AUXILIAR: Verificar estructura de respuesta
+  analyzeResponseStructure(response) {
+    console.log("🔍 Analizando estructura de respuesta:", {
+      tipo: typeof response,
+      esArray: Array.isArray(response),
+      keys: response ? Object.keys(response) : "null",
+      tieneOk: response?.ok !== undefined,
+      tieneProductos: response?.productos !== undefined,
+      productosEsArray: Array.isArray(response?.productos),
+    });
   }
   // ✅ MÉTODO PARA OBTENER IMAGEN (local o externa)
   async getProductImage(product) {
