@@ -1,222 +1,333 @@
-// utils/ImageDownloadManager.js - ARCHIVO NUEVO
+// utils/ImageDownloadManager.js - VERSIÓN CORREGIDA
 class ImageDownloadManager {
   constructor() {
-    this.baseUrl = "/images/products/";
+    this.cacheName = "ibbco-images-cache";
+    this.maxRetries = 2;
+    this.timeout = 15000; // 15 segundos
   }
 
-  // ✅ DESCARGAR imagen de i.ibb.co y convertir a local
-  async downloadAndCacheImage(externalUrl, productId) {
+  // ✅ DESCARGAR Y CACHEAR IMAGEN (manteniendo URL original)
+  async downloadAndCacheImage(imageUrl) {
     try {
-      if (!externalUrl || !productId) return null;
-
-      // Verificar si es una URL de i.ibb.co
-      if (!externalUrl.includes("i.ibb.co")) {
-        console.log(`⏩ Saltando imagen no i.ibb.co: ${externalUrl}`);
+      if (!imageUrl || !this.isValidImageUrl(imageUrl)) {
+        console.warn(`⚠️ URL de imagen inválida: ${imageUrl}`);
         return null;
       }
 
-      // Verificar si ya existe localmente
-      const localPath = `${this.baseUrl}${productId}.webp`;
-      const cached = await this.getLocalImage(localPath);
+      console.log(`📥 Descargando imagen: ${this.getFileName(imageUrl)}`);
+
+      // Verificar si ya está en cache
+      const cached = await this.getCachedImage(imageUrl);
       if (cached) {
-        console.log(`✅ Imagen ya en cache: ${productId}`);
-        return localPath;
+        console.log(`✅ Imagen ya en cache: ${this.getFileName(imageUrl)}`);
+        return imageUrl; // ✅ Devolver la URL original
       }
 
-      // Descargar imagen de i.ibb.co
+      // Descargar con reintentos
+      const success = await this.downloadWithRetry(imageUrl);
+
+      if (success) {
+        console.log(`✅ Imagen cacheada: ${this.getFileName(imageUrl)}`);
+        return imageUrl; // ✅ Siempre devolver la URL original
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.warn(`❌ Error descargando imagen ${imageUrl}:`, error.message);
+      return null;
+    }
+  }
+
+  // ✅ DESCARGAR CON REINTENTOS
+  async downloadWithRetry(imageUrl, retryCount = 0) {
+    try {
       console.log(
-        `📥 Descargando imagen para producto ${productId}:`,
-        externalUrl
+        `⬇️ Descarga (intento ${retryCount + 1}): ${this.getFileName(imageUrl)}`
       );
 
-      const response = await fetch(externalUrl, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(imageUrl, {
+        signal: controller.signal,
         mode: "cors",
-        credentials: "omit",
+        cache: "no-cache",
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} - ${externalUrl}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const blob = await response.blob();
 
       // Verificar que sea una imagen válida
       if (!blob.type.startsWith("image/")) {
-        throw new Error("Respuesta no es una imagen válida");
+        throw new Error(`Tipo MIME inválido: ${blob.type}`);
       }
 
-      // Convertir a formato optimizado (WebP)
-      const optimizedBlob = await this.optimizeImage(blob);
+      console.log(
+        `✅ Imagen descargada: ${this.getFileName(
+          imageUrl
+        )} (${this.formatBytes(blob.size)})`
+      );
 
-      // Guardar en cache local
-      const saved = await this.saveLocalImage(localPath, optimizedBlob);
-
-      if (saved) {
-        console.log(`✅ Imagen guardada localmente: ${localPath}`);
-        return localPath;
-      } else {
-        throw new Error("No se pudo guardar la imagen localmente");
-      }
+      // ✅ GUARDAR EN CACHE CON LA URL ORIGINAL
+      await this.cacheImage(imageUrl, blob);
+      return true;
     } catch (error) {
-      console.warn(`❌ Error descargando imagen ${productId}:`, error.message);
-      return null; // No retornar la URL externa como fallback
+      console.warn(
+        `⚠️ Error descargando ${this.getFileName(imageUrl)}:`,
+        error.message
+      );
+
+      if (retryCount < this.maxRetries) {
+        console.log(
+          `🔄 Reintentando... (${retryCount + 1}/${this.maxRetries})`
+        );
+        await this.delay(1000 * (retryCount + 1)); // Backoff exponencial
+        return this.downloadWithRetry(imageUrl, retryCount + 1);
+      } else {
+        console.error(
+          `❌ Fallo después de ${this.maxRetries + 1} intentos: ${imageUrl}`
+        );
+        return false;
+      }
     }
   }
 
-  // ✅ OPTIMIZAR imagen (reducir tamaño)
-  async optimizeImage(blob) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      img.onload = () => {
-        try {
-          // Redimensionar si es muy grande (max 800px)
-          const maxWidth = 800;
-          let { width, height } = img;
-
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convertir a WebP (85% calidad) - fallback a JPEG si no soporta WebP
-          if (canvas.toBlob) {
-            canvas.toBlob(resolve, "image/webp", 0.85);
-          } else {
-            // Fallback para navegadores antiguos
-            canvas.toBlob(resolve, "image/jpeg", 0.85);
-          }
-        } catch (error) {
-          reject(error);
-        }
-      };
-
-      img.onerror = () => {
-        reject(new Error("Error cargando imagen para optimización"));
-      };
-
-      img.src = URL.createObjectURL(blob);
-    });
-  }
-
-  // ✅ GUARDAR imagen en cache local
-  async saveLocalImage(path, blob) {
+  // ✅ OBTENER IMAGEN DEL CACHE
+  async getCachedImage(imageUrl) {
     try {
-      const cache = await caches.open("product-images-local");
-      const response = new Response(blob, {
-        headers: {
-          "Content-Type": blob.type || "image/webp",
-          "Cache-Control": "max-age=31536000",
-        },
-      });
-      await cache.put(path, response);
-      return true;
+      const cache = await caches.open(this.cacheName);
+      const cachedResponse = await cache.match(imageUrl);
+      return cachedResponse ? true : false;
     } catch (error) {
-      console.error("Error guardando imagen local:", error);
+      console.warn("Error accediendo al cache:", error);
       return false;
     }
   }
 
-  // ✅ OBTENER imagen local
-  async getLocalImage(path) {
+  // ✅ GUARDAR IMAGEN EN CACHE
+  async cacheImage(imageUrl, blob) {
     try {
-      const cache = await caches.open("product-images-local");
-      const response = await cache.match(path);
-      return response ? path : null;
+      const cache = await caches.open(this.cacheName);
+      const response = new Response(blob);
+      await cache.put(imageUrl, response);
+      return true;
     } catch (error) {
-      return null;
+      console.warn("Error guardando en cache:", error);
+      return false;
     }
   }
 
-  // ✅ DESCARGAR todas las imágenes de productos
+  // ✅ VALIDAR URL DE IMAGEN (especialmente i.ibb.co)
+  isValidImageUrl(url) {
+    if (!url || typeof url !== "string") return false;
+
+    try {
+      const urlObj = new URL(url);
+      const validProtocols = ["http:", "https:"];
+      const validExtensions = [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".svg",
+      ];
+
+      // ✅ PERMITIR URLs DE i.ibb.co SIN EXTENSIÓN
+      if (urlObj.hostname === "i.ibb.co") {
+        return validProtocols.includes(urlObj.protocol);
+      }
+
+      // Para otros dominios, verificar extensión
+      const extension = urlObj.pathname.toLowerCase();
+      const hasValidExtension = validExtensions.some((ext) =>
+        extension.includes(ext)
+      );
+
+      return validProtocols.includes(urlObj.protocol) && hasValidExtension;
+    } catch {
+      return false;
+    }
+  }
+
+  // ✅ OBTENER NOMBRE DEL ARCHIVO
+  getFileName(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.pathname.split("/").pop() || "imagen";
+    } catch {
+      return url.split("/").pop() || "imagen";
+    }
+  }
+
+  // ✅ FORMATEAR BYTES
+  formatBytes(bytes) {
+    if (bytes === 0) return "0 Bytes";
+
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  }
+
+  // ✅ DELAY HELPER
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // ✅ DESCARGAR TODAS LAS IMÁGENES DE PRODUCTOS
   async downloadAllProductImages(products) {
-    if (!products || !Array.isArray(products)) return products;
-
-    console.log("📥 Iniciando descarga MASIVA de imágenes desde i.ibb.co...");
-
-    let downloadedCount = 0;
-    const totalProducts = products.length;
-
-    const downloadPromises = products.map(async (product) => {
-      if (!product.id) return product;
-
-      const imageUrl = product.image || product.imagen || product.img;
-
-      // Solo procesar URLs de i.ibb.co
-      if (!imageUrl || !imageUrl.includes("i.ibb.co")) {
-        return product;
-      }
-
-      try {
-        const localPath = await this.downloadAndCacheImage(
-          imageUrl,
-          product.id
-        );
-
-        // Actualizar producto con ruta local
-        if (localPath) {
-          product.localImage = localPath;
-          product.hasLocalImage = true;
-          downloadedCount++;
-
-          console.log(
-            `✅ [${downloadedCount}/${totalProducts}] Imagen local para producto ${product.id}`
-          );
-        }
-      } catch (error) {
-        console.warn(`❌ Error con producto ${product.id}:`, error.message);
-      }
-
-      return product;
-    });
-
-    // Descargar en batches de 2 para no sobrecargar i.ibb.co
-    for (let i = 0; i < downloadPromises.length; i += 2) {
-      const batch = downloadPromises.slice(i, i + 2);
-      await Promise.allSettled(batch);
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Pausa de 1 segundo entre batches
+    if (!products || !Array.isArray(products)) {
+      console.warn("⚠️ No hay productos para descargar imágenes");
+      return { success: 0, failed: 0, total: 0 };
     }
 
     console.log(
-      `✅ Descarga masiva completada: ${downloadedCount}/${totalProducts} imágenes descargadas`
+      `📥 Iniciando descarga de imágenes para ${products.length} productos...`
     );
-    return products;
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // Filtrar solo productos con imágenes de i.ibb.co
+    const productsWithImages = products.filter(
+      (product) => product.imagen && product.imagen.includes("i.ibb.co")
+    );
+
+    console.log(
+      `🔍 ${productsWithImages.length} productos con imágenes de i.ibb.co`
+    );
+
+    // Descargar en lotes de 3 para no sobrecargar i.ibb.co
+    const batchSize = 3;
+    for (let i = 0; i < productsWithImages.length; i += batchSize) {
+      const batch = productsWithImages.slice(i, i + batchSize);
+
+      const batchPromises = batch.map(async (product) => {
+        try {
+          const result = await this.downloadAndCacheImage(product.imagen);
+          if (result) {
+            successCount++;
+            console.log(
+              `✅ [${successCount + failCount}/${productsWithImages.length}] ${
+                product.nombre
+              }`
+            );
+          } else {
+            failCount++;
+            console.warn(
+              `❌ [${successCount + failCount}/${productsWithImages.length}] ${
+                product.nombre
+              }`
+            );
+          }
+        } catch (error) {
+          failCount++;
+          console.warn(
+            `❌ [${successCount + failCount}/${productsWithImages.length}] ${
+              product.nombre
+            }:`,
+            error.message
+          );
+        }
+      });
+
+      await Promise.allSettled(batchPromises);
+
+      // Pequeña pausa entre lotes para no sobrecargar i.ibb.co
+      if (i + batchSize < productsWithImages.length) {
+        await this.delay(500);
+      }
+    }
+
+    console.log(
+      `✅ Descarga completada: ${successCount} exitosas, ${failCount} fallidas`
+    );
+
+    return {
+      success: successCount,
+      failed: failCount,
+      total: productsWithImages.length,
+    };
   }
 
-  // ✅ VERIFICAR almacenamiento local
-  async getLocalStorageUsage() {
+  // ✅ OBTENER ESTADÍSTICAS DEL CACHE
+  async getCacheStats() {
     try {
-      if (!navigator.storage || !navigator.storage.estimate) return null;
+      const cache = await caches.open(this.cacheName);
+      const keys = await cache.keys();
 
-      const estimate = await navigator.storage.estimate();
-      return {
-        used: estimate.usage,
-        quota: estimate.quota,
-        percentage: Math.round((estimate.usage / estimate.quota) * 100),
+      let totalSize = 0;
+      const stats = {
+        totalImages: keys.length,
+        totalSize: 0,
+        imagesByDomain: {},
       };
+
+      for (const key of keys) {
+        const response = await cache.match(key);
+        if (response) {
+          const blob = await response.blob();
+          totalSize += blob.size;
+
+          const domain = new URL(key.url).hostname;
+          stats.imagesByDomain[domain] =
+            (stats.imagesByDomain[domain] || 0) + 1;
+        }
+      }
+
+      stats.totalSize = this.formatBytes(totalSize);
+      return stats;
     } catch (error) {
+      console.error("Error obteniendo stats del cache:", error);
       return null;
     }
   }
 
-  // ✅ LIMPIAR cache de imágenes
-  async clearImageCache() {
+  // ✅ LIMPIAR CACHE
+  async clearCache() {
     try {
-      const cache = await caches.open("product-images-local");
+      const cache = await caches.open(this.cacheName);
       const keys = await cache.keys();
+
+      console.log(`🧹 Eliminando ${keys.length} imágenes del cache`);
       await Promise.all(keys.map((key) => cache.delete(key)));
-      console.log("🧹 Cache de imágenes limpiado");
+
+      console.log("✅ Cache de imágenes limpiado");
       return true;
     } catch (error) {
-      console.error("Error limpiando cache:", error);
+      console.error("❌ Error limpiando cache:", error);
       return false;
+    }
+  }
+
+  // ✅ OBTENER USO DE ALMACENAMIENTO
+  async getLocalStorageUsage() {
+    try {
+      if (!navigator.storage || !navigator.storage.estimate) {
+        return { error: "Storage API no soportada" };
+      }
+
+      const estimation = await navigator.storage.estimate();
+      const stats = await this.getCacheStats();
+
+      return {
+        usage: estimation.usage,
+        quota: estimation.quota,
+        usagePercentage: estimation.quota
+          ? Math.round((estimation.usage / estimation.quota) * 100)
+          : 0,
+        cacheStats: stats,
+      };
+    } catch (error) {
+      console.error("❌ Error obteniendo uso de almacenamiento:", error);
+      return { error: error.message };
     }
   }
 }

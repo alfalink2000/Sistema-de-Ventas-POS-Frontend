@@ -2204,54 +2204,92 @@ class ProductsOfflineController extends BaseOfflineController {
   }
   async forceProductsSyncWithImageDownload() {
     try {
-      console.log(
-        "🔄 ProductsOfflineController: Sincronizando productos + DESCARGANDO imágenes desde i.ibb.co..."
-      );
-
       // 1. Obtener productos del servidor
-      const products = await this.fetchProductsFromServer();
-      if (!products || products.length === 0) {
-        throw new Error("No se pudieron obtener productos del servidor");
-      }
+      const productos = await this.fetchProductsFromServer();
 
-      console.log(
-        `📥 Encontrados ${products.length} productos para sincronizar`
-      );
+      // 2. Guardar productos en IndexedDB
+      await this.saveProductsToIndexedDB(productos);
 
-      // 2. ✅ DESCARGAR IMÁGENES A LOCAL desde i.ibb.co
-      const productsWithLocalImages =
-        await ImageDownloadManager.downloadAllProductImages(products);
-
-      // 3. Guardar en IndexedDB
-      await this.saveProductsToIndexedDB(productsWithLocalImages);
-
-      // 4. Verificar uso de almacenamiento
-      const storage = await ImageDownloadManager.getLocalStorageUsage();
-      console.log("💾 Uso de almacenamiento:", storage);
-
-      const imagesDownloaded = productsWithLocalImages.filter(
-        (p) => p.hasLocalImage
-      ).length;
+      // 3. ✅ DESCARGAR IMÁGENES (cache transparente)
+      const downloadResult =
+        await ImageDownloadManager.downloadAllProductImages(productos);
 
       return {
         success: true,
-        productsCount: products.length,
-        imagesDownloaded: imagesDownloaded,
-        imagesPercentage: Math.round(
-          (imagesDownloaded / products.length) * 100
-        ),
-        storageInfo: storage,
+        productsCount: productos.length,
+        imagesDownloaded: downloadResult.success,
+        imagesFailed: downloadResult.failed,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error("❌ Error en sincronización con imágenes:", error);
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
+    }
+  }
+  // ✅ MÉTODO AUXILIAR: Validar URL de imagen
+  isValidImageUrl(url) {
+    if (!url || typeof url !== "string") return false;
+
+    try {
+      const urlObj = new URL(url);
+      const validProtocols = ["http:", "https:"];
+      const validExtensions = [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".svg",
+      ];
+
+      const extension = urlObj.pathname.toLowerCase();
+      const hasValidExtension = validExtensions.some((ext) =>
+        extension.includes(ext)
+      );
+
+      return validProtocols.includes(urlObj.protocol) && hasValidExtension;
+    } catch {
+      return false;
     }
   }
 
+  // ✅ MÉTODO AUXILIAR: Obtener nombre del archivo
+  getFileName(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.pathname.split("/").pop() || "imagen";
+    } catch {
+      return url.split("/").pop() || "imagen";
+    }
+  }
+  // ✅ MÉTODO FALTANTE: Obtener productos del servidor
+  async fetchProductsFromServer() {
+    try {
+      console.log(
+        "🔄 ProductsOfflineController: Obteniendo productos del servidor..."
+      );
+
+      const response = await fetchConToken("productos?limite=1000");
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.ok && data.productos) {
+        console.log(
+          `✅ ${data.productos.length} productos obtenidos del servidor`
+        );
+        return data.productos;
+      } else {
+        throw new Error("Respuesta inválida del servidor");
+      }
+    } catch (error) {
+      console.error("❌ Error obteniendo productos del servidor:", error);
+      throw error;
+    }
+  }
   // ✅ MÉTODO PARA OBTENER IMAGEN (local o externa)
   async getProductImage(product) {
     // Priorizar imagen local

@@ -118,92 +118,10 @@
   border: 1px solid #bbf7d0;
 }
 
-.statusWarning {
-  background: #fffbeb;
-  color: #92400e;
-  border: 1px solid #fcd34d;
-}
-
 .statusCritical {
   background: #fef2f2;
   color: #991b1b;
   border: 1px solid #fca5a5;
-}
-
-/* Grupo de acciones */
-.actionGroup {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-/* Botones compactos */
-.iconButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: #f1f5f9;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.8rem;
-}
-
-.iconButton:hover {
-  background: #e2e8f0;
-  transform: translateY(-1px);
-}
-
-.syncButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.syncButton:hover:not(:disabled) {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-}
-
-.syncButton:disabled {
-  background: #cbd5e1;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Badge para duplicados */
-.duplicateBadge {
-  background: #fef3c7;
-  color: #92400e;
-  padding: 1px 4px;
-  border-radius: 4px;
-  font-size: 0.6rem;
-  margin-left: 4px;
-  border: 1px solid #f59e0b;
-}
-
-/* Última actualización */
-.lastUpdate {
-  font-size: 0.65rem;
-  color: #94a3b8;
-  white-space: nowrap;
-  margin-left: 8px;
 }
 
 /* Animaciones */
@@ -217,81 +135,6 @@
   100% {
     opacity: 1;
   }
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Debug info compacta */
-.debugInfo {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  margin-top: 8px;
-  font-size: 0.75rem;
-}
-
-.debugHeader {
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #475569;
-}
-
-.debugItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2px 0;
-}
-
-.debugActions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.cleanupButton,
-.refreshButton {
-  padding: 4px 8px;
-  font-size: 0.7rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.cleanupButton {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.cleanupButton:hover {
-  background: #fde68a;
-}
-
-.refreshButton {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.refreshButton:hover {
-  background: #bfdbfe;
-}
-
-.duplicateWarning {
-  color: #dc2626;
-  font-weight: 600;
 }
 
 /* Responsive */
@@ -330,13 +173,6 @@
   .dataItem {
     font-size: 0.7rem;
     padding: 3px 6px;
-  }
-
-  .actionGroup {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-    margin-top: 4px;
   }
 }
 
