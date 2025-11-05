@@ -214,6 +214,8 @@ export const loadTodayClosure = () => {
 
 // ✅ CORREGIDO: CALCULAR TOTALES COMPLETOS CON OFFLINE
 // En closuresActions.js - ACTUALIZAR calculateClosureTotals
+// En closuresActions.js - CORREGIR LA FUNCIÓN calculateClosureTotals
+// En closuresActions.js - VERSIÓN COMPLETAMENTE CORREGIDA
 export const calculateClosureTotals = (sesionCajaId) => {
   return async (dispatch, getState) => {
     try {
@@ -225,39 +227,92 @@ export const calculateClosureTotals = (sesionCajaId) => {
       let totales;
 
       if (isOnline) {
-        // Código existente para online...
-      } else {
-        // Si no hay conexión, calcular localmente
-        console.log("📱 [CLOSURES] Calculando totales localmente...");
+        // ✅ ESTRATEGIA ONLINE COMPLETA
+        console.log("🌐 [CLOSURES] Calculando totales online...");
 
-        const { sesionesCaja } = getState();
-        const sesion = sesionesCaja.sesiones.find(
-          (s) => s.id === sesionCajaId || s.id_local === sesionCajaId
-        );
+        try {
+          // 1. Intentar usar el endpoint específico de cálculo
+          const response = await fetchConToken(
+            `cierres/calcular-totales/${sesionCajaId}`
+          );
 
-        if (!sesion) {
-          throw new Error("Sesión no encontrada");
+          if (response && response.ok === true && response.totales) {
+            console.log(
+              "✅ [CLOSURES] Totales obtenidos desde endpoint:",
+              response.totales
+            );
+            totales = response.totales;
+          } else {
+            throw new Error("Endpoint no disponible o respuesta inválida");
+          }
+        } catch (endpointError) {
+          console.warn(
+            "⚠️ [CLOSURES] Fallback a cálculo manual online:",
+            endpointError.message
+          );
+
+          // 2. Fallback: Obtener ventas de la sesión y calcular manualmente
+          try {
+            const responseVentas = await fetchConToken(
+              `ventas/sesion/${sesionCajaId}`
+            );
+
+            if (responseVentas && responseVentas.ok === true) {
+              const ventasSesion = responseVentas.ventas || [];
+
+              // Obtener información de la sesión
+              const { sesionesCaja } = getState();
+              const sesion = sesionesCaja.sesiones.find(
+                (s) => s.id === sesionCajaId || s.id_local === sesionCajaId
+              );
+
+              if (!sesion) {
+                throw new Error("Sesión no encontrada en estado local");
+              }
+
+              // Calcular totales manualmente
+              totales = calcularTotalesDesdeVentas(ventasSesion, sesion);
+              console.log(
+                "✅ [CLOSURES] Totales calculados manualmente online:",
+                totales
+              );
+            } else {
+              throw new Error("No se pudieron obtener ventas del servidor");
+            }
+          } catch (ventasError) {
+            console.warn(
+              "⚠️ [CLOSURES] Fallback a cálculo completamente local:",
+              ventasError.message
+            );
+            // 3. Último fallback: cálculo local con datos disponibles
+            totales = await calculateLocalTotals(
+              sesionCajaId,
+              dispatch,
+              getState
+            );
+          }
         }
-
-        const sesionIdLocal = sesion.id_local || sesionCajaId;
-
-        // ✅ CALCULAR TOTALES CON EL CONTROLADOR CORREGIDO
-        const totalesCalculados =
-          await ClosuresOfflineController.calculateSessionTotals(sesionIdLocal);
-
-        // ✅ VERIFICAR QUE TENEMOS SALDO INICIAL
-        console.log("📊 Saldo inicial de la sesión:", sesion.saldo_inicial);
-        console.log("📊 Totales calculados:", totalesCalculados);
-
-        totales = {
-          ...totalesCalculados,
-          saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
-          saldo_final_teorico: totalesCalculados.saldo_final_teorico || 0,
-          diferencia: 0, // Se calculará después con el saldo final real
-        };
+      } else {
+        // ✅ CÁLCULO OFFLINE
+        console.log("📱 [CLOSURES] Calculando totales localmente...");
+        totales = await calculateLocalTotals(sesionCajaId, dispatch, getState);
       }
 
-      return totales;
+      // ✅ ASEGURAR QUE TENEMOS TODOS LOS CAMPOS REQUERIDOS
+      const totalesCompletos = {
+        cantidad_ventas: totales.cantidad_ventas || 0,
+        total_ventas: totales.total_ventas || 0,
+        total_efectivo: totales.total_efectivo || 0,
+        total_tarjeta: totales.total_tarjeta || 0,
+        total_transferencia: totales.total_transferencia || 0,
+        ganancia_bruta: totales.ganancia_bruta || 0,
+        saldo_inicial: totales.saldo_inicial || 0,
+        saldo_final_teorico: totales.saldo_final_teorico || 0,
+        diferencia: 0, // Se calculará después con saldo final real
+      };
+
+      console.log("✅ [CLOSURES] Totales finales:", totalesCompletos);
+      return totalesCompletos;
     } catch (error) {
       console.error("❌ [CLOSURES] Error calculando totales:", error);
 
@@ -267,7 +322,7 @@ export const calculateClosureTotals = (sesionCajaId) => {
         (s) => s.id === sesionCajaId || s.id_local === sesionCajaId
       );
 
-      return {
+      const totalesError = {
         cantidad_ventas: 0,
         total_ventas: 0,
         total_efectivo: 0,
@@ -278,8 +333,110 @@ export const calculateClosureTotals = (sesionCajaId) => {
         saldo_final_teorico: sesion?.saldo_inicial || 0,
         diferencia: 0,
       };
+
+      console.log("🔄 [CLOSURES] Totales por error:", totalesError);
+      return totalesError;
     }
   };
+};
+
+// ✅ FUNCIÓN AUXILIAR PARA CÁLCULO LOCAL (COMMON)
+// ✅ FUNCIÓN AUXILIAR PARA CÁLCULO LOCAL
+const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
+  try {
+    const { sesionesCaja, ventas } = getState();
+    const sesion = sesionesCaja.sesiones.find(
+      (s) => s.id === sesionCajaId || s.id_local === sesionCajaId
+    );
+
+    if (!sesion) {
+      throw new Error("Sesión no encontrada");
+    }
+
+    console.log(`🔍 [CLOSURES] Buscando ventas para sesión: ${sesionCajaId}`);
+
+    // Si no hay ventas cargadas, cargarlas
+    let ventasSesion = [];
+    if (ventas.ventas && ventas.ventas.length > 0) {
+      ventasSesion = ventas.ventas.filter(
+        (venta) =>
+          venta.sesion_caja_id === sesionCajaId ||
+          venta.sesion_caja_id_local === sesionCajaId
+      );
+      console.log(
+        `📊 [CLOSURES] ${ventasSesion.length} ventas encontradas en estado Redux`
+      );
+    } else {
+      console.log("🔄 [CLOSURES] Cargando ventas desde el servidor...");
+      // Cargar ventas específicas de esta sesión
+      await dispatch(loadSales());
+      const { ventas: ventasActualizadas } = getState();
+      ventasSesion = ventasActualizadas.ventas.filter(
+        (venta) =>
+          venta.sesion_caja_id === sesionCajaId ||
+          venta.sesion_caja_id_local === sesionCajaId
+      );
+      console.log(
+        `📊 [CLOSURES] ${ventasSesion.length} ventas cargadas después de dispatch`
+      );
+    }
+
+    // Calcular totales
+    const calculo = {
+      cantidad_ventas: ventasSesion.length,
+      total_ventas: 0,
+      total_efectivo: 0,
+      total_tarjeta: 0,
+      total_transferencia: 0,
+      ganancia_bruta: 0,
+      saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
+    };
+
+    ventasSesion.forEach((venta) => {
+      calculo.total_ventas += parseFloat(venta.total) || 0;
+      calculo.total_efectivo += parseFloat(venta.monto_efectivo) || 0;
+      calculo.total_tarjeta += parseFloat(venta.monto_tarjeta) || 0;
+      calculo.total_transferencia += parseFloat(venta.monto_transferencia) || 0;
+      calculo.ganancia_bruta += parseFloat(venta.ganancia_bruta) || 0;
+    });
+
+    // Calcular saldo final teórico
+    calculo.saldo_final_teorico =
+      calculo.saldo_inicial + calculo.total_efectivo;
+    calculo.diferencia = 0; // Se calculará después con el saldo final real
+
+    console.log("✅ [CLOSURES] Cálculo local completado:", calculo);
+    return calculo;
+  } catch (error) {
+    console.error("❌ [CLOSURES] Error en cálculo local:", error);
+    throw error;
+  }
+};
+
+// ✅ FUNCIÓN AUXILIAR PARA CALCULAR TOTALES DESDE VENTAS
+const calcularTotalesDesdeVentas = (ventasSesion, sesion) => {
+  const calculo = {
+    cantidad_ventas: ventasSesion.length,
+    total_ventas: 0,
+    total_efectivo: 0,
+    total_tarjeta: 0,
+    total_transferencia: 0,
+    ganancia_bruta: 0,
+    saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
+  };
+
+  ventasSesion.forEach((venta) => {
+    calculo.total_ventas += parseFloat(venta.total) || 0;
+    calculo.total_efectivo += parseFloat(venta.monto_efectivo) || 0;
+    calculo.total_tarjeta += parseFloat(venta.monto_tarjeta) || 0;
+    calculo.total_transferencia += parseFloat(venta.monto_transferencia) || 0;
+    calculo.ganancia_bruta += parseFloat(venta.ganancia_bruta) || 0;
+  });
+
+  calculo.saldo_final_teorico = calculo.saldo_inicial + calculo.total_efectivo;
+  calculo.diferencia = 0;
+
+  return calculo;
 };
 
 // ✅ CORREGIDO: CREAR CIERRE con soporte offline

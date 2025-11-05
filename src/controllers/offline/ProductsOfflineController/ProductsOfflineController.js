@@ -9,6 +9,59 @@ class ProductsOfflineController extends BaseOfflineController {
     this.storeName = "productos_pendientes";
     this.cacheStore = "productos";
   }
+  // En ProductsOfflineController.js - AGREGAR método de sincronización forzada
+  async forceProductsSync() {
+    try {
+      console.log("🔄 FORZANDO SINCRONIZACIÓN DE PRODUCTOS...");
+
+      if (!this.isOnline) {
+        console.warn("⚠️ Sin conexión, no se puede sincronizar");
+        return { success: false, error: "Sin conexión" };
+      }
+
+      // ✅ LIMPIAR CACHE COMPLETAMENTE
+      await this.clearProducts();
+      console.log("✅ Cache de productos limpiado");
+
+      // ✅ DESCARGAR PRODUCTOS ACTUALIZADOS DEL SERVIDOR
+      const response = await fetchConToken("productos?limite=1000");
+
+      if (response && response.ok && response.productos) {
+        console.log(
+          `📥 Recibidos ${response.productos.length} productos del servidor`
+        );
+
+        // ✅ GUARDAR EN INDEXEDDB
+        const saveResult = await this.saveProducts(response.productos);
+
+        if (saveResult.success) {
+          console.log(
+            `✅ ${saveResult.saved} productos guardados en IndexedDB`
+          );
+
+          // ✅ DISPARAR EVENTO PARA ACTUALIZAR REDUX
+          window.dispatchEvent(
+            new CustomEvent("products_force_refresh", {
+              detail: { products: response.productos },
+            })
+          );
+
+          return {
+            success: true,
+            count: saveResult.saved,
+            message: "Productos sincronizados correctamente",
+          };
+        } else {
+          throw new Error("Error guardando productos en IndexedDB");
+        }
+      } else {
+        throw new Error("Error obteniendo productos del servidor");
+      }
+    } catch (error) {
+      console.error("❌ Error en forceProductsSync:", error);
+      return { success: false, error: error.message };
+    }
+  }
   // ✅ FUNCIÓN DE EMERGENCIA PARA LIMPIAR DUPLICADOS
   async emergencyCleanDuplicates() {
     try {
@@ -149,20 +202,21 @@ class ProductsOfflineController extends BaseOfflineController {
   async updateStockAfterSale(productos) {
     try {
       console.log(
-        "🔄 [PRODUCTS OFFLINE] Actualizando stock después de venta...",
+        "🔄 [STOCK] Actualizando stock después de venta...",
         productos
       );
 
       const resultados = {
         exitosos: [],
         fallidos: [],
+        timestamp: new Date().toISOString(),
       };
 
       for (const producto of productos) {
         try {
-          // Buscar producto actual
+          // ✅ BUSCAR PRODUCTO ACTUAL
           const productoActual = await IndexedDBService.get(
-            this.storeName,
+            "productos",
             producto.producto_id
           );
 
@@ -170,35 +224,53 @@ class ProductsOfflineController extends BaseOfflineController {
             throw new Error(`Producto ${producto.producto_id} no encontrado`);
           }
 
-          // Calcular nuevo stock
-          const nuevoStock = productoActual.stock - producto.cantidad;
+          // ✅ CALCULAR NUEVO STOCK
+          const stockActual = parseInt(productoActual.stock) || 0;
+          const cantidadVendida = parseInt(producto.cantidad) || 0;
+          const nuevoStock = Math.max(0, stockActual - cantidadVendida);
+
+          console.log(
+            `📊 ${productoActual.nombre}: ${stockActual} - ${cantidadVendida} = ${nuevoStock}`
+          );
 
           if (nuevoStock < 0) {
             throw new Error(
-              `Stock no puede ser negativo: ${productoActual.stock} - ${producto.cantidad} = ${nuevoStock}`
+              `Stock no puede ser negativo: ${stockActual} - ${cantidadVendida}`
             );
           }
 
-          // Actualizar producto
+          // ✅ ACTUALIZAR PRODUCTO
           const productoActualizado = {
             ...productoActual,
             stock: nuevoStock,
-            fecha_actualizacion: new Date().toISOString(),
+            ultima_actualizacion: new Date().toISOString(),
+            sincronizado: navigator.onLine, // Marcar como sincronizado si hay conexión
           };
 
-          await IndexedDBService.put(this.storeName, productoActualizado);
+          // ✅ USAR PUT PARA SOBREESCRIBIR
+          await IndexedDBService.put("productos", productoActualizado);
 
-          resultados.exitosos.push({
-            producto_id: producto.producto_id,
-            producto_nombre: productoActual.nombre,
-            stock_anterior: productoActual.stock,
-            stock_nuevo: nuevoStock,
-            cantidad_vendida: producto.cantidad,
-          });
-
-          console.log(
-            `✅ Stock actualizado: ${productoActual.nombre} (${productoActual.stock} → ${nuevoStock})`
+          // ✅ VERIFICAR ACTUALIZACIÓN
+          const productoVerificado = await IndexedDBService.get(
+            "productos",
+            producto.producto_id
           );
+
+          if (productoVerificado && productoVerificado.stock === nuevoStock) {
+            resultados.exitosos.push({
+              producto_id: producto.producto_id,
+              producto_nombre: productoActual.nombre,
+              stock_anterior: stockActual,
+              stock_nuevo: nuevoStock,
+              cantidad_vendida: cantidadVendida,
+            });
+
+            console.log(
+              `✅ Stock actualizado: ${productoActual.nombre} -> ${nuevoStock}`
+            );
+          } else {
+            throw new Error("La actualización no se verificó correctamente");
+          }
         } catch (error) {
           console.error(
             `❌ Error actualizando stock de ${producto.producto_id}:`,
@@ -206,27 +278,22 @@ class ProductsOfflineController extends BaseOfflineController {
           );
           resultados.fallidos.push({
             producto_id: producto.producto_id,
-            producto_nombre: producto.nombre || "Producto desconocido",
             error: error.message,
           });
         }
       }
 
-      return {
-        success: resultados.fallidos.length === 0,
-        resultados: resultados,
-      };
+      console.log("📊 RESUMEN ACTUALIZACIÓN STOCK:", resultados);
+      return resultados;
     } catch (error) {
-      console.error("❌ Error en updateStockAfterSale:", error);
+      console.error("❌ Error general en updateStockAfterSale:", error);
       return {
-        success: false,
-        resultados: {
-          exitosos: [],
-          fallidos: productos.map((p) => ({
-            producto_id: p.producto_id,
-            error: error.message,
-          })),
-        },
+        exitosos: [],
+        fallidos: productos.map((p) => ({
+          producto_id: p.producto_id,
+          error: error.message,
+        })),
+        error: error.message,
       };
     }
   }

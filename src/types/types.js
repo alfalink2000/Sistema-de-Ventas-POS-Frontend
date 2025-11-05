@@ -123,4 +123,6 @@ export const types = {
 
   // ✅ PARA ACTUALIZAR CONTADORES DE PENDIENTES
   updatePendingCounts: "[sync] Update Pending Counts",
+  // ✅ NUEVO TYPE PARA ACTUALIZAR MÚLTIPLES STOCKS
+  productsUpdateMultipleStocks: "[products] Update Multiple Stocks",
 };

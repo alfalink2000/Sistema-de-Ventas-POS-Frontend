@@ -1,8 +1,11 @@
-// components/features/sales/PaymentModal/PaymentModal.jsx - VERSIÓN CON DIAGNÓSTICO COMPLETO
+// components/features/sales/PaymentModal/PaymentModal.jsx - VERSIÓN CON GANANCIA BRUTA OCULTA
 import { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
-import { createSale } from "../../../../actions/salesActions";
+import {
+  createSale,
+  reloadProductsAfterSale,
+} from "../../../../actions/salesActions";
 import { loadOpenSesion } from "../../../../actions/sesionesCajaActions";
 import { loadProducts } from "../../../../actions/productsActions";
 import Modal from "../../../ui/Modal/Modal";
@@ -22,6 +25,20 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
   const { items } = useSelector((state) => state.cart);
   const { user } = useSelector((state) => state.auth);
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
+
+  // ✅ VERIFICAR SI ES ADMINISTRADOR
+  const isAdmin = user?.rol === "admin";
+
+  // ✅ CALCULAR GANANCIA BRUTA (SOLO PARA ADMIN)
+  const calculateProfit = () => {
+    if (!isAdmin) return 0;
+
+    return items.reduce((profit, item) => {
+      const costo = item.precio * 0.8; // Asumiendo 20% de ganancia
+      const gananciaItem = (item.precio - costo) * item.quantity;
+      return profit + gananciaItem;
+    }, 0);
+  };
 
   // ✅ DIAGNÓSTICO COMPLETO DE INDEXEDDB
   const runFullDiagnostic = async () => {
@@ -152,7 +169,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
 
   // ✅ FUNCIÓN MEJORADA PARA ACTUALIZAR STOCK
   const updateProductStockOffline = async (productId, quantity) => {
-    console.log(`🔄 Intentando actualizar stock: ${productId} -${quantity}`);
+    console.log(`🔄 Actualizando stock: ${productId} -${quantity}`);
 
     try {
       // PRIMERO: Diagnosticar antes de la operación
@@ -178,7 +195,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         );
       }
 
-      // ACTUALIZAR usando put
+      // ✅ ACTUALIZACIÓN MEJORADA - usar put con el objeto completo
       const updatedProduct = {
         ...product,
         stock: newStock,
@@ -186,19 +203,24 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
       };
 
       console.log(`💾 Guardando producto actualizado:`, updatedProduct);
-      const success = await IndexedDBService.put("productos", updatedProduct);
 
-      if (!success) {
-        throw new Error("Fallo al guardar en IndexedDB");
-      }
+      // ✅ USAR PUT EN LUGAR DE UPDATE
+      await IndexedDBService.put("productos", updatedProduct);
 
       console.log(
         `✅ Stock actualizado: ${product.nombre} (${product.stock} → ${newStock})`
       );
 
-      // VERIFICAR que se guardó correctamente
+      // ✅ VERIFICACIÓN MEJORADA
       const verifyProduct = await IndexedDBService.get("productos", productId);
-      console.log(`🔍 Verificación post-actualización:`, verifyProduct);
+      if (!verifyProduct || verifyProduct.stock !== newStock) {
+        console.error("❌ Verificación fallida:", verifyProduct);
+        throw new Error(
+          "La actualización de stock no se verificó correctamente"
+        );
+      }
+
+      console.log(`✅ Verificación exitosa:`, verifyProduct);
 
       return {
         success: true,
@@ -216,41 +238,19 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
     }
   };
 
-  // ✅ FUNCIÓN PRINCIPAL CON DIAGNÓSTICO COMPLETO
   const handleProcessSale = async () => {
-    console.log("💰 INICIANDO VENTA CON DIAGNÓSTICO COMPLETO");
+    console.log("💰 INICIANDO VENTA CON CONTROL DE STOCK");
 
-    // Ejecutar diagnóstico inicial
-    const initialDiagnostic = await runFullDiagnostic();
-
-    if (initialDiagnostic.errors.length > 0) {
-      await Swal.fire({
-        icon: "error",
-        title: "Problemas Detectados",
-        html: `
-          <div style="text-align: left;">
-            <p><strong>Se encontraron problemas antes de procesar:</strong></p>
-            <ul>
-              ${initialDiagnostic.errors
-                .map((error) => `<li>${error}</li>`)
-                .join("")}
-            </ul>
-            <p>Revisa la consola para más detalles.</p>
-          </div>
-        `,
-        confirmButtonText: "Entendido",
-      });
+    // ✅ BLOQUEAR PROCESAMIENTO SIMULTÁNEO
+    if (processing) {
+      console.warn("⚠️ Venta ya en proceso, ignorando...");
       return;
     }
 
     setProcessing(true);
-    setStockUpdateStatus({
-      updating: true,
-      message: "Ejecutando diagnóstico...",
-    });
 
     try {
-      // 1. VERIFICAR STOCK
+      // ✅ VERIFICAR STOCK UNA SOLA VEZ
       setStockUpdateStatus({ updating: true, message: "Verificando stock..." });
       const stockIssues = await checkStockAvailability();
 
@@ -266,46 +266,14 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         throw new Error(`Problemas de stock:\n${issueText}`);
       }
 
-      // 2. ACTUALIZAR STOCK
-      setStockUpdateStatus({
-        updating: true,
-        message: "Actualizando stock...",
-      });
-
-      const stockUpdates = [];
-      for (const item of items) {
-        const result = await updateProductStockOffline(item.id, item.quantity);
-
-        if (!result.success) {
-          // Revertir cambios
-          for (const update of stockUpdates) {
-            if (update.success) {
-              await updateProductStockOffline(
-                update.productId,
-                -update.quantity
-              );
-            }
-          }
-          throw new Error(`Error actualizando ${item.nombre}: ${result.error}`);
-        }
-
-        stockUpdates.push({
-          productId: item.id,
-          productName: item.nombre,
-          success: true,
-          quantity: item.quantity,
-          newStock: result.newStock,
-        });
-      }
-
-      // 3. CREAR VENTA
+      // El stock se actualizará en salesActions.js
       setStockUpdateStatus({ updating: true, message: "Creando venta..." });
 
       const productosConCosto = items.map((item) => ({
         producto_id: item.id,
         cantidad: parseInt(item.quantity),
         precio_unitario: parseFloat(item.precio),
-        precio_compra: parseFloat(item.precio * 0.8), // Valor por defecto
+        precio_compra: parseFloat(item.precio * 0.8),
         subtotal: parseFloat(item.precio * item.quantity),
         nombre: item.nombre,
         producto_nombre: item.nombre,
@@ -323,19 +291,20 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         productos: productosConCosto,
         es_offline: !navigator.onLine,
         timestamp_offline: new Date().toISOString(),
+        ganancia_bruta: isAdmin ? calculateProfit() : 0,
       };
 
-      console.log("📤 Enviando venta:", saleData);
+      console.log("📤 Enviando venta al sistema...");
+
+      // ✅ DELEGAR LA ACTUALIZACIÓN DE STOCK A salesActions.js
       const resultadoVenta = await dispatch(createSale(saleData));
 
       if (!resultadoVenta?.success) {
         throw new Error(resultadoVenta?.error || "Error al crear la venta");
       }
 
-      // ÉXITO
+      // ✅ ÉXITO - NO ACTUALIZAR STOCK MANUALMENTE
       dispatch(clearCart());
-      await dispatch(loadOpenSesion(user.id));
-      await dispatch(loadProducts());
 
       setStockUpdateStatus({
         updating: false,
@@ -343,16 +312,31 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         message: "✅ Venta completada",
       });
 
+      // ✅ MOSTRAR ALERTA DE ÉXITO Y CERRAR MODAL
       await Swal.fire({
-        icon: "success",
         title: "¡Venta Exitosa!",
-        text: `Venta procesada por $${total.toFixed(2)}`,
+        text: "La venta se ha procesado correctamente",
+        icon: "success",
         confirmButtonText: "Aceptar",
+        timer: 3000,
+        timerProgressBar: true,
       });
 
+      // ✅ CERRAR MODAL Y EJECUTAR CALLBACK DE ÉXITO
       onClose();
+      if (onSuccess) {
+        onSuccess(resultadoVenta);
+      }
     } catch (error) {
       console.error("❌ Error en venta:", error);
+
+      // ✅ MOSTRAR ALERTA DE ERROR
+      await Swal.fire({
+        title: "Error en Venta",
+        text: error.message,
+        icon: "error",
+        confirmButtonText: "Aceptar",
+      });
 
       setStockUpdateStatus({
         updating: false,
@@ -360,24 +344,32 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
         message: error.message,
       });
 
+      // Ejecutar callback de error si existe
+      if (onError) {
+        onError(error);
+      }
+
+      // Recargar productos para restaurar estado
       await dispatch(loadProducts());
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error en Venta",
-        html: `
-          <div style="text-align: left;">
-            <p><strong>${error.message}</strong></p>
-            <p>Revisa la consola para el diagnóstico completo.</p>
-          </div>
-        `,
-        confirmButtonText: "Entendido",
-      });
-
-      if (onError) onError(error);
     } finally {
       setProcessing(false);
     }
+  };
+
+  // ✅ COMPONENTE DE RESUMEN CON GANANCIA BRUTA CONDICIONAL
+  const ProfitSummary = () => {
+    if (!isAdmin) return null;
+
+    const profit = calculateProfit();
+
+    return (
+      <div className={styles.profitSummary}>
+        <div className={styles.profitRow}>
+          <span>Ganancia Bruta Estimada:</span>
+          <span className={styles.profitAmount}>${profit.toFixed(2)}</span>
+        </div>
+      </div>
+    );
   };
 
   // ✅ COMPONENTE DE DEBUG CLICKEABLE
@@ -557,6 +549,9 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, onError }) => {
             <span>Total a Pagar:</span>
             <span className={styles.totalAmount}>${total.toFixed(2)}</span>
           </div>
+
+          {/* ✅ MOSTRAR GANANCIA BRUTA SOLO PARA ADMIN */}
+          <ProfitSummary />
         </div>
 
         <div className={styles.paymentMethod}>

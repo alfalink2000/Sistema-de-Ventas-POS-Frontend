@@ -8,8 +8,6 @@ import ProductsOfflineController from "../controllers/offline/ProductsOfflineCon
 import IndexedDBService from "../services/IndexedDBService";
 // ✅ FUNCIÓN AUXILIAR PARA ACTUALIZAR STOCK (AGREGAR ESTA FUNCIÓN)
 
-// ✅ FUNCIÓN PARA GUARDAR VENTA OFFLINE (AGREGAR ESTA FUNCIÓN)
-// ✅ FUNCIÓN PARA GUARDAR VENTA OFFLINE (AGREGAR ESTA FUNCIÓN)
 // ✅ FUNCIÓN PARA GUARDAR VENTA OFFLINE
 const saveSaleOffline = async (saleData) => {
   try {
@@ -36,6 +34,89 @@ const saveSaleOffline = async (saleData) => {
   } catch (error) {
     console.error("❌ [SALES] Error guardando venta offline:", error);
     throw new Error(`Error guardando venta offline: ${error.message}`);
+  }
+};
+
+// ✅ NUEVA FUNCIÓN PARA ACTUALIZAR STOCK LOCAL DESPUÉS DE VENTA ONLINE
+const updateLocalStockAfterSale = async (productos) => {
+  try {
+    console.log(
+      "🔄 [STOCK LOCAL] Actualizando stock local después de venta online..."
+    );
+
+    const actualizaciones = [];
+
+    for (const item of productos) {
+      try {
+        console.log(`🔍 Buscando producto local: ${item.producto_id}`);
+
+        const product = await IndexedDBService.get(
+          "productos",
+          item.producto_id
+        );
+
+        if (product) {
+          const stockActual = parseInt(product.stock) || 0;
+          const cantidadVendida = parseInt(item.cantidad) || 0;
+          const nuevoStock = Math.max(0, stockActual - cantidadVendida);
+
+          console.log(
+            `📊 Stock cálculo local: ${stockActual} - ${cantidadVendida} = ${nuevoStock}`
+          );
+
+          // ✅ REGISTRAR LA ACTUALIZACIÓN
+          actualizaciones.push({
+            producto_id: item.producto_id,
+            nombre: product.nombre,
+            stock_anterior: stockActual,
+            cantidad_vendida: cantidadVendida,
+            stock_nuevo: nuevoStock,
+          });
+
+          // ✅ ACTUALIZAR EN INDEXEDDB
+          if (typeof IndexedDBService.update === "function") {
+            await IndexedDBService.update("productos", item.producto_id, {
+              stock: nuevoStock,
+              ultima_actualizacion: new Date().toISOString(),
+            });
+          } else {
+            // Fallback: eliminar y agregar
+            await IndexedDBService.delete("productos", item.producto_id);
+            await IndexedDBService.add("productos", {
+              ...product,
+              stock: nuevoStock,
+              ultima_actualizacion: new Date().toISOString(),
+            });
+          }
+
+          console.log(
+            `✅ Stock local actualizado: ${product.nombre} -> ${nuevoStock}`
+          );
+        } else {
+          console.error(
+            `❌ Producto no encontrado localmente: ${item.producto_id}`
+          );
+        }
+      } catch (error) {
+        console.error(
+          `❌ Error actualizando stock local de ${item.producto_id}:`,
+          error
+        );
+      }
+    }
+
+    console.log("📊 RESUMEN ACTUALIZACIONES LOCALES:", actualizaciones);
+    console.log(
+      `✅ [STOCK LOCAL] ${actualizaciones.length} productos actualizados localmente`
+    );
+
+    return actualizaciones;
+  } catch (error) {
+    console.error(
+      "❌ [STOCK LOCAL] Error general actualizando stock local:",
+      error
+    );
+    return [];
   }
 };
 
@@ -127,38 +208,75 @@ export const loadSales = (limite = 50, pagina = 1) => {
   };
 };
 
-// ✅ CREAR VENTA - VERSIÓN CORREGIDA
-// ✅ FUNCIÓN PRINCIPAL CREATE SALE CORREGIDA
-// ✅ FUNCIÓN PRINCIPAL CREATE SALE CORREGIDA
-// ✅ FUNCIÓN PRINCIPAL CREATE SALE MEJORADA
-// salesActions.js - CORREGIR DUPLICACIÓN DE STOCK
+// actions/salesActions.js
 export const createSale = (saleData) => {
   return async (dispatch) => {
     try {
-      console.log("🔄 [SALES] Creando venta...");
+      console.log("🔄 [SALES] Creando venta...", saleData);
 
-      // ✅ SOLUCIÓN: Control centralizado de stock
-      let stockActualizado = false;
+      // ✅ CONTROL CENTRALIZADO - SOLO UNA ACTUALIZACIÓN DE STOCK
+      let stockUpdated = false;
 
       if (navigator.onLine) {
         // Online: servidor maneja el stock
+        console.log("🌐 [SALES] Creando venta online...");
         const response = await fetchConToken("ventas", saleData, "POST");
-        if (response.ok) {
-          // No actualizar stock aquí - el servidor ya lo hizo
+
+        if (response && response.ok === true) {
+          console.log("✅ [SALES] Venta creada en servidor");
+
+          // ✅ ACTUALIZAR STOCK LOCAL PARA MANTENER SINCRONIZACIÓN
+          if (!stockUpdated && saleData.productos) {
+            await updateLocalStockAfterSale(saleData.productos);
+            stockUpdated = true;
+          }
+
           dispatch({ type: types.saleAddNew, payload: response.venta });
           return { success: true, venta: response.venta };
+        } else {
+          throw new Error(response?.error || "Error al crear venta online");
         }
       } else {
         // Offline: actualizar stock UNA SOLA VEZ
-        if (!stockActualizado) {
-          await updateStockAfterSale(saleData.productos);
-          stockActualizado = true;
+        console.log("📱 [SALES] Creando venta offline...");
 
-          const resultado = await SalesOfflineController.createSaleOffline(
-            saleData
+        // ✅ VERIFICAR STOCK ANTES DE PROCEDER
+        const stockValidation = await validateStockForSale(saleData.productos);
+        if (!stockValidation.valid) {
+          throw new Error(
+            `Stock insuficiente: ${stockValidation.errors.join(", ")}`
           );
+        }
+
+        // ✅ ACTUALIZAR STOCK UNA SOLA VEZ
+        if (!stockUpdated) {
+          console.log("🔄 [SALES] Actualizando stock offline...");
+          const actualizaciones = await updateStockAfterSale(
+            saleData.productos
+          );
+          stockUpdated = true;
+
+          // ✅ ACTUALIZAR REDUX STORE
+          if (actualizaciones && Array.isArray(actualizaciones)) {
+            const stockUpdates = actualizaciones.map((update) => ({
+              productoId: update.producto_id,
+              nuevoStock: update.stock_nuevo,
+            }));
+            dispatch(updateMultipleProductsStock(stockUpdates));
+          }
+        }
+
+        // ✅ CREAR VENTA OFFLINE
+        const resultado = await SalesOfflineController.createSaleOffline(
+          saleData
+        );
+
+        if (resultado.success) {
+          console.log("✅ [SALES] Venta offline creada exitosamente");
           dispatch({ type: types.saleAddNew, payload: resultado.venta });
           return { success: true, venta: resultado.venta };
+        } else {
+          throw new Error(resultado.error);
         }
       }
     } catch (error) {
@@ -168,9 +286,56 @@ export const createSale = (saleData) => {
   };
 };
 
-// ✅ FUNCIÓN PARA ACTUALIZAR STOCK DESPUÉS DE VENTA
-// ✅ FUNCIÓN PARA ACTUALIZAR STOCK DESPUÉS DE VENTA
-// ✅ FUNCIÓN CORREGIDA PARA ACTUALIZAR STOCK (COMPATIBLE)
+// ✅ NUEVA FUNCIÓN: DIAGNÓSTICO DE STOCK
+const runStockDiagnostic = async (productos) => {
+  const diagnostic = [];
+
+  for (const item of productos) {
+    try {
+      const product = await IndexedDBService.get("productos", item.producto_id);
+      diagnostic.push({
+        producto_id: item.producto_id,
+        nombre: product?.nombre,
+        stock_actual: product?.stock,
+        cantidad_vendida: item.cantidad,
+        stock_esperado: product ? product.stock - item.cantidad : "N/A",
+      });
+    } catch (error) {
+      diagnostic.push({
+        producto_id: item.producto_id,
+        error: error.message,
+      });
+    }
+  }
+
+  return diagnostic;
+};
+
+// ✅ NUEVA FUNCIÓN: VERIFICAR STOCK DESPUÉS DE ACTUALIZACIÓN
+const verifyStockAfterUpdate = async (productos) => {
+  const verification = [];
+
+  for (const item of productos) {
+    try {
+      const product = await IndexedDBService.get("productos", item.producto_id);
+      verification.push({
+        producto_id: item.producto_id,
+        nombre: product?.nombre,
+        stock_final: product?.stock,
+        esperado: product ? `<= ${product.stock}` : "N/A",
+        correcto: product ? product.stock >= 0 : false,
+      });
+    } catch (error) {
+      verification.push({
+        producto_id: item.producto_id,
+        error: error.message,
+      });
+    }
+  }
+
+  return verification;
+};
+
 // salesActions.js - FUNCIÓN MEJORADA DE ACTUALIZACIÓN DE STOCK
 const updateStockAfterSale = async (productos) => {
   try {
@@ -179,10 +344,22 @@ const updateStockAfterSale = async (productos) => {
       productos
     );
 
+    // ✅ VALIDAR QUE productos EXISTA Y SEA UN ARRAY
+    if (!productos || !Array.isArray(productos)) {
+      console.error("❌ [STOCK] productos no es un array válido:", productos);
+      return [];
+    }
+
     const actualizaciones = [];
 
     for (const item of productos) {
       try {
+        // ✅ VALIDAR QUE item TENGA producto_id
+        if (!item || !item.producto_id) {
+          console.error("❌ [STOCK] Item inválido:", item);
+          continue;
+        }
+
         console.log(`🔍 Actualizando stock para: ${item.producto_id}`);
 
         const product = await IndexedDBService.get(
@@ -250,8 +427,11 @@ const updateStockAfterSale = async (productos) => {
     console.log(
       `✅ [STOCK] ${actualizaciones.length} productos actualizados correctamente`
     );
+
+    return actualizaciones; // ✅ SIEMPRE retornar un array
   } catch (error) {
     console.error("❌ [STOCK] Error general actualizando stock:", error);
+    return []; // ✅ SIEMPRE retornar un array, incluso en error
   }
 };
 
@@ -413,6 +593,74 @@ const updateStockAfterSaleAlternative = async (productos) => {
 };
 // ✅ SINCRONIZAR VENTAS PENDIENTES MANUALMENTE
 // ✅ FUNCIÓN PARA SINCRONIZAR QUE ACTUALICE STOCK EN SERVIDOR
+// export const syncPendingSales = () => {
+//   return async (dispatch) => {
+//     try {
+//       if (!navigator.onLine) {
+//         throw new Error("No hay conexión a internet");
+//       }
+
+//       console.log("🔄 [SYNC] Sincronizando ventas pendientes...");
+
+//       // 1. Obtener ventas pendientes
+//       const ventasPendientes = await IndexedDBService.getAll(
+//         "ventas_pendientes"
+//       );
+//       console.log(
+//         `📦 Ventas pendientes a sincronizar: ${ventasPendientes.length}`
+//       );
+
+//       let exitosas = 0;
+//       let fallidas = 0;
+
+//       for (const venta of ventasPendientes) {
+//         try {
+//           console.log(`🔄 Sincronizando venta: ${venta.id_local}`);
+
+//           // 2. Enviar venta al servidor
+//           const response = await fetchConToken(
+//             "ventas",
+//             {
+//               ...venta,
+//               id_local: venta.id_local, // Incluir referencia local
+//             },
+//             "POST"
+//           );
+
+//           if (response && response.ok === true) {
+//             // 3. Si éxito, eliminar venta pendiente y actualizar stock en servidor
+//             await IndexedDBService.delete("ventas_pendientes", venta.id_local);
+//             exitosas++;
+//             console.log(`✅ Venta sincronizada: ${venta.id_local}`);
+//           } else {
+//             fallidas++;
+//             console.error(`❌ Error sincronizando venta: ${response?.error}`);
+//           }
+//         } catch (error) {
+//           fallidas++;
+//           console.error(
+//             `❌ Error sincronizando venta ${venta.id_local}:`,
+//             error
+//           );
+//         }
+//       }
+
+//       // 4. Recargar ventas después de sincronizar
+//       dispatch(loadSales());
+
+//       return {
+//         success: exitosas > 0 || fallidas === 0,
+//         exitosas,
+//         fallidas,
+//         total: ventasPendientes.length,
+//       };
+//     } catch (error) {
+//       console.error("❌ [SYNC] Error sincronizando ventas:", error);
+//       throw error;
+//     }
+//   };
+// };
+// ✅ MODIFICAR LA FUNCIÓN syncPendingSales EXISTENTE
 export const syncPendingSales = () => {
   return async (dispatch) => {
     try {
@@ -432,6 +680,7 @@ export const syncPendingSales = () => {
 
       let exitosas = 0;
       let fallidas = 0;
+      const resultadosDetallados = [];
 
       for (const venta of ventasPendientes) {
         try {
@@ -448,13 +697,33 @@ export const syncPendingSales = () => {
           );
 
           if (response && response.ok === true) {
-            // 3. Si éxito, eliminar venta pendiente y actualizar stock en servidor
+            // 3. Si éxito, eliminar venta pendiente
             await IndexedDBService.delete("ventas_pendientes", venta.id_local);
             exitosas++;
+
+            // ✅ ACTUALIZAR STOCK LOCAL CON LOS DATOS DEL SERVIDOR
+            // El backend ya actualizó el stock, pero sincronizamos el estado local
+            if (venta.productos && Array.isArray(venta.productos)) {
+              console.log(
+                `🔄 Actualizando stock local para venta sincronizada: ${venta.id_local}`
+              );
+              await updateLocalStockAfterSale(venta.productos);
+            }
+
             console.log(`✅ Venta sincronizada: ${venta.id_local}`);
+            resultadosDetallados.push({
+              id_local: venta.id_local,
+              status: "success",
+              message: "Venta sincronizada y stock actualizado",
+            });
           } else {
             fallidas++;
             console.error(`❌ Error sincronizando venta: ${response?.error}`);
+            resultadosDetallados.push({
+              id_local: venta.id_local,
+              status: "failed",
+              error: response?.error || "Error del servidor",
+            });
           }
         } catch (error) {
           fallidas++;
@@ -462,17 +731,27 @@ export const syncPendingSales = () => {
             `❌ Error sincronizando venta ${venta.id_local}:`,
             error
           );
+          resultadosDetallados.push({
+            id_local: venta.id_local,
+            status: "error",
+            error: error.message,
+          });
         }
       }
 
       // 4. Recargar ventas después de sincronizar
       dispatch(loadSales());
 
+      console.log(
+        `✅ [SYNC] Sincronización completada: ${exitosas} exitosas, ${fallidas} fallidas`
+      );
+
       return {
         success: exitosas > 0 || fallidas === 0,
         exitosas,
         fallidas,
         total: ventasPendientes.length,
+        detalles: resultadosDetallados,
       };
     } catch (error) {
       console.error("❌ [SYNC] Error sincronizando ventas:", error);
@@ -480,7 +759,6 @@ export const syncPendingSales = () => {
     }
   };
 };
-
 // ✅ OBTENER VENTA POR ID
 export const getSaleById = (saleId) => {
   return async (dispatch) => {
@@ -517,6 +795,42 @@ export const getSaleById = (saleId) => {
     } catch (error) {
       console.error(`❌ [SALES] Error obteniendo venta ${saleId}:`, error);
       throw error;
+    }
+  };
+};
+
+// ✅ FUNCIONES AUXILIARES QUE FALTABAN
+export const updateMultipleProductsStock = (stockUpdates) => ({
+  type: types.productsUpdateMultipleStocks,
+  payload: stockUpdates,
+});
+
+export const reloadProductsAfterSale = () => {
+  return async (dispatch) => {
+    try {
+      console.log("🔄 Recargando productos después de venta...");
+
+      if (navigator.onLine) {
+        // Recargar desde API
+        const response = await fetchConToken("productos?limite=1000");
+        if (response && response.ok) {
+          dispatch({
+            type: types.productsLoad,
+            payload: response.productos,
+          });
+          console.log("✅ Productos recargados desde API");
+        }
+      } else {
+        // Recargar desde IndexedDB
+        const productos = await IndexedDBService.getAll("productos");
+        dispatch({
+          type: types.productsLoad,
+          payload: productos,
+        });
+        console.log("✅ Productos recargados desde IndexedDB");
+      }
+    } catch (error) {
+      console.error("❌ Error recargando productos:", error);
     }
   };
 };

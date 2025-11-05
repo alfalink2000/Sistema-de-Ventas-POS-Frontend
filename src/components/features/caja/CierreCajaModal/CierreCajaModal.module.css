@@ -328,3 +328,40 @@
     flex-direction: column;
   }
 }
+/* Agrega esto a tu CierreCajaModal.module.css */
+
+.adminVisibilityIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.adminVisibilityIndicator.admin {
+  background-color: #f0f9ff;
+  border-color: #0ea5e9;
+  color: #0369a1;
+}
+
+.adminVisibilityIndicator.vendedor {
+  background-color: #fefce8;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.visibleIcon {
+  color: #059669;
+}
+
+.hiddenIcon {
+  color: #dc2626;
+}
+
+.profitHighlight {
+  color: #059669;
+  font-weight: 600;
+}

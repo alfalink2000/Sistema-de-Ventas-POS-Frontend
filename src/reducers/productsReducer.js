@@ -70,16 +70,52 @@ export const productsReducer = (state = initialState, action) => {
         activeProduct: null,
       };
 
+    // case types.productUpdateStock:
+    //   return {
+    //     ...state,
+    //     products: state.products.map((product) =>
+    //       product.id === action.payload.productoId
+    //         ? {
+    //             ...product,
+    //             stock: action.payload.stock_nuevo,
+    //             ...action.payload.producto,
+    //           }
+    //         : product
+    //     ),
+    //   };
     case types.productUpdateStock:
       return {
         ...state,
         products: state.products.map((product) =>
           product.id === action.payload.productoId
-            ? {
-                ...product,
-                stock: action.payload.stock_nuevo,
-                ...action.payload.producto,
-              }
+            ? { ...product, stock: action.payload.nuevoStock }
+            : product
+        ),
+        // ✅ ACTUALIZAR TAMBIÉN lowStockProducts
+        lowStockProducts: state.lowStockProducts.map((product) =>
+          product.id === action.payload.productoId
+            ? { ...product, stock: action.payload.nuevoStock }
+            : product
+        ),
+      };
+
+    // ✅ NUEVO CASE PARA ACTUALIZAR MÚLTIPLES PRODUCTOS
+    case types.productsUpdateMultipleStocks:
+      const stockUpdatesMap = {};
+      action.payload.forEach((update) => {
+        stockUpdatesMap[update.productoId] = update.nuevoStock;
+      });
+
+      return {
+        ...state,
+        products: state.products.map((product) =>
+          stockUpdatesMap[product.id] !== undefined
+            ? { ...product, stock: stockUpdatesMap[product.id] }
+            : product
+        ),
+        lowStockProducts: state.lowStockProducts.map((product) =>
+          stockUpdatesMap[product.id] !== undefined
+            ? { ...product, stock: stockUpdatesMap[product.id] }
             : product
         ),
       };

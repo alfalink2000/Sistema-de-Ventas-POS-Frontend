@@ -16,6 +16,8 @@ import {
   FiRefreshCw,
   FiAlertCircle,
   FiUploadCloud,
+  FiEye,
+  FiEyeOff,
 } from "react-icons/fi";
 import {
   loadClosures,
@@ -41,6 +43,10 @@ const ClosuresHistory = () => {
   const { closures: reduxCierres, loading: reduxLoading } = useSelector(
     (state) => state.closures
   );
+
+  // ✅ OBTENER USUARIO ACTUAL PARA VERIFICAR ROL
+  const { user: currentUser } = useSelector((state) => state.auth);
+  const isAdmin = currentUser?.rol === "admin";
 
   // ✅ CARGAR CIERRES PENDIENTES DE SINCRONIZACIÓN
   useEffect(() => {
@@ -262,7 +268,7 @@ const ClosuresHistory = () => {
       "Efectivo",
       "Tarjeta",
       "Transferencia",
-      "Ganancia Bruta",
+      ...(isAdmin ? ["Ganancia Bruta"] : []),
       "Saldo Final Teórico",
       "Saldo Final Real",
       "Diferencia",
@@ -271,8 +277,8 @@ const ClosuresHistory = () => {
       "Sincronizado",
     ].join(",");
 
-    const csvData = filteredClosures.map((closure) =>
-      [
+    const csvData = filteredClosures.map((closure) => {
+      const baseData = [
         closure.id || closure.id_local,
         new Date(closure.fecha_cierre).toLocaleDateString(),
         closure.vendedor_nombre,
@@ -280,7 +286,14 @@ const ClosuresHistory = () => {
         closure.total_efectivo,
         closure.total_tarjeta,
         closure.total_transferencia || 0,
-        closure.ganancia_bruta,
+      ];
+
+      // ✅ SOLO INCLUIR GANANCIA BRUTA SI ES ADMIN
+      if (isAdmin) {
+        baseData.push(closure.ganancia_bruta);
+      }
+
+      baseData.push(
         closure.saldo_final_teorico,
         closure.saldo_final_real,
         closure.diferencia,
@@ -291,9 +304,11 @@ const ClosuresHistory = () => {
             : closure.diferencia > 0
             ? "sobrante"
             : "faltante"),
-        closure.sincronizado ? "Sí" : "No",
-      ].join(",")
-    );
+        closure.sincronizado ? "Sí" : "No"
+      );
+
+      return baseData.join(",");
+    });
 
     const csv = [headers, ...csvData].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -349,6 +364,23 @@ const ClosuresHistory = () => {
     </button>
   );
 
+  // ✅ COMPONENTE DE INDICADOR DE VISIBILIDAD ADMIN
+  const renderAdminVisibilityIndicator = () => (
+    <div className={styles.adminVisibilityIndicator}>
+      {isAdmin ? (
+        <>
+          <FiEye className={styles.visibleIcon} />
+          <span>Vista de Administrador - Ganancia Bruta visible</span>
+        </>
+      ) : (
+        <>
+          <FiEyeOff className={styles.hiddenIcon} />
+          <span>Vista de Vendedor - Ganancia Bruta oculta</span>
+        </>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -388,6 +420,10 @@ const ClosuresHistory = () => {
               ? `${filteredClosures.length} registros encontrados`
               : `${filteredClosures.length} registros locales`}
           </p>
+
+          {/* ✅ INDICADOR DE VISIBILIDAD ADMIN */}
+          {renderAdminVisibilityIndicator()}
+
           {!isOnline && renderOfflineStatus()}
         </div>
 
@@ -689,12 +725,15 @@ const ClosuresHistory = () => {
 
                               <div className={styles.detailSection}>
                                 <h4>Resumen Financiero</h4>
-                                <div className={styles.detailItem}>
-                                  <span>Ganancia Bruta:</span>
-                                  <span className={styles.profitHighlight}>
-                                    {formatCurrency(closure.ganancia_bruta)}
-                                  </span>
-                                </div>
+                                {/* ✅ SOLO MOSTRAR GANANCIA BRUTA SI ES ADMIN */}
+                                {isAdmin && (
+                                  <div className={styles.detailItem}>
+                                    <span>Ganancia Bruta:</span>
+                                    <span className={styles.profitHighlight}>
+                                      {formatCurrency(closure.ganancia_bruta)}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className={styles.detailItem}>
                                   <span>Saldo Final Teórico:</span>
                                   <span>

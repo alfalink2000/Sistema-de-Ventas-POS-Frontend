@@ -13,6 +13,12 @@ import { loadOpenSesion } from "../../actions/sesionesCajaActions";
 import LoadingSpinner from "../ui/LoadingSpinner/LoadingSpinner";
 import styles from "./DataLoader.module.css";
 
+import {
+  setupProductsSyncListener,
+  syncProductsFromServer,
+} from "../../actions/productsActions";
+import ProductsOfflineController from "../../controllers/offline/ProductsOfflineController/ProductsOfflineController";
+
 const DataLoader = ({
   children,
   isOnline,
@@ -39,7 +45,32 @@ const DataLoader = ({
   const dispatch = useDispatch();
   const loadAttemptedRef = useRef(false);
 
-  // ✅ CARGA ESENCIAL DE DATOS
+  // ✅ NUEVA FUNCIÓN: SINCRONIZACIÓN FORZADA DE PRODUCTOS
+  const syncProductsData = async () => {
+    try {
+      console.log("🔄 DataLoader: Sincronizando datos de productos...");
+
+      if (navigator.onLine) {
+        // ✅ FORZAR SINCRONIZACIÓN DE PRODUCTOS
+        const syncResult = await ProductsOfflineController.forceProductsSync();
+
+        if (syncResult.success) {
+          console.log("✅ DataLoader: Productos sincronizados correctamente");
+          // Recargar productos en Redux
+          await dispatch(loadProductsIfNeeded());
+        } else {
+          console.warn(
+            "⚠️ DataLoader: No se pudieron sincronizar productos:",
+            syncResult.error
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ DataLoader: Error sincronizando productos:", error);
+    }
+  };
+
+  // ✅ CARGA ESENCIAL DE DATOS - VERSIÓN MEJORADA
   useEffect(() => {
     const shouldLoadData =
       !checking &&
@@ -57,36 +88,60 @@ const DataLoader = ({
           const loadPromises = [];
           const progressUpdates = {};
 
-          // 📦 PRODUCTOS
-          if (!products || products.length === 0) {
-            console.log("📦 DataLoader: Cargando productos...");
-            progressUpdates.products = false;
-            loadPromises.push(
-              dispatch(loadProductsIfNeeded()).then(() => {
-                setLoadState((prev) => ({
-                  ...prev,
-                  progress: { ...prev.progress, products: true },
-                }));
-                console.log("✅ DataLoader: Productos cargados");
-              })
-            );
-          } else {
-            console.log("✅ DataLoader: Productos ya cargados");
-            progressUpdates.products = true;
-          }
+          // 📦 PRODUCTOS - CON SINCRONIZACIÓN FORZADA
+          console.log("📦 DataLoader: Cargando productos...");
+          progressUpdates.products = false;
+
+          const productsPromise = (async () => {
+            try {
+              // ✅ PRIMERO: SINCRONIZAR SI ESTAMOS ONLINE
+              if (isOnline) {
+                await syncProductsData();
+              }
+
+              // ✅ LUEGO: CARGAR PRODUCTOS
+              await dispatch(loadProductsIfNeeded());
+
+              setLoadState((prev) => ({
+                ...prev,
+                progress: { ...prev.progress, products: true },
+              }));
+              console.log("✅ DataLoader: Productos cargados");
+            } catch (error) {
+              console.error("❌ DataLoader: Error cargando productos:", error);
+              // Continuar incluso si hay error
+              setLoadState((prev) => ({
+                ...prev,
+                progress: { ...prev.progress, products: true },
+              }));
+            }
+          })();
+
+          loadPromises.push(productsPromise);
 
           // 📂 CATEGORÍAS
           if (!categories || categories.length === 0) {
             console.log("📂 DataLoader: Cargando categorías...");
             progressUpdates.categories = false;
             loadPromises.push(
-              dispatch(loadCategoriesIfNeeded()).then(() => {
-                setLoadState((prev) => ({
-                  ...prev,
-                  progress: { ...prev.progress, categories: true },
-                }));
-                console.log("✅ DataLoader: Categorías cargadas");
-              })
+              dispatch(loadCategoriesIfNeeded())
+                .then(() => {
+                  setLoadState((prev) => ({
+                    ...prev,
+                    progress: { ...prev.progress, categories: true },
+                  }));
+                  console.log("✅ DataLoader: Categorías cargadas");
+                })
+                .catch((error) => {
+                  console.error(
+                    "❌ DataLoader: Error cargando categorías:",
+                    error
+                  );
+                  setLoadState((prev) => ({
+                    ...prev,
+                    progress: { ...prev.progress, categories: true },
+                  }));
+                })
             );
           } else {
             console.log("✅ DataLoader: Categorías ya cargadas");
@@ -97,26 +152,45 @@ const DataLoader = ({
           console.log("📊 DataLoader: Cargando inventario...");
           progressUpdates.inventory = false;
           loadPromises.push(
-            dispatch(loadInventory()).then(() => {
-              setLoadState((prev) => ({
-                ...prev,
-                progress: { ...prev.progress, inventory: true },
-              }));
-              console.log("✅ DataLoader: Inventario cargado");
-            })
+            dispatch(loadInventory())
+              .then(() => {
+                setLoadState((prev) => ({
+                  ...prev,
+                  progress: { ...prev.progress, inventory: true },
+                }));
+                console.log("✅ DataLoader: Inventario cargado");
+              })
+              .catch((error) => {
+                console.error(
+                  "❌ DataLoader: Error cargando inventario:",
+                  error
+                );
+                setLoadState((prev) => ({
+                  ...prev,
+                  progress: { ...prev.progress, inventory: true },
+                }));
+              })
           );
 
           // 💰 CIERRES DE CAJA
           console.log("💰 DataLoader: Cargando cierres de caja...");
           progressUpdates.closures = false;
           loadPromises.push(
-            dispatch(loadTodayClosure()).then(() => {
-              setLoadState((prev) => ({
-                ...prev,
-                progress: { ...prev.progress, closures: true },
-              }));
-              console.log("✅ DataLoader: Cierres de caja cargados");
-            })
+            dispatch(loadTodayClosure())
+              .then(() => {
+                setLoadState((prev) => ({
+                  ...prev,
+                  progress: { ...prev.progress, closures: true },
+                }));
+                console.log("✅ DataLoader: Cierres de caja cargados");
+              })
+              .catch((error) => {
+                console.error("❌ DataLoader: Error cargando cierres:", error);
+                setLoadState((prev) => ({
+                  ...prev,
+                  progress: { ...prev.progress, closures: true },
+                }));
+              })
           );
 
           // 🏦 SESIONES ABIERTAS
@@ -124,17 +198,34 @@ const DataLoader = ({
             console.log("🏦 DataLoader: Verificando sesiones activas...");
             progressUpdates.sessions = false;
             loadPromises.push(
-              dispatch(loadOpenSesion(user.id)).then(() => {
-                setLoadState((prev) => ({
-                  ...prev,
-                  progress: { ...prev.progress, sessions: true },
-                }));
-                console.log("✅ DataLoader: Sesiones verificadas");
-              })
+              dispatch(loadOpenSesion(user.id))
+                .then(() => {
+                  setLoadState((prev) => ({
+                    ...prev,
+                    progress: { ...prev.progress, sessions: true },
+                  }));
+                  console.log("✅ DataLoader: Sesiones verificadas");
+                })
+                .catch((error) => {
+                  console.error(
+                    "❌ DataLoader: Error verificando sesiones:",
+                    error
+                  );
+                  setLoadState((prev) => ({
+                    ...prev,
+                    progress: { ...prev.progress, sessions: true },
+                  }));
+                })
             );
           } else {
             progressUpdates.sessions = true;
           }
+
+          // Establecer progreso inicial
+          setLoadState((prev) => ({
+            ...prev,
+            progress: { ...prev.progress, ...progressUpdates },
+          }));
 
           // 🔄 SINCRONIZAR PRODUCTOS PARA OFFLINE (solo online)
           if (isOnline) {
@@ -154,12 +245,6 @@ const DataLoader = ({
             }
           }
 
-          // Establecer progreso inicial
-          setLoadState((prev) => ({
-            ...prev,
-            progress: { ...prev.progress, ...progressUpdates },
-          }));
-
           // Esperar a que todas las cargas esenciales terminen
           await Promise.allSettled(loadPromises);
 
@@ -171,11 +256,23 @@ const DataLoader = ({
           }));
 
           console.log("🎉 DataLoader: Carga esencial completada");
+
+          // ✅ DISPARAR EVENTO DE CARGA COMPLETADA
+          window.dispatchEvent(
+            new CustomEvent("data_loader_complete", {
+              detail: {
+                timestamp: new Date().toISOString(),
+                productsCount: products?.length || 0,
+                categoriesCount: categories?.length || 0,
+              },
+            })
+          );
         } catch (error) {
           console.error("❌ DataLoader: Error en carga esencial:", error);
           setLoadState((prev) => ({
             ...prev,
             initialLoadComplete: true,
+            essentialDataLoaded: true, // Forzar continuar incluso con errores
           }));
         }
       };
@@ -187,6 +284,7 @@ const DataLoader = ({
           setLoadState((prev) => ({
             ...prev,
             initialLoadComplete: true,
+            essentialDataLoaded: true,
           }));
         }
       }, 15000);
@@ -206,6 +304,89 @@ const DataLoader = ({
     categories,
     isOnline,
   ]);
+
+  // ✅ LISTENERS DE SINCRONIZACIÓN - VERSIÓN MEJORADA
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    console.log("🔧 DataLoader: Configurando listeners de sincronización...");
+
+    // ✅ CONFIGURAR LISTENER DE SINCRONIZACIÓN
+    dispatch(setupProductsSyncListener());
+
+    // ✅ SINCRONIZAR PRODUCTOS AL INICIAR (solo si hay conexión)
+    if (navigator.onLine) {
+      const initialSync = setTimeout(() => {
+        console.log("🔄 DataLoader: Sincronización inicial de productos...");
+        dispatch(syncProductsFromServer());
+      }, 3000); // Pequeño delay para no sobrecargar el inicio
+
+      // ✅ SINCRONIZACIÓN FORZADA ADICIONAL
+      const forceSync = setTimeout(() => {
+        if (navigator.onLine) {
+          console.log("🔄 DataLoader: Sincronización forzada de productos...");
+          syncProductsData();
+        }
+      }, 5000);
+
+      return () => {
+        clearTimeout(initialSync);
+        clearTimeout(forceSync);
+      };
+    }
+  }, [dispatch, isAuthenticated, user]);
+
+  // ✅ SINCRONIZACIÓN PERIÓDICA MEJORADA
+  useEffect(() => {
+    if (!isAuthenticated || !user || !navigator.onLine) return;
+
+    console.log("⏰ DataLoader: Iniciando sincronización periódica...");
+
+    // ✅ SINCRONIZAR CADA 3 MINUTOS (más frecuente para mejor consistencia)
+    const interval = setInterval(() => {
+      if (navigator.onLine) {
+        console.log("🔄 DataLoader: Sincronización periódica de productos...");
+        dispatch(syncProductsFromServer());
+
+        // ✅ SINCRONIZACIÓN FORZADA CADA 2 CICLOS (6 minutos)
+        if (Date.now() % (2 * 3 * 60 * 1000) < 3000) {
+          syncProductsData();
+        }
+      }
+    }, 3 * 60 * 1000); // 3 minutos
+
+    return () => {
+      console.log("🧹 DataLoader: Limpiando sincronización periódica...");
+      clearInterval(interval);
+    };
+  }, [dispatch, isAuthenticated, user]);
+
+  // ✅ LISTENER PARA EVENTOS EXTERNOS DE SINCRONIZACIÓN
+  useEffect(() => {
+    const handleForceSync = () => {
+      if (navigator.onLine) {
+        console.log("🔄 DataLoader: Sincronización forzada por evento externo");
+        syncProductsData();
+      }
+    };
+
+    const handleOnline = () => {
+      console.log("🌐 DataLoader: Conexión restaurada - Sincronizando...");
+      setTimeout(() => {
+        syncProductsData();
+        dispatch(syncProductsFromServer());
+      }, 2000);
+    };
+
+    // Registrar event listeners
+    window.addEventListener("force_products_sync", handleForceSync);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("force_products_sync", handleForceSync);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [dispatch]);
 
   // ✅ RESETEO AL CERRAR SESIÓN
   useEffect(() => {
@@ -320,6 +501,13 @@ const DataLoader = ({
               </span>
             </div>
           </div>
+
+          {/* ✅ INDICADOR DE SINCRONIZACIÓN */}
+          {isOnline && (
+            <div className={styles.syncNotice}>
+              <span>🔄 Sincronizando datos en tiempo real...</span>
+            </div>
+          )}
 
           {!isOnline && (
             <div className={styles.offlineNotice}>

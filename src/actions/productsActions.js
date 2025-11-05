@@ -52,7 +52,7 @@ class OfflineProductsService {
             if (response && response.ok) {
               // Actualizar en IndexedDB con ID real
               await IndexedDBService.delete("productos", producto.id);
-              await IndexedDBService.add("productos", {
+              await IndexedDBService.put("productos", {
                 ...response.producto,
                 sincronizado: true,
               });
@@ -313,7 +313,7 @@ export const createProduct = (productData) => {
 
           // ✅ GUARDAR EN CACHE LOCAL TAMBIÉN
           if (resultado) {
-            await IndexedDBService.add("productos", {
+            await IndexedDBService.put("productos", {
               ...resultado,
               sincronizado: true,
             });
@@ -1192,6 +1192,35 @@ export const loadProductsStats = () => {
   };
 };
 
+// actions/productsActions.js - AGREGAR
+export const reloadProductsAfterSale = () => {
+  return async (dispatch) => {
+    try {
+      console.log("🔄 Recargando productos después de venta...");
+
+      if (navigator.onLine) {
+        // Recargar desde API
+        const response = await fetchConToken("productos?limite=1000");
+        if (response.ok) {
+          dispatch({
+            type: types.productsLoad,
+            payload: response.productos,
+          });
+        }
+      } else {
+        // Recargar desde IndexedDB
+        const productos = await IndexedDBService.getAll("productos");
+        dispatch({
+          type: types.productsLoad,
+          payload: productos,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error recargando productos:", error);
+    }
+  };
+};
+
 export const setActiveProduct = (product) => ({
   type: types.productSetActive,
   payload: product,
@@ -1200,3 +1229,106 @@ export const setActiveProduct = (product) => ({
 export const clearActiveProduct = () => ({
   type: types.productClearActive,
 });
+// actions/productsActions.js - AGREGAR ESTA FUNCIÓN
+export const updateProductStockInStore = (productoId, nuevoStock) => ({
+  type: types.productUpdateStock,
+  payload: { productoId, nuevoStock },
+});
+
+// ✅ FUNCIÓN PARA ACTUALIZAR MÚLTIPLES STOCKS
+export const updateMultipleProductsStock = (stockUpdates) => ({
+  type: types.productsUpdateMultipleStocks,
+  payload: stockUpdates,
+});
+// actions/productsActions.js - AGREGAR ESTAS FUNCIONES
+// actions/productsActions.js - CORREGIR syncProductsFromServer
+export const syncProductsFromServer = () => {
+  return async (dispatch) => {
+    try {
+      console.log("🔄 Sincronizando productos desde servidor...");
+
+      if (!navigator.onLine) {
+        console.log("📱 Modo offline, usando productos locales");
+        const productos = await IndexedDBService.getAll("productos");
+        dispatch({
+          type: types.productsLoad,
+          payload: productos,
+        });
+        return { success: true, source: "offline" };
+      }
+
+      // ✅ OBTENER PRODUCTOS ACTUALIZADOS DEL SERVIDOR
+      const response = await fetchConToken("productos?limite=1000");
+
+      if (response && response.ok && response.productos) {
+        console.log(
+          `📦 ${response.productos.length} productos recibidos del servidor`
+        );
+
+        // ✅ CORREGIDO: USAR PUT EN LUGAR DE ADD
+        for (const producto of response.productos) {
+          await IndexedDBService.put("productos", {
+            ...producto,
+            last_sync: new Date().toISOString(),
+            sincronizado: true,
+          });
+        }
+
+        // ✅ ACTUALIZAR REDUX STORE
+        dispatch({
+          type: types.productsLoad,
+          payload: response.productos,
+        });
+
+        console.log("✅ Productos sincronizados y store actualizado");
+        return {
+          success: true,
+          source: "server",
+          count: response.productos.length,
+        };
+      } else {
+        throw new Error(response?.error || "Error del servidor");
+      }
+    } catch (error) {
+      console.error("❌ Error sincronizando productos:", error);
+
+      // ✅ FALLBACK: Usar productos locales
+      const productos = await IndexedDBService.getAll("productos");
+      dispatch({
+        type: types.productsLoad,
+        payload: productos,
+      });
+
+      return { success: false, error: error.message, source: "fallback" };
+    }
+  };
+};
+
+// ✅ LISTENER PARA ACTUALIZACIONES AUTOMÁTICAS
+export const setupProductsSyncListener = () => {
+  return (dispatch) => {
+    const handleProductsUpdate = async (event) => {
+      console.log("🔄 Evento de actualización de productos recibido");
+      await dispatch(syncProductsFromServer());
+    };
+
+    const handleForceReload = async (event) => {
+      console.log("🔄 Forzando recarga de productos");
+      await dispatch(syncProductsFromServer());
+    };
+
+    // Escuchar eventos de sincronización
+    window.addEventListener("products_updated", handleProductsUpdate);
+    window.addEventListener("force_reload_products", handleForceReload);
+
+    // Escuchar cambios de conexión
+    window.addEventListener("online", () => {
+      setTimeout(() => dispatch(syncProductsFromServer()), 2000);
+    });
+
+    return () => {
+      window.removeEventListener("products_updated", handleProductsUpdate);
+      window.removeEventListener("force_reload_products", handleForceReload);
+    };
+  };
+};

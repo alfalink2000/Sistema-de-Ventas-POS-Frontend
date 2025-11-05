@@ -18,6 +18,7 @@ class SyncController extends BaseOfflineController {
   }
 
   // ✅ SINCRONIZACIÓN COMPLETA MEJORADA - SIN VENTAS
+  // ✅ MODIFICAR fullSync PARA INCLUIR SINCRONIZACIÓN DE PRODUCTOS
   async fullSync() {
     if (!this.isOnline) {
       return { success: false, error: "Sin conexión a internet", silent: true };
@@ -31,45 +32,45 @@ class SyncController extends BaseOfflineController {
       steps: {},
       errors: [],
       idMappings: {},
-      strategy: "sin_ventas",
+      strategy: "completa_con_productos",
     };
 
     try {
-      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA (SIN VENTAS)");
+      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA CON PRODUCTOS");
 
-      // ✅ PASO 1: Limpiar ventas pendientes (NO se sincronizarán)
+      // ✅ PASO 1: SINCRONIZAR PRODUCTOS E INVENTARIO PRIMERO
+      console.log("📦 SINCRONIZANDO PRODUCTOS E INVENTARIO...");
+      syncResults.steps.productos = await this.syncProductsAndInventory();
+
+      // ✅ PASO 2: Limpiar ventas pendientes
       console.log("🧹 LIMPIANDO VENTAS PENDIENTES...");
       syncResults.steps.cleanup = await this.limpiarVentasPendientes();
 
-      // ✅ PASO 2: Sincronizar sesiones cerradas
+      // ✅ PASO 3: Sincronizar sesiones cerradas
       console.log("📝 SINCRONIZANDO SESIONES CERRADAS...");
       syncResults.steps.sessions = await this.syncOnlyClosedSessions();
 
-      // ✅ PASO 3: Sincronizar cierres pendientes
+      // ✅ PASO 4: Sincronizar cierres pendientes
       console.log("💰 SINCRONIZANDO CIERRES...");
       syncResults.steps.closures = await this.syncPendingClosures();
 
-      // ✅ PASO 4: Sincronizar productos
-      console.log("📦 SINCRONIZANDO PRODUCTOS...");
-      syncResults.steps.products = await this.syncPendingProducts();
-
-      // ✅ PASO 5: Sincronizar inventario
-      console.log("📊 SINCRONIZANDO INVENTARIO...");
-      syncResults.steps.inventory = await this.syncPendingStock();
-
       syncResults.duration = Date.now() - syncResults.startTime;
       syncResults.success =
-        syncResults.steps.sessions?.success > 0 ||
-        syncResults.steps.closures?.success > 0 ||
-        syncResults.steps.products?.success > 0 ||
-        syncResults.steps.inventory?.success > 0;
+        syncResults.steps.productos?.success &&
+        (syncResults.steps.sessions?.success > 0 ||
+          syncResults.steps.closures?.success > 0);
 
       // Guardar timestamp de última sincronización exitosa
       if (syncResults.success) {
         localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
+
+        // ✅ FORZAR ACTUALIZACIÓN DEL STORE DE REDUX
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("force_reload_products"));
+        }
       }
 
-      console.log("✅ SINCRONIZACIÓN COMPLETADA (SIN VENTAS)");
+      console.log("✅ SINCRONIZACIÓN COMPLETA CON PRODUCTOS TERMINADA");
       this.notifyListeners("sync_complete", syncResults);
       return syncResults;
     } catch (error) {
@@ -82,7 +83,6 @@ class SyncController extends BaseOfflineController {
       this.isSyncing = false;
     }
   }
-
   // ✅ LIMPIAR VENTAS PENDIENTES (NO SINCRONIZAR)
   async limpiarVentasPendientes() {
     try {
@@ -929,6 +929,127 @@ class SyncController extends BaseOfflineController {
     } catch (error) {
       console.error("❌ Error en debugSyncIssues:", error);
       return { error: error.message };
+    }
+  }
+  // En SyncController.js - AGREGAR ESTE MÉTODO
+  async syncProductsAndInventory() {
+    try {
+      console.log("🔄 SINCRONIZANDO PRODUCTOS E INVENTARIO...");
+
+      const resultados = {
+        productos: { success: 0, failed: 0, detalles: [] },
+        inventario: { success: 0, failed: 0, detalles: [] },
+      };
+
+      // ✅ PASO 1: SINCRONIZAR PRODUCTOS DESDE SERVIDOR
+      console.log("📥 Descargando productos actualizados del servidor...");
+      const productosResponse = await fetchConToken("productos?limite=1000");
+
+      if (
+        productosResponse &&
+        productosResponse.ok &&
+        productosResponse.productos
+      ) {
+        console.log(
+          `📦 Recibidos ${productosResponse.productos.length} productos del servidor`
+        );
+
+        // ✅ LIMPIAR Y ACTUALIZAR INDEXEDDB
+        await IndexedDBService.clear("productos");
+
+        for (const producto of productosResponse.productos) {
+          try {
+            await IndexedDBService.add("productos", {
+              ...producto,
+              last_sync: new Date().toISOString(),
+              sincronizado: true,
+            });
+            resultados.productos.success++;
+          } catch (error) {
+            resultados.productos.failed++;
+            resultados.productos.detalles.push({
+              producto_id: producto.id,
+              error: error.message,
+            });
+          }
+        }
+
+        console.log(
+          `✅ ${resultados.productos.success} productos actualizados en IndexedDB`
+        );
+      } else {
+        throw new Error("Error obteniendo productos del servidor");
+      }
+
+      // ✅ PASO 2: SINCRONIZAR INVENTARIO DESDE SERVIDOR
+      console.log("📥 Descargando inventario actualizado del servidor...");
+      const inventarioResponse = await fetchConToken("inventario");
+
+      if (
+        inventarioResponse &&
+        inventarioResponse.ok &&
+        inventarioResponse.inventario
+      ) {
+        console.log(
+          `📊 Recibidos ${inventarioResponse.inventario.length} items de inventario`
+        );
+
+        // Actualizar stocks en productos basado en inventario
+        for (const item of inventarioResponse.inventario) {
+          try {
+            const producto = await IndexedDBService.get(
+              "productos",
+              item.producto_id
+            );
+            if (producto) {
+              await IndexedDBService.put("productos", {
+                ...producto,
+                stock: item.stock_actual,
+                last_sync: new Date().toISOString(),
+              });
+              resultados.inventario.success++;
+            }
+          } catch (error) {
+            resultados.inventario.failed++;
+            resultados.inventario.detalles.push({
+              producto_id: item.producto_id,
+              error: error.message,
+            });
+          }
+        }
+
+        console.log(
+          `✅ ${resultados.inventario.success} stocks actualizados desde inventario`
+        );
+      }
+
+      // ✅ PASO 3: ACTUALIZAR REDUX STORE
+      console.log("🔄 Actualizando Redux store con productos actualizados...");
+      const productosActualizados = await IndexedDBService.getAll("productos");
+
+      // Despachar acción para actualizar store (necesitarás implementar esto)
+      if (typeof window !== "undefined" && window.dispatchEvent) {
+        window.dispatchEvent(
+          new CustomEvent("products_updated", {
+            detail: { productos: productosActualizados },
+          })
+        );
+      }
+
+      return {
+        success:
+          resultados.productos.failed === 0 &&
+          resultados.inventario.failed === 0,
+        resultados,
+        totalProductos: resultados.productos.success,
+        totalStocks: resultados.inventario.success,
+      };
+    } catch (error) {
+      console.error("❌ Error en syncProductsAndInventory:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   }
 }

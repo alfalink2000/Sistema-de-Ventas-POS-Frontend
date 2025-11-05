@@ -13,6 +13,7 @@ import Users from "../pages/Users/Users";
 import DataLoader from "../components/DataLoader/DataLoader";
 import LoadingSpinner from "../components/ui/LoadingSpinner/LoadingSpinner";
 import { startChecking, startOfflineChecking } from "../actions/authActions";
+import { reloadProductsAfterSale } from "../actions/salesActions";
 import styles from "./AppRouter.module.css";
 
 const AppRouter = () => {
@@ -24,6 +25,11 @@ const AppRouter = () => {
   );
 
   const dispatch = useDispatch();
+
+  // ✅ DETECTAR CAMBIOS DE CONEXIÓN
+  useEffect(() => {
+    reloadProductsAfterSale();
+  }, [dispatch]);
 
   // ✅ DETECTAR CAMBIOS DE CONEXIÓN
   useEffect(() => {
