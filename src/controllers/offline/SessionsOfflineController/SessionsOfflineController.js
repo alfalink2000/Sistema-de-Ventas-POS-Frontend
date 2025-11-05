@@ -207,6 +207,18 @@ class SessionsOfflineController extends BaseOfflineController {
 
   async openSession(sessionData) {
     try {
+      const existingSession = await this.getOpenSessionByVendedor(
+        sessionData.vendedor_id
+      );
+      if (existingSession && this.isSessionActive(existingSession)) {
+        return {
+          success: true,
+          sesion: existingSession,
+          id_local: existingSession.id_local,
+          wasExisting: true, // ← INDICA QUE ES EXISTENTE
+        };
+      }
+
       await this.validateRequiredFields(sessionData, [
         "vendedor_id",
         "saldo_inicial",

@@ -206,42 +206,77 @@ class SyncController extends BaseOfflineController {
   }
 
   // ✅ CREAR CIERRE PARA SESIÓN CERRADA
+  // ✅ REEMPLAZAR crearCierreParaSesionCerrada con validación completa
   async crearCierreParaSesionCerrada(session) {
     try {
-      console.log(`💰 Creando cierre para sesión: ${session.id_local}`);
+      console.log(`💰 Creando cierre para sesión cerrada: ${session.id_local}`);
 
-      // ✅ CALCULAR TOTALES REALES
+      // ✅ VALIDAR DATOS CRÍTICOS ANTES DE CONTINUAR
+      if (!session.saldo_final_real && !session.saldo_inicial) {
+        throw new Error("No hay saldo final real ni saldo inicial disponible");
+      }
+
+      // ✅ OBTENER ID DE SERVIDOR PRIMERO
+      const sesionServerId = await this.obtenerIdServidorSesion(session);
+      if (!sesionServerId) {
+        throw new Error("No se pudo obtener ID de servidor para la sesión");
+      }
+
+      // ✅ VERIFICAR SI YA EXISTE CIERRE
+      const existingClosure = await this.verificarCierreExistenteMejorado(
+        session,
+        sesionServerId
+      );
+      if (existingClosure) {
+        console.log(
+          `✅ Cierre ya existe, omitiendo creación: ${existingClosure.id}`
+        );
+        return {
+          success: true,
+          cierre_id: existingClosure.id,
+          sesion_server_id: sesionServerId,
+          skipped: true,
+        };
+      }
+
+      // ✅ CALCULAR TOTALES CON VALIDACIÓN
       const totales = await this.calcularTotalesSesion(session);
 
-      // ✅ OBTENER ID DE SERVIDOR PARA LA SESIÓN
-      const sesionServerId = await this.obtenerIdServidorSesion(session);
+      // ✅ PREPARAR DATOS DEL CIERRE CON VALIDACIÓN
+      const saldoFinalReal =
+        session.saldo_final_real || session.saldo_inicial || 0;
+      const saldoFinalTeorico =
+        totales.saldo_final_teorico || session.saldo_inicial || 0;
 
-      // ✅ PREPARAR DATOS DEL CIERRE
       const cierreData = {
         sesion_caja_id: sesionServerId,
-        total_ventas: totales.total_ventas,
-        total_efectivo: totales.total_efectivo,
-        total_tarjeta: totales.total_tarjeta,
-        total_transferencia: totales.total_transferencia,
-        ganancia_bruta: totales.ganancia_bruta,
-        saldo_final_teorico: totales.saldo_final_teorico,
-        saldo_final_real:
-          session.saldo_final_real || session.saldo_inicial || 0,
-        diferencia:
-          (session.saldo_final_real || 0) - totales.saldo_final_teorico,
+        total_ventas: totales.total_ventas || 0,
+        total_efectivo: totales.total_efectivo || 0,
+        total_tarjeta: totales.total_tarjeta || 0,
+        total_transferencia: totales.total_transferencia || 0,
+        ganancia_bruta: totales.ganancia_bruta || 0,
+        saldo_final_teorico: saldoFinalTeorico,
+        saldo_final_real: Number(saldoFinalReal), // ✅ ASEGURAR QUE ES NÚMERO
+        diferencia: Number(saldoFinalReal) - Number(saldoFinalTeorico),
         observaciones:
           session.observaciones ||
-          `Sincronizado desde offline - ${totales.cantidad_ventas} ventas procesadas`,
+          `Sincronizado desde offline - Sesión: ${session.id_local}`,
         vendedor_id: session.vendedor_id,
       };
 
-      console.log("📤 Enviando cierre al servidor:", cierreData);
+      // ✅ VALIDACIÓN FINAL ANTES DE ENVIAR
+      if (
+        cierreData.saldo_final_real === undefined ||
+        cierreData.saldo_final_real === null
+      ) {
+        throw new Error("Saldo final real es requerido para crear el cierre");
+      }
 
+      console.log("📤 Enviando cierre al servidor:", cierreData);
       const response = await fetchConToken("cierres", cierreData, "POST");
 
       if (response && response.ok && response.cierre) {
         console.log(`✅ Cierre creado exitosamente: ${response.cierre.id}`);
-
         return {
           success: true,
           cierre_id: response.cierre.id,
@@ -263,15 +298,102 @@ class SyncController extends BaseOfflineController {
   }
 
   // ✅ CALCULAR TOTALES DE SESIÓN
+  // async calcularTotalesSesion(session) {
+  //   try {
+  //     console.log(`💰 Calculando totales para sesión: ${session.id_local}`);
+
+  //     // ✅ BUSCAR VENTAS REALES DE ESTA SESIÓN
+  //     const ventasSesion = await SalesOfflineController.getSalesBySession(
+  //       session.id_local
+  //     );
+
+  //     console.log(
+  //       `📊 Encontradas ${ventasSesion.length} ventas para la sesión`
+  //     );
+
+  //     let totales = {
+  //       total_ventas: 0,
+  //       total_efectivo: 0,
+  //       total_tarjeta: 0,
+  //       total_transferencia: 0,
+  //       ganancia_bruta: 0,
+  //       saldo_final_teorico: session.saldo_inicial || 0,
+  //       cantidad_ventas: ventasSesion.length,
+  //     };
+
+  //     // ✅ CALCULAR TOTALES REALES DESDE VENTAS
+  //     ventasSesion.forEach((venta) => {
+  //       if (venta.estado !== "cancelada" && venta.total) {
+  //         const totalVenta = Number(venta.total) || 0;
+
+  //         // Sumar al total general
+  //         totales.total_ventas += totalVenta;
+
+  //         // Sumar por método de pago
+  //         switch (venta.metodo_pago) {
+  //           case "efectivo":
+  //             totales.total_efectivo += totalVenta;
+  //             break;
+  //           case "tarjeta":
+  //             totales.total_tarjeta += totalVenta;
+  //             break;
+  //           case "transferencia":
+  //             totales.total_transferencia += totalVenta;
+  //             break;
+  //           default:
+  //             totales.total_efectivo += totalVenta;
+  //         }
+
+  //         // ✅ CALCULAR GANANCIA REAL
+  //         if (venta.productos && Array.isArray(venta.productos)) {
+  //           venta.productos.forEach((producto) => {
+  //             const precioVenta = Number(producto.precio_unitario) || 0;
+  //             const precioCompra =
+  //               Number(producto.precio_compra) || precioVenta * 0.7;
+  //             const cantidad = Number(producto.cantidad) || 1;
+
+  //             totales.ganancia_bruta += (precioVenta - precioCompra) * cantidad;
+  //           });
+  //         } else {
+  //           // Estimación si no hay detalles
+  //           totales.ganancia_bruta += totalVenta * 0.25;
+  //         }
+  //       }
+  //     });
+
+  //     // ✅ CALCULAR SALDO FINAL TEÓRICO
+  //     totales.saldo_final_teorico =
+  //       (session.saldo_inicial || 0) + totales.total_efectivo;
+
+  //     console.log(
+  //       `💰 TOTALES CALCULADOS para sesión ${session.id_local}:`,
+  //       totales
+  //     );
+  //     return totales;
+  //   } catch (error) {
+  //     console.error("❌ Error calculando totales:", error);
+
+  //     // ✅ FALLBACK: Usar datos de la sesión
+  //     return {
+  //       total_ventas: session.total_ventas || 0,
+  //       total_efectivo: session.total_efectivo || 0,
+  //       total_tarjeta: session.total_tarjeta || 0,
+  //       total_transferencia: session.total_transferencia || 0,
+  //       ganancia_bruta: session.ganancia_bruta || 0,
+  //       saldo_final_teorico:
+  //         session.saldo_final_teorico || session.saldo_inicial || 0,
+  //       cantidad_ventas: 0,
+  //     };
+  //   }
+  // }
+  // ✅ MEJORAR calcularTotalesSesion para incluir saldo_final_real
   async calcularTotalesSesion(session) {
     try {
       console.log(`💰 Calculando totales para sesión: ${session.id_local}`);
 
-      // ✅ BUSCAR VENTAS REALES DE ESTA SESIÓN
       const ventasSesion = await SalesOfflineController.getSalesBySession(
         session.id_local
       );
-
       console.log(
         `📊 Encontradas ${ventasSesion.length} ventas para la sesión`
       );
@@ -282,19 +404,16 @@ class SyncController extends BaseOfflineController {
         total_tarjeta: 0,
         total_transferencia: 0,
         ganancia_bruta: 0,
-        saldo_final_teorico: session.saldo_inicial || 0,
+        saldo_inicial: session.saldo_inicial || 0,
         cantidad_ventas: ventasSesion.length,
       };
 
-      // ✅ CALCULAR TOTALES REALES DESDE VENTAS
+      // ✅ CALCULAR TOTALES DESDE VENTAS
       ventasSesion.forEach((venta) => {
         if (venta.estado !== "cancelada" && venta.total) {
           const totalVenta = Number(venta.total) || 0;
-
-          // Sumar al total general
           totales.total_ventas += totalVenta;
 
-          // Sumar por método de pago
           switch (venta.metodo_pago) {
             case "efectivo":
               totales.total_efectivo += totalVenta;
@@ -309,26 +428,22 @@ class SyncController extends BaseOfflineController {
               totales.total_efectivo += totalVenta;
           }
 
-          // ✅ CALCULAR GANANCIA REAL
-          if (venta.productos && Array.isArray(venta.productos)) {
-            venta.productos.forEach((producto) => {
-              const precioVenta = Number(producto.precio_unitario) || 0;
-              const precioCompra =
-                Number(producto.precio_compra) || precioVenta * 0.7;
-              const cantidad = Number(producto.cantidad) || 1;
-
-              totales.ganancia_bruta += (precioVenta - precioCompra) * cantidad;
-            });
-          } else {
-            // Estimación si no hay detalles
-            totales.ganancia_bruta += totalVenta * 0.25;
+          // Calcular ganancia
+          if (venta.ganancia_bruta) {
+            totales.ganancia_bruta += Number(venta.ganancia_bruta) || 0;
           }
         }
       });
 
       // ✅ CALCULAR SALDO FINAL TEÓRICO
       totales.saldo_final_teorico =
-        (session.saldo_inicial || 0) + totales.total_efectivo;
+        totales.saldo_inicial + totales.total_efectivo;
+
+      // ✅ SI LA SESIÓN TIENE SALDO_FINAL_REAL, USARLO PARA DIFERENCIA
+      if (session.saldo_final_real) {
+        totales.diferencia =
+          Number(session.saldo_final_real) - totales.saldo_final_teorico;
+      }
 
       console.log(
         `💰 TOTALES CALCULADOS para sesión ${session.id_local}:`,
@@ -338,21 +453,21 @@ class SyncController extends BaseOfflineController {
     } catch (error) {
       console.error("❌ Error calculando totales:", error);
 
-      // ✅ FALLBACK: Usar datos de la sesión
+      // ✅ FALLBACK MEJORADO
       return {
         total_ventas: session.total_ventas || 0,
         total_efectivo: session.total_efectivo || 0,
         total_tarjeta: session.total_tarjeta || 0,
         total_transferencia: session.total_transferencia || 0,
         ganancia_bruta: session.ganancia_bruta || 0,
+        saldo_inicial: session.saldo_inicial || 0,
         saldo_final_teorico:
           session.saldo_final_teorico || session.saldo_inicial || 0,
         cantidad_ventas: 0,
       };
     }
   }
-
-  // ✅ OBTENER ID DE SERVIDOR PARA SESIÓN
+  // ✅ REEMPLAZAR obtenerIdServidorSesion con esta versión corregida
   async obtenerIdServidorSesion(session) {
     try {
       // Si ya tiene ID de servidor, usarlo
@@ -368,11 +483,85 @@ class SyncController extends BaseOfflineController {
         return session.id;
       }
 
-      // ✅ CREAR NUEVA SESIÓN EN SERVIDOR
-      console.log(
-        `🆘 Creando sesión en servidor para sesión cerrada local: ${session.id_local}`
+      // ✅ PRIMERO: Verificar si hay sesión abierta en el servidor
+      try {
+        const response = await fetchConToken("sesiones-caja/abierta");
+        if (response && response.existe && response.sesion) {
+          console.log(
+            "✅ Usando sesión abierta existente:",
+            response.sesion.id
+          );
+          return response.sesion.id;
+        }
+      } catch (error) {
+        console.warn("⚠️ No se pudo verificar sesión abierta:", error.message);
+      }
+
+      // ✅ SEGUNDO: Buscar sesiones existentes del mismo vendedor
+      try {
+        const vendedorId = session.vendedor_id;
+        const response = await fetchConToken(
+          `sesiones-caja/vendedor/${vendedorId}?limite=10`
+        );
+
+        if (response && response.sesiones) {
+          // Buscar sesión con fecha similar
+          const sesionSimilar = response.sesiones.find((s) => {
+            const fechaLocal = new Date(session.fecha_apertura).toDateString();
+            const fechaServer = new Date(s.fecha_apertura).toDateString();
+            return fechaLocal === fechaServer && s.vendedor_id === vendedorId;
+          });
+
+          if (sesionSimilar) {
+            console.log("✅ Sesión similar encontrada:", sesionSimilar.id);
+            return sesionSimilar.id;
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "⚠️ No se pudieron buscar sesiones existentes:",
+          error.message
+        );
+      }
+
+      // ✅ TERCERO: Si no hay sesiones, usar una sesión genérica o crear cierre directo
+      console.warn(
+        "⚠️ No se pudo obtener ID de sesión servidor, usando estrategia alternativa"
+      );
+      return await this.obtenerSesionParaCierre(session);
+    } catch (error) {
+      console.error("❌ Error obteniendo ID servidor:", error);
+      // Fallback final
+      return await this.crearSesionEmergencia(session);
+    }
+  }
+
+  // ✅ NUEVO MÉTODO: Obtener sesión para cierre sin crear duplicados
+  async obtenerSesionParaCierre(session) {
+    try {
+      // Intentar usar la última sesión cerrada del vendedor
+      const vendedorId = session.vendedor_id;
+      const response = await fetchConToken(
+        `sesiones-caja/vendedor/${vendedorId}?limite=5&estado=cerrada`
       );
 
+      if (response && response.sesiones && response.sesiones.length > 0) {
+        const ultimaSesion = response.sesiones[0]; // Más reciente primero
+        console.log("✅ Usando última sesión cerrada:", ultimaSesion.id);
+        return ultimaSesion.id;
+      }
+
+      // Si no hay sesiones, crear una específica para cierres
+      return await this.crearSesionParaCierre(session);
+    } catch (error) {
+      console.error("❌ Error en obtenerSesionParaCierre:", error);
+      return await this.crearSesionEmergencia(session);
+    }
+  }
+
+  // ✅ NUEVO MÉTODO: Crear sesión específica para cierres
+  async crearSesionParaCierre(session) {
+    try {
       const AuthOfflineController = await import(
         "../AuthOfflineController/AuthOfflineController.js"
       );
@@ -382,10 +571,11 @@ class SyncController extends BaseOfflineController {
       const sessionData = {
         vendedor_id: session.vendedor_id || currentVendedorId,
         saldo_inicial: session.saldo_inicial || 0,
-        observaciones: `Sesión recreada para cierre offline ${session.id_local}`,
+        observaciones: `Sesión automática para cierre offline - ${session.id_local}`,
         vendedor_nombre: session.vendedor_nombre || "Sistema Offline",
       };
 
+      console.log("🆘 Creando sesión para cierre offline...");
       const response = await fetchConToken(
         "sesiones-caja/abrir",
         sessionData,
@@ -394,30 +584,98 @@ class SyncController extends BaseOfflineController {
 
       if (response?.ok && response.sesion) {
         const serverSessionId = response.sesion.id;
-        console.log(`✅ Sesión recreada en servidor: ${serverSessionId}`);
+        console.log(`✅ Sesión creada para cierre: ${serverSessionId}`);
 
-        // ✅ CERRAR INMEDIATAMENTE (sesión cerrada)
-        await fetchConToken(
-          `sesiones-caja/cerrar/${serverSessionId}`,
-          {
-            saldo_final: session.saldo_final || session.saldo_inicial || 0,
-            observaciones:
-              "Sesión cerrada para sincronización de cierre offline",
-          },
-          "PUT"
-        );
+        // ✅ CERRAR INMEDIATAMENTE la sesión recién creada
+        try {
+          await fetchConToken(
+            `sesiones-caja/cerrar/${serverSessionId}`,
+            {
+              saldo_final:
+                session.saldo_final_real || session.saldo_inicial || 0,
+              observaciones:
+                "Sesión cerrada automáticamente para cierre offline",
+            },
+            "PUT"
+          );
+          console.log(`✅ Sesión ${serverSessionId} cerrada para cierre`);
+        } catch (closeError) {
+          console.warn(
+            "⚠️ No se pudo cerrar la sesión, pero se usará para el cierre:",
+            closeError.message
+          );
+        }
 
         return serverSessionId;
       } else {
-        throw new Error("No se pudo crear sesión en servidor");
+        throw new Error(
+          response?.error || "No se pudo crear sesión para cierre"
+        );
       }
     } catch (error) {
-      console.error("❌ Error obteniendo ID servidor:", error);
+      console.error("❌ Error creando sesión para cierre:", error);
       throw error;
     }
   }
 
+  // ✅ REEMPLAZAR verificarCierreExistenteMejorado
+  async verificarCierreExistenteMejorado(closure, sesionServerId) {
+    try {
+      console.log(
+        `🔍 Verificando cierre existente para sesión: ${sesionServerId}`
+      );
+
+      // ✅ ESTRATEGIA 1: Buscar en todos los cierres y filtrar
+      const response = await fetchConToken("cierres?limite=100");
+
+      if (response && response.ok && response.cierres) {
+        // Buscar cierre que coincida con la sesión
+        const cierreExistente = response.cierres.find((c) => {
+          // Coincidencia exacta por sesión
+          if (c.sesion_caja_id !== sesionServerId) return false;
+
+          // Verificar fechas similares (mismo día)
+          const fechaCierreLocal = new Date(
+            closure.fecha_cierre || closure.fecha_creacion || new Date()
+          );
+          const fechaCierreServer = new Date(c.fecha_cierre);
+
+          const mismoDia =
+            fechaCierreLocal.toDateString() ===
+            fechaCierreServer.toDateString();
+
+          // Verificar montos similares (tolerancia 1%)
+          const montosSimilares =
+            Math.abs(c.total_ventas - (closure.total_ventas || 0)) /
+              (closure.total_ventas || 1) <
+            0.01;
+
+          console.log(`📊 Comparando cierres:`, {
+            sesion_coincide: c.sesion_caja_id === sesionServerId,
+            mismo_dia: mismoDia,
+            montos_similares: montosSimilares,
+            local: closure.total_ventas,
+            server: c.total_ventas,
+          });
+
+          return mismoDia && montosSimilares;
+        });
+
+        if (cierreExistente) {
+          console.log(`✅ Cierre existente encontrado: ${cierreExistente.id}`);
+          return cierreExistente;
+        }
+      }
+
+      console.log("ℹ️ No se encontró cierre existente");
+      return null;
+    } catch (error) {
+      console.error("❌ Error verificando cierre existente:", error);
+      return null;
+    }
+  }
   // ✅ SINCRONIZAR CIERRES PENDIENTES
+  // En SyncController - syncPendingClosures() - VERSIÓN CORREGIDA
   async syncPendingClosures() {
     try {
       const pendingClosures =
@@ -443,6 +701,8 @@ class SyncController extends BaseOfflineController {
       const sessionMappings = await this.getSessionMappings();
 
       for (const closure of pendingClosures) {
+        let shouldContinue = false; // ✅ BANDERA PARA REEMPLAZAR CONTINUE
+
         try {
           console.log(`🔄 Procesando cierre local: ${closure.id_local}`);
 
@@ -458,8 +718,11 @@ class SyncController extends BaseOfflineController {
             );
           }
 
-          // Verificar si ya existe en servidor
-          const existingClosure = await this.verificarCierreExistente(closure);
+          // ✅ VERIFICAR SI YA EXISTE EN SERVIDOR (SIN CONTINUE)
+          const existingClosure = await this.verificarCierreExistente(
+            closure,
+            sesionServerId
+          );
           if (existingClosure) {
             console.log(
               `✅ Cierre ya existe en servidor: ${existingClosure.id}`
@@ -469,10 +732,15 @@ class SyncController extends BaseOfflineController {
               existingClosure
             );
             resultados.success++;
-            continue;
+            shouldContinue = true; // ✅ MARCAR PARA SALTAR AL SIGUIENTE
           }
 
-          // Crear cierre en servidor
+          // ✅ SI DEBE CONTINUAR, SALTA A LA SIGUIENTE ITERACIÓN
+          if (shouldContinue) {
+            continue; // ✅ AHORA SÍ PUEDE USARSE CONTINUE FUERA DEL BLOQUE TRY INTERNO
+          }
+
+          // ✅ CREAR CIERRE EN SERVIDOR (SOLO SI NO EXISTE)
           const cierreData = {
             sesion_caja_id: sesionServerId,
             total_ventas: closure.total_ventas || 0,

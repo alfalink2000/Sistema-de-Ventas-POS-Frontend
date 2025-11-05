@@ -1,6 +1,7 @@
 // src/controllers/offline/ProductsOfflineController/ProductsOfflineController.js
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
 import IndexedDBService from "../../../services/IndexedDBService";
+import ImageDownloadManager from "../../../utils/ImageDownloadManager";
 import { fetchConToken } from "../../../helpers/fetch";
 
 class ProductsOfflineController extends BaseOfflineController {
@@ -9,6 +10,7 @@ class ProductsOfflineController extends BaseOfflineController {
     this.storeName = "productos_pendientes";
     this.cacheStore = "productos";
   }
+
   // En ProductsOfflineController.js - AGREGAR método de sincronización forzada
   async forceProductsSync() {
     try {
@@ -2199,6 +2201,66 @@ class ProductsOfflineController extends BaseOfflineController {
       console.error("❌ Error obteniendo estadísticas:", error);
       return { total: 0, crear: 0, actualizar: 0, eliminar: 0 };
     }
+  }
+  async forceProductsSyncWithImageDownload() {
+    try {
+      console.log(
+        "🔄 ProductsOfflineController: Sincronizando productos + DESCARGANDO imágenes desde i.ibb.co..."
+      );
+
+      // 1. Obtener productos del servidor
+      const products = await this.fetchProductsFromServer();
+      if (!products || products.length === 0) {
+        throw new Error("No se pudieron obtener productos del servidor");
+      }
+
+      console.log(
+        `📥 Encontrados ${products.length} productos para sincronizar`
+      );
+
+      // 2. ✅ DESCARGAR IMÁGENES A LOCAL desde i.ibb.co
+      const productsWithLocalImages =
+        await ImageDownloadManager.downloadAllProductImages(products);
+
+      // 3. Guardar en IndexedDB
+      await this.saveProductsToIndexedDB(productsWithLocalImages);
+
+      // 4. Verificar uso de almacenamiento
+      const storage = await ImageDownloadManager.getLocalStorageUsage();
+      console.log("💾 Uso de almacenamiento:", storage);
+
+      const imagesDownloaded = productsWithLocalImages.filter(
+        (p) => p.hasLocalImage
+      ).length;
+
+      return {
+        success: true,
+        productsCount: products.length,
+        imagesDownloaded: imagesDownloaded,
+        imagesPercentage: Math.round(
+          (imagesDownloaded / products.length) * 100
+        ),
+        storageInfo: storage,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ Error en sincronización con imágenes:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  // ✅ MÉTODO PARA OBTENER IMAGEN (local o externa)
+  async getProductImage(product) {
+    // Priorizar imagen local
+    if (product.localImage) {
+      return product.localImage;
+    }
+
+    // Fallback a URL externa de i.ibb.co
+    return product.image || product.imagen || product.img;
   }
 }
 

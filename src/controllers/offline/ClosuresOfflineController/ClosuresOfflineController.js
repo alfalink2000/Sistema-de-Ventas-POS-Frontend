@@ -13,6 +13,21 @@ class ClosuresOfflineController extends BaseOfflineController {
   // ✅ CREAR CIERRE OFFLINE
   async createClosure(closureData) {
     try {
+      // ✅ VERIFICAR SI YA EXISTE UN CIERRE PARA ESTA SESIÓN
+      const existingClosure = await this.getClosureBySession(
+        closureData.sesion_caja_id
+      );
+      if (existingClosure) {
+        console.warn(
+          "⚠️ Ya existe un cierre para esta sesión:",
+          existingClosure.id_local
+        );
+        return {
+          success: false,
+          error: "Ya existe un cierre para esta sesión",
+          existingClosure: existingClosure,
+        };
+      }
       await this.validateRequiredFields(closureData, [
         "sesion_caja_id",
         "saldo_final_real",
@@ -36,7 +51,7 @@ class ClosuresOfflineController extends BaseOfflineController {
         estado: "completado",
       };
 
-      await IndexedDBService.add(this.storeName, cierreCompleto);
+      await IndexedDBService.put(this.storeName, cierreCompleto);
 
       console.log("✅ Cierre offline creado:", localId);
 

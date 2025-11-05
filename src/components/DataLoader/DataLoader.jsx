@@ -11,6 +11,7 @@ import { loadInventory } from "../../actions/inventoryActions";
 import { loadTodayClosure } from "../../actions/closuresActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
 import LoadingSpinner from "../ui/LoadingSpinner/LoadingSpinner";
+import ImageDownloadManager from "../../utils/ImageDownloadManager";
 import styles from "./DataLoader.module.css";
 
 import {
@@ -46,30 +47,68 @@ const DataLoader = ({
   const loadAttemptedRef = useRef(false);
 
   // ✅ NUEVA FUNCIÓN: SINCRONIZACIÓN FORZADA DE PRODUCTOS
+  // const syncProductsData = async () => {
+  //   try {
+  //     console.log("🔄 DataLoader: Sincronizando datos de productos...");
+
+  //     if (navigator.onLine) {
+  //       // ✅ FORZAR SINCRONIZACIÓN DE PRODUCTOS
+  //       const syncResult = await ProductsOfflineController.forceProductsSync();
+
+  //       if (syncResult.success) {
+  //         console.log("✅ DataLoader: Productos sincronizados correctamente");
+  //         // Recargar productos en Redux
+  //         await dispatch(loadProductsIfNeeded());
+  //       } else {
+  //         console.warn(
+  //           "⚠️ DataLoader: No se pudieron sincronizar productos:",
+  //           syncResult.error
+  //         );
+  //       }
+
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ DataLoader: Error sincronizando productos:", error);
+  //   }
+  // };
+  // ✅ FUNCIÓN ACTUALIZADA: SINCRONIZACIÓN CON DESCARGA DE IMÁGENES
   const syncProductsData = async () => {
     try {
       console.log("🔄 DataLoader: Sincronizando datos de productos...");
 
       if (navigator.onLine) {
-        // ✅ FORZAR SINCRONIZACIÓN DE PRODUCTOS
-        const syncResult = await ProductsOfflineController.forceProductsSync();
+        // ✅ FORZAR SINCRONIZACIÓN DE PRODUCTOS CON DESCARGAR IMÁGENES
+        const syncResult =
+          await ProductsOfflineController.forceProductsSyncWithImageDownload();
 
         if (syncResult.success) {
           console.log("✅ DataLoader: Productos sincronizados correctamente");
+          console.log(
+            `📦 ${syncResult.imagesDownloaded} imágenes descargadas localmente`
+          );
+
           // Recargar productos en Redux
           await dispatch(loadProductsIfNeeded());
+
+          // Disparar evento de sincronización completada
+          window.dispatchEvent(
+            new CustomEvent("products_sync_complete", {
+              detail: syncResult,
+            })
+          );
         } else {
           console.warn(
             "⚠️ DataLoader: No se pudieron sincronizar productos:",
             syncResult.error
           );
         }
+      } else {
+        console.log("📱 DataLoader: Modo offline - usando datos locales");
       }
     } catch (error) {
       console.error("❌ DataLoader: Error sincronizando productos:", error);
     }
   };
-
   // ✅ CARGA ESENCIAL DE DATOS - VERSIÓN MEJORADA
   useEffect(() => {
     const shouldLoadData =
