@@ -575,7 +575,8 @@ class ProductsOfflineController extends BaseOfflineController {
     try {
       console.log("🔄 Sincronizando productos con servidor...");
 
-      const apiUrl = window.API_URL || "http://localhost:3000/api";
+      const apiUrl =
+        process.env.REACT_APP_API_URL || "http://localhost:3000/api";
       const response = await fetch(`${apiUrl}/productos`, {
         headers: {
           "x-token": localStorage.getItem("token"),
@@ -1917,7 +1918,8 @@ class ProductsOfflineController extends BaseOfflineController {
         return false;
       }
 
-      const API_URL = "http://localhost:3000/api";
+      const API_URL =
+        process.env.REACT_APP_API_URL || "http://localhost:3000/api";
       const url = `${API_URL}/productos/${productoId}`;
       console.log(`🌐 URL de verificación: ${url}`);
 
@@ -1974,7 +1976,8 @@ class ProductsOfflineController extends BaseOfflineController {
       // PASO 4: Intentar eliminación directa
       console.log("4. 🗑️ INTENTANDO ELIMINACIÓN DIRECTA...");
       if (steps.backendId && steps.exists) {
-        const API_URL = "http://localhost:3000/api";
+        const API_URL =
+          process.env.REACT_APP_API_URL || "http://localhost:3000/api";
         const url = `${API_URL}/productos/${steps.backendId}`;
         console.log("🌐 URL:", url);
 
