@@ -1,4 +1,4 @@
-// components/layout/Sidebar/Sidebar.jsx - CON BOTÓN DE SALIR
+// components/layout/Sidebar/Sidebar.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { startLogout } from "../../../actions/authActions";
@@ -14,6 +14,8 @@ import {
   FiShield,
   FiUsers,
   FiLogOut,
+  FiLock,
+  FiAlertTriangle,
 } from "react-icons/fi";
 import styles from "./Sidebar.module.css";
 
@@ -25,10 +27,16 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
     { path: "/dashboard", label: "Dashboard", icon: FiHome },
     { path: "/sales", label: "Punto de Venta", icon: FiShoppingCart },
     { path: "/products", label: "Productos", icon: FiPackage },
-    { path: "/inventory", label: "Inventario", icon: FiTrendingUp },
+    {
+      path: "/inventory",
+      label: "Inventario",
+      icon: FiTrendingUp,
+      disabled: true, // ✅ SOLO INVENTORY DESHABILITADO
+      badge: "Próximamente",
+    },
     { path: "/caja", label: "Caja", icon: FiDollarSign },
     { path: "/reports", label: "Reportes", icon: FiBarChart2 },
-    { path: "/users", label: "Usuarios", icon: FiUsers },
+    { path: "/users", label: "Usuarios", icon: FiUsers }, // ✅ USERS HABILITADO
   ];
 
   useEffect(() => {
@@ -37,7 +45,13 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
 
   const isActive = (path) => currentPath === path;
 
-  const handleNavigation = (path) => {
+  const handleNavigation = (path, disabled = false) => {
+    // ✅ BLOQUEAR NAVEGACIÓN SOLO SI ESTÁ DESHABILITADO
+    if (disabled) {
+      console.warn("🚫 Navegación bloqueada - Módulo en desarrollo:", path);
+      return;
+    }
+
     setCurrentPath(path);
     if (onNavigation) {
       onNavigation(path);
@@ -73,25 +87,51 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
       <nav className={styles.sidebarNav}>
         {menuItems.map((item) => {
           const IconComponent = item.icon;
+          const isDisabled = item.disabled || false;
+
           return (
             <button
               key={item.path}
               className={`${styles.navItem} ${
                 isActive(item.path) ? styles.active : ""
-              }`}
-              onClick={() => handleNavigation(item.path)}
+              } ${isDisabled ? styles.disabled : ""}`}
+              onClick={() => handleNavigation(item.path, isDisabled)}
+              disabled={isDisabled}
+              title={
+                isDisabled ? "Módulo en desarrollo - Próximamente" : item.label
+              }
             >
               <div className={styles.navIconWrapper}>
                 <IconComponent className={styles.navIcon} />
+                {isDisabled && <FiLock className={styles.lockIcon} />}
               </div>
               <span className={styles.navLabel}>{item.label}</span>
-              {isActive(item.path) && (
+
+              {/* ✅ BADGE SOLO PARA MÓDULOS EN DESARROLLO */}
+              {item.badge && (
+                <span className={styles.developmentBadge}>{item.badge}</span>
+              )}
+
+              {isActive(item.path) && !isDisabled && (
                 <div className={styles.activeIndicator} />
               )}
             </button>
           );
         })}
       </nav>
+
+      {/* ✅ INFORMACIÓN DE MÓDULOS NO DISPONIBLES (solo si hay algún módulo deshabilitado) */}
+      {menuItems.some((item) => item.disabled) && (
+        <div className={styles.modulesInfo}>
+          <div className={styles.infoCard}>
+            <FiAlertTriangle className={styles.infoIcon} />
+            <div className={styles.infoContent}>
+              <strong>Módulos en Desarrollo</strong>
+              <p>Algunas funciones estarán disponibles próximamente</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ✅ BOTÓN DE SALIR EN EL SIDEBAR */}
       <div className={styles.sidebarFooter}>

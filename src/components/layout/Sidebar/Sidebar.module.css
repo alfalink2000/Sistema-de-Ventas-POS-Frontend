@@ -282,9 +282,9 @@
   gap: 0.75rem;
   width: 100%;
   padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.5);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fecaca;
+  color: #f7e3e3;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -292,8 +292,8 @@
 }
 
 .logoutButton:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(231, 32, 32, 0.555);
+  border-color: rgba(240, 39, 39, 0.5);
   color: #ffffff;
 }
 
@@ -351,4 +351,80 @@
   .navLabel {
     font-size: 1rem;
   }
+}
+/* Sidebar.module.css - AGREGAR ESTOS ESTILOS */
+
+/* ✅ ESTILOS PARA ELEMENTOS DESHABILITADOS */
+.navItem.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.navItem.disabled .navIcon {
+  color: #9ca3af !important;
+}
+
+.navItem.disabled .navLabel {
+  color: #9ca3af !important;
+}
+
+/* ✅ ICONO DE CANDADO PARA DESHABILITADOS */
+.lockIcon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+/* ✅ BADGE DE DESARROLLO */
+.developmentBadge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: auto;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* ✅ TARJETA INFORMATIVA */
+.modulesInfo {
+  margin: 16px;
+  padding: 12px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+}
+
+.infoCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.infoIcon {
+  color: #d97706;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.infoContent {
+  flex: 1;
+}
+
+.infoContent strong {
+  color: #92400e;
+  font-size: 12px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.infoContent p {
+  color: #92400e;
+  font-size: 11px;
+  margin: 0;
+  line-height: 1.3;
 }
