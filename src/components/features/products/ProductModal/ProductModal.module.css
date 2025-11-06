@@ -578,3 +578,50 @@
   margin-right: 0.5rem;
   font-size: 0.875rem;
 }
+/* ✅ ESTILOS PARA VALIDACIONES MEJORADAS */
+.errorIcon {
+  color: #e53e3e;
+  margin-left: 5px;
+  font-size: 14px;
+}
+
+.disabled {
+  background-color: #f7fafc !important;
+  color: #a0aec0 !important;
+  cursor: not-allowed !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* ✅ MEJORAR VISUALIZACIÓN DE ERRORES */
+.error {
+  border-color: #e53e3e !important;
+  background-color: #fed7d7 !important;
+}
+
+.errorText {
+  color: #e53e3e;
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ✅ ESTILO PARA SWAL PERSONALIZADO */
+.custom-swal-popup {
+  font-family: "Inter", sans-serif;
+}
+
+.custom-swal-popup .swal2-title {
+  color: #e53e3e;
+  font-weight: 600;
+}
+
+.custom-swal-popup ul {
+  margin: 10px 0;
+}
+
+.custom-swal-popup li {
+  margin: 5px 0;
+  color: #4a5568;
+}
