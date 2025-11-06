@@ -967,3 +967,117 @@
   background: #cbd5e1;
   transform: none;
 }
+/* ✅ BOTÓN DE EXPORTACIÓN INDIVIDUAL */
+.actionsCell {
+  text-align: center;
+  min-width: 100px;
+}
+
+.individualExportButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.individualExportButton:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* ✅ BOTÓN EXPORTAR TODOS MEJORADO */
+.exportButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.exportButton:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.exportIcon {
+  font-size: 1rem;
+}
+
+.offlineExportIcon {
+  margin-left: 6px;
+  color: #f59e0b;
+}
+
+/* ✅ BADGE PENDIENTE MEJORADO */
+.pendingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
+.pendingSyncBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #dc2626;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.pendingSyncInfo {
+  font-size: 0.8rem;
+  margin: 4px 0 0 0;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* ✅ INDICADOR DE VISIBILIDAD ADMIN */
+.adminVisibilityIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.visibleIcon {
+  color: #10b981;
+}
+
+.hiddenIcon {
+  color: #6b7280;
+}

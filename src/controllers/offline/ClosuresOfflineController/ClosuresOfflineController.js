@@ -17,6 +17,7 @@ class ClosuresOfflineController extends BaseOfflineController {
       const existingClosure = await this.getClosureBySession(
         closureData.sesion_caja_id
       );
+
       if (existingClosure) {
         console.warn(
           "⚠️ Ya existe un cierre para esta sesión:",

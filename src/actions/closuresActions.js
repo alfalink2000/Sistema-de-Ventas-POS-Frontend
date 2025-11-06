@@ -6,22 +6,120 @@ import IndexedDBService from "../services/IndexedDBService";
 import ClosuresOfflineController from "../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
 import SyncController from "../controllers/offline/SyncController/SyncController";
 
+// export const loadClosures = (limite = 100, pagina = 1) => {
+//   return async (dispatch) => {
+//     dispatch({ type: types.closuresStartLoading });
+
+//     try {
+//       console.log(`🔄 [CLOSURES] Cargando cierres...`);
+
+//       let cierres = [];
+
+//       if (navigator.onLine) {
+//         // Si hay conexión, cargar desde API
+//         const response = await fetchConToken(
+//           `cierres?limite=${limite}&pagina=${pagina}`
+//         );
+
+//         console.log("📦 [CLOSURES] Respuesta:", {
+//           ok: response?.ok,
+//           cantidad: response?.cierres?.length || 0,
+//         });
+
+//         if (response && response.ok === true) {
+//           cierres = response.cierres || [];
+
+//           // Guardar en IndexedDB para offline
+//           await IndexedDBService.clear("cierres");
+//           for (const cierre of cierres) {
+//             await IndexedDBService.add("cierres", cierre);
+//           }
+//         } else {
+//           console.warn("⚠️ [CLOSURES] Respuesta no exitosa desde API");
+//         }
+//       } else {
+//         // Si no hay conexión, cargar desde IndexedDB
+//         cierres = await IndexedDBService.getAll("cierres");
+//         console.log(
+//           `📱 [CLOSURES] ${cierres.length} cierres cargados desde almacenamiento local`
+//         );
+//       }
+
+//       // ✅ ENRIQUECER DATOS PARA EL FRONTEND
+//       const cierresEnriquecidos = cierres.map((cierre) => ({
+//         ...cierre,
+//         estado_diferencia:
+//           cierre.diferencia === 0
+//             ? "exacto"
+//             : cierre.diferencia > 0
+//             ? "sobrante"
+//             : "faltante",
+//         diferencia_absoluta: Math.abs(cierre.diferencia || 0),
+//         eficiencia:
+//           cierre.total_ventas > 0
+//             ? ((cierre.ganancia_bruta / cierre.total_ventas) * 100).toFixed(1) +
+//               "%"
+//             : "0%",
+//       }));
+
+//       // ✅ ORDENAR POR FECHA DE CIERRE (MÁS RECIENTE PRIMERO)
+//       const cierresOrdenados = cierresEnriquecidos.sort((a, b) => {
+//         return new Date(b.fecha_cierre) - new Date(a.fecha_cierre);
+//       });
+
+//       console.log(
+//         `✅ [CLOSURES] ${cierresOrdenados.length} cierres cargados y ordenados`
+//       );
+
+//       dispatch({
+//         type: types.closuresLoad,
+//         payload: cierresOrdenados,
+//       });
+
+//       return cierresOrdenados;
+//     } catch (error) {
+//       console.error("❌ [CLOSURES] Error cargando cierres:", error);
+
+//       // En caso de error, intentar cargar desde local
+//       try {
+//         const cierresLocal = await IndexedDBService.getAll("cierres");
+//         dispatch({
+//           type: types.closuresLoad,
+//           payload: cierresLocal || [],
+//         });
+//         return cierresLocal || [];
+//       } catch (localError) {
+//         dispatch({
+//           type: types.closuresLoad,
+//           payload: [],
+//         });
+//         return [];
+//       }
+//     } finally {
+//       dispatch({ type: types.closuresFinishLoading });
+//     }
+//   };
+// };
 export const loadClosures = (limite = 100, pagina = 1) => {
   return async (dispatch) => {
     dispatch({ type: types.closuresStartLoading });
 
     try {
-      console.log(`🔄 [CLOSURES] Cargando cierres...`);
+      console.log(`🔄 [CLOSURES] Cargando cierres...`, {
+        online: navigator.onLine,
+        limite,
+        pagina,
+      });
 
       let cierres = [];
 
       if (navigator.onLine) {
-        // Si hay conexión, cargar desde API
+        // ✅ MODO ONLINE - desde API
         const response = await fetchConToken(
           `cierres?limite=${limite}&pagina=${pagina}`
         );
 
-        console.log("📦 [CLOSURES] Respuesta:", {
+        console.log("📦 [CLOSURES] Respuesta API:", {
           ok: response?.ok,
           cantidad: response?.cierres?.length || 0,
         });
@@ -38,11 +136,42 @@ export const loadClosures = (limite = 100, pagina = 1) => {
           console.warn("⚠️ [CLOSURES] Respuesta no exitosa desde API");
         }
       } else {
-        // Si no hay conexión, cargar desde IndexedDB
-        cierres = await IndexedDBService.getAll("cierres");
-        console.log(
-          `📱 [CLOSURES] ${cierres.length} cierres cargados desde almacenamiento local`
-        );
+        // ✅ MODO OFFLINE - CORREGIDO: BUSCAR EN AMBOS STORES
+        console.log("📱 [CLOSURES] Modo OFFLINE - Buscando en IndexedDB...");
+
+        try {
+          // ✅ BUSCAR EN "cierres" (sincronizados) Y "cierres_pendientes" (offline)
+          const [cierresStore, cierresPendientes] = await Promise.all([
+            IndexedDBService.getAll("cierres"),
+            IndexedDBService.getAll("cierres_pendientes"),
+          ]);
+
+          console.log(`📱 [CLOSURES] IndexedDB respondió:`, {
+            cierres_sincronizados: cierresStore.length,
+            cierres_pendientes: cierresPendientes.length,
+            total: cierresStore.length + cierresPendientes.length,
+          });
+
+          // ✅ COMBINAR Y TRANSFORMAR LOS DATOS
+          cierres = [
+            ...cierresStore, // Cierres ya sincronizados
+            ...cierresPendientes.map((cierre) => ({
+              ...cierre,
+              // ✅ MARCAR COMO OFFLINE Y AGREGAR IDENTIFICADORES
+              es_local: true,
+              origen: "offline",
+              // ✅ USAR id_local COMO ID PRINCIPAL SI NO HAY id
+              id: cierre.id || cierre.id_local,
+              // ✅ ASEGURAR FORMATO CONSISTENTE
+              fecha_cierre: cierre.fecha_cierre || new Date().toISOString(),
+              vendedor_nombre: cierre.vendedor_nombre || "Vendedor Offline",
+            })),
+          ];
+
+          console.log(`📱 [CLOSURES] ${cierres.length} cierres combinados`);
+        } catch (dbError) {
+          console.error("❌ [CLOSURES] Error accediendo a IndexedDB:", dbError);
+        }
       }
 
       // ✅ ENRIQUECER DATOS PARA EL FRONTEND
@@ -60,6 +189,10 @@ export const loadClosures = (limite = 100, pagina = 1) => {
             ? ((cierre.ganancia_bruta / cierre.total_ventas) * 100).toFixed(1) +
               "%"
             : "0%",
+        // ✅ IDENTIFICADOR ÚNICO MEJORADO
+        uniqueId: cierre.id || cierre.id_local || `local_${Date.now()}`,
+        // ✅ ORIGEN CLARO
+        origen: cierre.origen || (cierre.es_local ? "offline" : "online"),
       }));
 
       // ✅ ORDENAR POR FECHA DE CIERRE (MÁS RECIENTE PRIMERO)
@@ -68,7 +201,13 @@ export const loadClosures = (limite = 100, pagina = 1) => {
       });
 
       console.log(
-        `✅ [CLOSURES] ${cierresOrdenados.length} cierres cargados y ordenados`
+        `✅ [CLOSURES] ${cierresOrdenados.length} cierres cargados y ordenados`,
+        cierresOrdenados.map((c) => ({
+          id: c.id,
+          id_local: c.id_local,
+          origen: c.origen,
+          fecha: c.fecha_cierre,
+        }))
       );
 
       dispatch({
@@ -82,13 +221,28 @@ export const loadClosures = (limite = 100, pagina = 1) => {
 
       // En caso de error, intentar cargar desde local
       try {
-        const cierresLocal = await IndexedDBService.getAll("cierres");
+        console.log("🔄 [CLOSURES] Intentando recuperación local...");
+        const [cierresLocal, cierresPendientes] = await Promise.all([
+          IndexedDBService.getAll("cierres"),
+          IndexedDBService.getAll("cierres_pendientes"),
+        ]);
+
+        const cierresCombinados = [
+          ...cierresLocal,
+          ...cierresPendientes.map((c) => ({
+            ...c,
+            es_local: true,
+            origen: "offline",
+          })),
+        ];
+
         dispatch({
           type: types.closuresLoad,
-          payload: cierresLocal || [],
+          payload: cierresCombinados || [],
         });
-        return cierresLocal || [];
+        return cierresCombinados || [];
       } catch (localError) {
+        console.error("❌ [CLOSURES] Error en recuperación local:", localError);
         dispatch({
           type: types.closuresLoad,
           payload: [],
@@ -100,7 +254,50 @@ export const loadClosures = (limite = 100, pagina = 1) => {
     }
   };
 };
+// En closuresActions.js - AGREGAR ESTE MÉTODO
+export const loadOfflineClosures = () => {
+  return async (dispatch) => {
+    try {
+      console.log("🔄 [CLOSURES] Cargando específicamente cierres offline...");
 
+      const [cierresPendientes, cierresSincronizados] = await Promise.all([
+        IndexedDBService.getAll("cierres_pendientes"),
+        IndexedDBService.getAll("cierres"),
+      ]);
+
+      console.log("📊 [CLOSURES] Resultados carga offline:", {
+        pendientes: cierresPendientes.length,
+        sincronizados: cierresSincronizados.length,
+      });
+
+      // Combinar y enriquecer
+      const cierresOffline = [
+        ...cierresPendientes.map((c) => ({
+          ...c,
+          es_local: true,
+          origen: "offline_pendiente",
+          id: c.id_local, // Usar id_local como identificador principal
+          sincronizado: false,
+        })),
+        ...cierresSincronizados.map((c) => ({
+          ...c,
+          origen: "online_sincronizado",
+          sincronizado: true,
+        })),
+      ];
+
+      dispatch({
+        type: types.closuresLoad,
+        payload: cierresOffline,
+      });
+
+      return cierresOffline;
+    } catch (error) {
+      console.error("❌ [CLOSURES] Error cargando cierres offline:", error);
+      return [];
+    }
+  };
+};
 // Cargar cierre del día actual
 export const loadTodayClosure = () => {
   return async (dispatch) => {

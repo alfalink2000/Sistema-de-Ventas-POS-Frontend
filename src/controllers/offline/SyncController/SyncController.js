@@ -19,66 +19,97 @@ class SyncController extends BaseOfflineController {
 
   // ✅ SINCRONIZACIÓN COMPLETA MEJORADA - SIN VENTAS
   // ✅ MODIFICAR fullSync PARA INCLUIR SINCRONIZACIÓN DE PRODUCTOS
+  // async fullSync() {
+  //   if (!this.isOnline) {
+  //     return { success: false, error: "Sin conexión a internet", silent: true };
+  //   }
+
+  //   this.isSyncing = true;
+  //   this.notifyListeners("sync_start");
+
+  //   const syncResults = {
+  //     startTime: Date.now(),
+  //     steps: {},
+  //     errors: [],
+  //     idMappings: {},
+  //     strategy: "completa_con_productos",
+  //   };
+
+  //   try {
+  //     console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA CON PRODUCTOS");
+
+  //     // ✅ PASO 1: SINCRONIZAR PRODUCTOS E INVENTARIO PRIMERO
+  //     console.log("📦 SINCRONIZANDO PRODUCTOS E INVENTARIO...");
+  //     syncResults.steps.productos = await this.syncProductsAndInventory();
+
+  //     // ✅ PASO 2: Limpiar ventas pendientes
+  //     console.log("🧹 LIMPIANDO VENTAS PENDIENTES...");
+  //     syncResults.steps.cleanup = await this.limpiarVentasPendientes();
+
+  //     // ✅ PASO 3: Sincronizar sesiones cerradas
+  //     console.log("📝 SINCRONIZANDO SESIONES CERRADAS...");
+  //     syncResults.steps.sessions = await this.syncOnlyClosedSessions();
+
+  //     // ✅ PASO 4: Sincronizar cierres pendientes
+  //     console.log("💰 SINCRONIZANDO CIERRES...");
+  //     syncResults.steps.closures = await this.syncPendingClosures();
+
+  //     syncResults.duration = Date.now() - syncResults.startTime;
+  //     syncResults.success =
+  //       syncResults.steps.productos?.success &&
+  //       (syncResults.steps.sessions?.success > 0 ||
+  //         syncResults.steps.closures?.success > 0);
+
+  //     // Guardar timestamp de última sincronización exitosa
+  //     if (syncResults.success) {
+  //       localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
+
+  //       // ✅ FORZAR ACTUALIZACIÓN DEL STORE DE REDUX
+  //       if (typeof window !== "undefined") {
+  //         window.dispatchEvent(new CustomEvent("force_reload_products"));
+  //       }
+  //     }
+
+  //     console.log("✅ SINCRONIZACIÓN COMPLETA CON PRODUCTOS TERMINADA");
+  //     this.notifyListeners("sync_complete", syncResults);
+  //     return syncResults;
+  //   } catch (error) {
+  //     console.error("❌ ERROR EN SINCRONIZACIÓN:", error);
+  //     syncResults.success = false;
+  //     syncResults.errors.push(error.message);
+  //     this.notifyListeners("sync_error", syncResults);
+  //     return syncResults;
+  //   } finally {
+  //     this.isSyncing = false;
+  //   }
+  // }
+
   async fullSync() {
     if (!this.isOnline) {
       return { success: false, error: "Sin conexión a internet", silent: true };
     }
 
     this.isSyncing = true;
-    this.notifyListeners("sync_start");
-
-    const syncResults = {
-      startTime: Date.now(),
-      steps: {},
-      errors: [],
-      idMappings: {},
-      strategy: "completa_con_productos",
-    };
 
     try {
-      console.log("🔄 INICIANDO SINCRONIZACIÓN COMPLETA CON PRODUCTOS");
+      console.log("🔄 INICIANDO SINCRONIZACIÓN SIMPLIFICADA");
 
-      // ✅ PASO 1: SINCRONIZAR PRODUCTOS E INVENTARIO PRIMERO
-      console.log("📦 SINCRONIZANDO PRODUCTOS E INVENTARIO...");
-      syncResults.steps.productos = await this.syncProductsAndInventory();
+      // ✅ PASO 1: LIMPIAR DUPLICADOS
+      console.log("🧹 LIMPIANDO DUPLICADOS...");
+      await this.limpiarCierresDuplicados();
 
-      // ✅ PASO 2: Limpiar ventas pendientes
-      console.log("🧹 LIMPIANDO VENTAS PENDIENTES...");
-      syncResults.steps.cleanup = await this.limpiarVentasPendientes();
-
-      // ✅ PASO 3: Sincronizar sesiones cerradas
-      console.log("📝 SINCRONIZANDO SESIONES CERRADAS...");
-      syncResults.steps.sessions = await this.syncOnlyClosedSessions();
-
-      // ✅ PASO 4: Sincronizar cierres pendientes
+      // ✅ PASO 2: SINCRONIZAR CIERRES PENDIENTES (VERSIÓN SIMPLIFICADA)
       console.log("💰 SINCRONIZANDO CIERRES...");
-      syncResults.steps.closures = await this.syncPendingClosures();
+      const syncResult = await this.syncPendingClosures();
 
-      syncResults.duration = Date.now() - syncResults.startTime;
-      syncResults.success =
-        syncResults.steps.productos?.success &&
-        (syncResults.steps.sessions?.success > 0 ||
-          syncResults.steps.closures?.success > 0);
-
-      // Guardar timestamp de última sincronización exitosa
-      if (syncResults.success) {
-        localStorage.setItem("lastSuccessfulSync", new Date().toISOString());
-
-        // ✅ FORZAR ACTUALIZACIÓN DEL STORE DE REDUX
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("force_reload_products"));
-        }
-      }
-
-      console.log("✅ SINCRONIZACIÓN COMPLETA CON PRODUCTOS TERMINADA");
-      this.notifyListeners("sync_complete", syncResults);
-      return syncResults;
+      console.log("✅ SINCRONIZACIÓN SIMPLIFICADA COMPLETADA");
+      return {
+        success: syncResult.success > 0,
+        results: syncResult,
+      };
     } catch (error) {
       console.error("❌ ERROR EN SINCRONIZACIÓN:", error);
-      syncResults.success = false;
-      syncResults.errors.push(error.message);
-      this.notifyListeners("sync_error", syncResults);
-      return syncResults;
+      return { success: false, error: error.message };
     } finally {
       this.isSyncing = false;
     }
@@ -121,46 +152,113 @@ class SyncController extends BaseOfflineController {
   }
 
   // ✅ SINCRONIZAR SOLO SESIONES CERRADAS
+  // async syncOnlyClosedSessions() {
+  //   try {
+  //     console.log("🎯 SINCRONIZANDO EXCLUSIVAMENTE SESIONES CERRADAS...");
+
+  //     const pendingSessions =
+  //       await SessionsOfflineController.getPendingSessions();
+
+  //     // ✅ FILTRAR: Solo sesiones CERRADAS
+  //     const closedSessions = pendingSessions.filter(
+  //       (session) => session.estado === "cerrada" && !session.sincronizado
+  //     );
+
+  //     console.log(
+  //       `📊 Sesiones cerradas pendientes: ${closedSessions.length} de ${pendingSessions.length} totales`
+  //     );
+
+  //     const resultados = {
+  //       total: closedSessions.length,
+  //       success: 0,
+  //       failed: 0,
+  //       detalles: [],
+  //       idMappings: {},
+  //       skipped: {
+  //         abiertas: pendingSessions.filter((s) => s.estado === "abierta")
+  //           .length,
+  //         ya_sincronizadas: pendingSessions.filter((s) => s.sincronizado)
+  //           .length,
+  //       },
+  //     };
+
+  //     if (closedSessions.length === 0) {
+  //       console.log("✅ No hay sesiones cerradas pendientes para sincronizar");
+  //       return resultados;
+  //     }
+
+  //     for (const session of closedSessions) {
+  //       try {
+  //         console.log(`🔄 Procesando sesión CERRADA: ${session.id_local}`);
+
+  //         // ✅ CREAR CIERRE EN SERVIDOR PARA ESTA SESIÓN
+  //         const cierreResult = await this.crearCierreParaSesionCerrada(session);
+
+  //         if (cierreResult.success) {
+  //           // ✅ MARCAR SESIÓN COMO SINCRONIZADA
+  //           await SessionsOfflineController.markAsSynced(session.id_local, {
+  //             id: cierreResult.sesion_server_id,
+  //             sincronizado: true,
+  //             fecha_sincronizacion: new Date().toISOString(),
+  //           });
+
+  //           resultados.idMappings[session.id_local] =
+  //             cierreResult.sesion_server_id;
+  //           resultados.success++;
+
+  //           console.log(
+  //             `✅ Sesión cerrada sincronizada: ${session.id_local} -> ${cierreResult.sesion_server_id}`
+  //           );
+  //         } else {
+  //           throw new Error(cierreResult.error);
+  //         }
+  //       } catch (error) {
+  //         console.error(
+  //           `❌ Error en sesión cerrada ${session.id_local}:`,
+  //           error
+  //         );
+  //         resultados.failed++;
+  //         resultados.detalles.push({
+  //           id_local: session.id_local,
+  //           status: "failed",
+  //           error: error.message,
+  //         });
+  //       }
+  //     }
+
+  //     console.log(
+  //       `🎯 RESULTADO SESIONES CERRADAS: ${resultados.success} exitosas, ${resultados.failed} fallidas`
+  //     );
+  //     return resultados;
+  //   } catch (error) {
+  //     console.error("❌ Error en syncOnlyClosedSessions:", error);
+  //     return { total: 0, success: 0, failed: 0, error: error.message };
+  //   }
+  // }
   async syncOnlyClosedSessions() {
     try {
-      console.log("🎯 SINCRONIZANDO EXCLUSIVAMENTE SESIONES CERRADAS...");
+      console.log("🎯 SINCRONIZANDO SESIONES CERRADAS...");
 
       const pendingSessions =
         await SessionsOfflineController.getPendingSessions();
-
-      // ✅ FILTRAR: Solo sesiones CERRADAS
       const closedSessions = pendingSessions.filter(
-        (session) => session.estado === "cerrada" && !session.sincronizado
+        (session) => session.estado === "cerrada"
       );
 
-      console.log(
-        `📊 Sesiones cerradas pendientes: ${closedSessions.length} de ${pendingSessions.length} totales`
-      );
+      console.log(`📊 Sesiones cerradas pendientes: ${closedSessions.length}`);
 
       const resultados = {
         total: closedSessions.length,
         success: 0,
         failed: 0,
         detalles: [],
-        idMappings: {},
-        skipped: {
-          abiertas: pendingSessions.filter((s) => s.estado === "abierta")
-            .length,
-          ya_sincronizadas: pendingSessions.filter((s) => s.sincronizado)
-            .length,
-        },
       };
-
-      if (closedSessions.length === 0) {
-        console.log("✅ No hay sesiones cerradas pendientes para sincronizar");
-        return resultados;
-      }
 
       for (const session of closedSessions) {
         try {
-          console.log(`🔄 Procesando sesión CERRADA: ${session.id_local}`);
+          console.log(`🔄 Procesando sesión cerrada: ${session.id_local}`);
 
-          // ✅ CREAR CIERRE EN SERVIDOR PARA ESTA SESIÓN
+          // ✅ CREAR CIERRE DIRECTAMENTE SIN VERIFICACIONES
           const cierreResult = await this.crearCierreParaSesionCerrada(session);
 
           if (cierreResult.success) {
@@ -168,16 +266,10 @@ class SyncController extends BaseOfflineController {
             await SessionsOfflineController.markAsSynced(session.id_local, {
               id: cierreResult.sesion_server_id,
               sincronizado: true,
-              fecha_sincronizacion: new Date().toISOString(),
             });
 
-            resultados.idMappings[session.id_local] =
-              cierreResult.sesion_server_id;
             resultados.success++;
-
-            console.log(
-              `✅ Sesión cerrada sincronizada: ${session.id_local} -> ${cierreResult.sesion_server_id}`
-            );
+            console.log(`✅ Sesión cerrada sincronizada: ${session.id_local}`);
           } else {
             throw new Error(cierreResult.error);
           }
@@ -196,7 +288,7 @@ class SyncController extends BaseOfflineController {
       }
 
       console.log(
-        `🎯 RESULTADO SESIONES CERRADAS: ${resultados.success} exitosas, ${resultados.failed} fallidas`
+        `🎯 RESULTADO: ${resultados.success} exitosas, ${resultados.failed} fallidas`
       );
       return resultados;
     } catch (error) {
@@ -204,73 +296,154 @@ class SyncController extends BaseOfflineController {
       return { total: 0, success: 0, failed: 0, error: error.message };
     }
   }
+  // En SyncController.js - AGREGAR método de limpieza
+  async limpiarCierresDuplicados() {
+    try {
+      console.log("🧹 Buscando cierres duplicados...");
 
+      const pendingClosures =
+        await ClosuresOfflineController.getPendingClosures();
+      const uniqueSessions = new Set();
+      const duplicates = [];
+
+      // IDENTIFICAR DUPLICADOS
+      for (const closure of pendingClosures) {
+        const sessionKey = closure.sesion_caja_id;
+        if (uniqueSessions.has(sessionKey)) {
+          duplicates.push(closure);
+        } else {
+          uniqueSessions.add(sessionKey);
+        }
+      }
+
+      // ELIMINAR DUPLICADOS
+      for (const duplicate of duplicates) {
+        console.log(`🗑️ Eliminando cierre duplicado: ${duplicate.id_local}`);
+        await IndexedDBService.delete("cierres_pendientes", duplicate.id_local);
+      }
+
+      console.log(`✅ ${duplicates.length} cierres duplicados eliminados`);
+      return { eliminados: duplicates.length };
+    } catch (error) {
+      console.error("❌ Error limpiando duplicados:", error);
+      return { error: error.message };
+    }
+  }
   // ✅ CREAR CIERRE PARA SESIÓN CERRADA
   // ✅ REEMPLAZAR crearCierreParaSesionCerrada con validación completa
+  // async crearCierreParaSesionCerrada(session) {
+  //   try {
+  //     console.log(`💰 Creando cierre para sesión cerrada: ${session.id_local}`);
+
+  //     // ✅ VALIDAR DATOS CRÍTICOS ANTES DE CONTINUAR
+  //     if (!session.saldo_final_real && !session.saldo_inicial) {
+  //       throw new Error("No hay saldo final real ni saldo inicial disponible");
+  //     }
+
+  //     // ✅ OBTENER ID DE SERVIDOR PRIMERO
+  //     const sesionServerId = await this.obtenerIdServidorSesion(session);
+  //     if (!sesionServerId) {
+  //       throw new Error("No se pudo obtener ID de servidor para la sesión");
+  //     }
+
+  //     // ✅ VERIFICAR SI YA EXISTE CIERRE
+  //     const existingClosure = await this.verificarCierreExistenteMejorado(
+  //       session,
+  //       sesionServerId
+  //     );
+  //     if (existingClosure) {
+  //       console.log(
+  //         `✅ Cierre ya existe, omitiendo creación: ${existingClosure.id}`
+  //       );
+  //       return {
+  //         success: true,
+  //         cierre_id: existingClosure.id,
+  //         sesion_server_id: sesionServerId,
+  //         skipped: true,
+  //       };
+  //     }
+
+  //     // ✅ CALCULAR TOTALES CON VALIDACIÓN
+  //     const totales = await this.calcularTotalesSesion(session);
+
+  //     // ✅ PREPARAR DATOS DEL CIERRE CON VALIDACIÓN
+  //     const saldoFinalReal =
+  //       session.saldo_final_real || session.saldo_inicial || 0;
+  //     const saldoFinalTeorico =
+  //       totales.saldo_final_teorico || session.saldo_inicial || 0;
+
+  //     const cierreData = {
+  //       sesion_caja_id: sesionServerId,
+  //       total_ventas: totales.total_ventas || 0,
+  //       total_efectivo: totales.total_efectivo || 0,
+  //       total_tarjeta: totales.total_tarjeta || 0,
+  //       total_transferencia: totales.total_transferencia || 0,
+  //       ganancia_bruta: totales.ganancia_bruta || 0,
+  //       saldo_final_teorico: saldoFinalTeorico,
+  //       saldo_final_real: Number(saldoFinalReal), // ✅ ASEGURAR QUE ES NÚMERO
+  //       diferencia: Number(saldoFinalReal) - Number(saldoFinalTeorico),
+  //       observaciones:
+  //         session.observaciones ||
+  //         `Sincronizado desde offline - Sesión: ${session.id_local}`,
+  //       vendedor_id: session.vendedor_id,
+  //     };
+
+  //     // ✅ VALIDACIÓN FINAL ANTES DE ENVIAR
+  //     if (
+  //       cierreData.saldo_final_real === undefined ||
+  //       cierreData.saldo_final_real === null
+  //     ) {
+  //       throw new Error("Saldo final real es requerido para crear el cierre");
+  //     }
+
+  //     console.log("📤 Enviando cierre al servidor:", cierreData);
+  //     const response = await fetchConToken("cierres", cierreData, "POST");
+
+  //     if (response && response.ok && response.cierre) {
+  //       console.log(`✅ Cierre creado exitosamente: ${response.cierre.id}`);
+  //       return {
+  //         success: true,
+  //         cierre_id: response.cierre.id,
+  //         sesion_server_id: sesionServerId,
+  //         totales: totales,
+  //       };
+  //     } else {
+  //       throw new Error(
+  //         response?.error || "Error del servidor al crear cierre"
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error(
+  //       `❌ Error creando cierre para sesión ${session.id_local}:`,
+  //       error
+  //     );
+  //     return { success: false, error: error.message };
+  //   }
+  // }
+  // En SyncController.js - REEMPLAZAR este método
   async crearCierreParaSesionCerrada(session) {
     try {
       console.log(`💰 Creando cierre para sesión cerrada: ${session.id_local}`);
 
-      // ✅ VALIDAR DATOS CRÍTICOS ANTES DE CONTINUAR
-      if (!session.saldo_final_real && !session.saldo_inicial) {
-        throw new Error("No hay saldo final real ni saldo inicial disponible");
-      }
+      // ✅ USAR DIRECTAMENTE EL ID DE LA SESIÓN (si existe) o crear uno simple
+      const sesionServerId = session.id || `ses_offline_${session.id_local}`;
 
-      // ✅ OBTENER ID DE SERVIDOR PRIMERO
-      const sesionServerId = await this.obtenerIdServidorSesion(session);
-      if (!sesionServerId) {
-        throw new Error("No se pudo obtener ID de servidor para la sesión");
-      }
-
-      // ✅ VERIFICAR SI YA EXISTE CIERRE
-      const existingClosure = await this.verificarCierreExistenteMejorado(
-        session,
-        sesionServerId
-      );
-      if (existingClosure) {
-        console.log(
-          `✅ Cierre ya existe, omitiendo creación: ${existingClosure.id}`
-        );
-        return {
-          success: true,
-          cierre_id: existingClosure.id,
-          sesion_server_id: sesionServerId,
-          skipped: true,
-        };
-      }
-
-      // ✅ CALCULAR TOTALES CON VALIDACIÓN
-      const totales = await this.calcularTotalesSesion(session);
-
-      // ✅ PREPARAR DATOS DEL CIERRE CON VALIDACIÓN
-      const saldoFinalReal =
-        session.saldo_final_real || session.saldo_inicial || 0;
-      const saldoFinalTeorico =
-        totales.saldo_final_teorico || session.saldo_inicial || 0;
-
+      // ✅ PREPARAR DATOS BÁSICOS DEL CIERRE
       const cierreData = {
         sesion_caja_id: sesionServerId,
-        total_ventas: totales.total_ventas || 0,
-        total_efectivo: totales.total_efectivo || 0,
-        total_tarjeta: totales.total_tarjeta || 0,
-        total_transferencia: totales.total_transferencia || 0,
-        ganancia_bruta: totales.ganancia_bruta || 0,
-        saldo_final_teorico: saldoFinalTeorico,
-        saldo_final_real: Number(saldoFinalReal), // ✅ ASEGURAR QUE ES NÚMERO
-        diferencia: Number(saldoFinalReal) - Number(saldoFinalTeorico),
+        total_ventas: session.total_ventas || 0,
+        total_efectivo: session.total_efectivo || 0,
+        total_tarjeta: session.total_tarjeta || 0,
+        total_transferencia: session.total_transferencia || 0,
+        ganancia_bruta: session.ganancia_bruta || 0,
+        saldo_final_teorico: session.saldo_final_teorico || 0,
+        saldo_final_real:
+          session.saldo_final_real || session.saldo_inicial || 0,
+        diferencia: session.diferencia || 0,
         observaciones:
-          session.observaciones ||
-          `Sincronizado desde offline - Sesión: ${session.id_local}`,
+          session.observaciones || `Cierre offline - ${session.id_local}`,
         vendedor_id: session.vendedor_id,
       };
-
-      // ✅ VALIDACIÓN FINAL ANTES DE ENVIAR
-      if (
-        cierreData.saldo_final_real === undefined ||
-        cierreData.saldo_final_real === null
-      ) {
-        throw new Error("Saldo final real es requerido para crear el cierre");
-      }
 
       console.log("📤 Enviando cierre al servidor:", cierreData);
       const response = await fetchConToken("cierres", cierreData, "POST");
@@ -281,7 +454,6 @@ class SyncController extends BaseOfflineController {
           success: true,
           cierre_id: response.cierre.id,
           sesion_server_id: sesionServerId,
-          totales: totales,
         };
       } else {
         throw new Error(
@@ -296,7 +468,6 @@ class SyncController extends BaseOfflineController {
       return { success: false, error: error.message };
     }
   }
-
   // ✅ CALCULAR TOTALES DE SESIÓN
   // async calcularTotalesSesion(session) {
   //   try {
@@ -619,61 +790,54 @@ class SyncController extends BaseOfflineController {
   }
 
   // ✅ REEMPLAZAR verificarCierreExistenteMejorado
-  async verificarCierreExistenteMejorado(closure, sesionServerId) {
-    try {
-      console.log(
-        `🔍 Verificando cierre existente para sesión: ${sesionServerId}`
-      );
+  // En SyncController.js - MEJORAR este método
+  // async verificarCierreExistenteMejorado(closure) {
+  //   try {
+  //     console.log(`🔍 Verificando si cierre ya existe: ${closure.id_local}`);
 
-      // ✅ ESTRATEGIA 1: Buscar en todos los cierres y filtrar
-      const response = await fetchConToken("cierres?limite=100");
+  //     // ✅ BUSCAR POR MULTIPLES CRITERIOS
+  //     const criteriosBusqueda = [
+  //       `fecha=${new Date(closure.fecha_cierre).toISOString().split("T")[0]}`,
+  //       `vendedor_id=${closure.vendedor_id}`,
+  //     ].join("&");
 
-      if (response && response.ok && response.cierres) {
-        // Buscar cierre que coincida con la sesión
-        const cierreExistente = response.cierres.find((c) => {
-          // Coincidencia exacta por sesión
-          if (c.sesion_caja_id !== sesionServerId) return false;
+  //     const response = await fetchConToken(
+  //       `cierres?${criteriosBusqueda}&limite=50`
+  //     );
 
-          // Verificar fechas similares (mismo día)
-          const fechaCierreLocal = new Date(
-            closure.fecha_cierre || closure.fecha_creacion || new Date()
-          );
-          const fechaCierreServer = new Date(c.fecha_cierre);
+  //     if (response && response.ok && response.cierres) {
+  //       const cierreExistente = response.cierres.find((c) => {
+  //         // Coincidencia por montos similares (hasta 1% de diferencia)
+  //         const montosSimilares =
+  //           Math.abs(c.total_ventas - (closure.total_ventas || 0)) /
+  //             (closure.total_ventas || 1) <
+  //             0.01 &&
+  //           Math.abs(c.total_efectivo - (closure.total_efectivo || 0)) /
+  //             (closure.total_efectivo || 1) <
+  //             0.01;
 
-          const mismoDia =
-            fechaCierreLocal.toDateString() ===
-            fechaCierreServer.toDateString();
+  //         // Coincidencia por misma fecha
+  //         const fechaCierreServer = new Date(c.fecha_cierre).toDateString();
+  //         const fechaCierreLocal = new Date(
+  //           closure.fecha_cierre
+  //         ).toDateString();
+  //         const mismaFecha = fechaCierreServer === fechaCierreLocal;
 
-          // Verificar montos similares (tolerancia 1%)
-          const montosSimilares =
-            Math.abs(c.total_ventas - (closure.total_ventas || 0)) /
-              (closure.total_ventas || 1) <
-            0.01;
+  //         return montosSimilares && mismaFecha;
+  //       });
 
-          console.log(`📊 Comparando cierres:`, {
-            sesion_coincide: c.sesion_caja_id === sesionServerId,
-            mismo_dia: mismoDia,
-            montos_similares: montosSimilares,
-            local: closure.total_ventas,
-            server: c.total_ventas,
-          });
+  //       if (cierreExistente) {
+  //         console.log(`✅ Cierre duplicado encontrado: ${cierreExistente.id}`);
+  //         return cierreExistente;
+  //       }
+  //     }
 
-          return mismoDia && montosSimilares;
-        });
-
-        if (cierreExistente) {
-          console.log(`✅ Cierre existente encontrado: ${cierreExistente.id}`);
-          return cierreExistente;
-        }
-      }
-
-      console.log("ℹ️ No se encontró cierre existente");
-      return null;
-    } catch (error) {
-      console.error("❌ Error verificando cierre existente:", error);
-      return null;
-    }
-  }
+  //     return null;
+  //   } catch (error) {
+  //     console.error("❌ Error verificando cierre existente:", error);
+  //     return null;
+  //   }
+  // }
   // ✅ SINCRONIZAR CIERRES PENDIENTES
   // En SyncController - syncPendingClosures() - VERSIÓN CORREGIDA
   async syncPendingClosures() {
@@ -697,52 +861,13 @@ class SyncController extends BaseOfflineController {
         detalles: [],
       };
 
-      // ✅ OBTENER MAPPING DE SESIONES
-      const sessionMappings = await this.getSessionMappings();
-
       for (const closure of pendingClosures) {
-        let shouldContinue = false; // ✅ BANDERA PARA REEMPLAZAR CONTINUE
-
         try {
           console.log(`🔄 Procesando cierre local: ${closure.id_local}`);
 
-          // ✅ CONVERTIR SESIÓN LOCAL A SESIÓN DEL SERVIDOR
-          let sesionServerId = await this.convertLocalSessionToServer(
-            closure.sesion_caja_id,
-            sessionMappings
-          );
-
-          if (!sesionServerId) {
-            throw new Error(
-              `No se pudo mapear sesión: ${closure.sesion_caja_id}`
-            );
-          }
-
-          // ✅ VERIFICAR SI YA EXISTE EN SERVIDOR (SIN CONTINUE)
-          const existingClosure = await this.verificarCierreExistente(
-            closure,
-            sesionServerId
-          );
-          if (existingClosure) {
-            console.log(
-              `✅ Cierre ya existe en servidor: ${existingClosure.id}`
-            );
-            await ClosuresOfflineController.markAsSynced(
-              closure.id_local,
-              existingClosure
-            );
-            resultados.success++;
-            shouldContinue = true; // ✅ MARCAR PARA SALTAR AL SIGUIENTE
-          }
-
-          // ✅ SI DEBE CONTINUAR, SALTA A LA SIGUIENTE ITERACIÓN
-          if (shouldContinue) {
-            continue; // ✅ AHORA SÍ PUEDE USARSE CONTINUE FUERA DEL BLOQUE TRY INTERNO
-          }
-
-          // ✅ CREAR CIERRE EN SERVIDOR (SOLO SI NO EXISTE)
+          // ✅ ELIMINAR TODA LA LÓGICA DE VERIFICACIÓN - SOLO SUBIR
           const cierreData = {
-            sesion_caja_id: sesionServerId,
+            sesion_caja_id: closure.sesion_caja_id, // Usar el ID directo
             total_ventas: closure.total_ventas || 0,
             total_efectivo: closure.total_efectivo || 0,
             total_tarjeta: closure.total_tarjeta || 0,
@@ -756,25 +881,26 @@ class SyncController extends BaseOfflineController {
             vendedor_id: closure.vendedor_id,
           };
 
+          console.log("📤 Enviando cierre al servidor:", cierreData);
           const response = await fetchConToken("cierres", cierreData, "POST");
 
           if (response && response.ok && response.cierre) {
+            // ✅ MARCAR COMO SINCRONIZADO INMEDIATAMENTE
             await ClosuresOfflineController.markAsSynced(
               closure.id_local,
               response.cierre
             );
             resultados.success++;
             console.log(
-              `✅ Cierre ${closure.id_local} sincronizado exitosamente`
+              `✅ Cierre subido exitosamente: ${closure.id_local} -> ${response.cierre.id}`
             );
           } else {
-            throw new Error(response?.error || "Error del servidor");
+            throw new Error(
+              response?.error || "Error del servidor al crear cierre"
+            );
           }
         } catch (error) {
-          console.error(
-            `❌ Error sincronizando cierre ${closure.id_local}:`,
-            error
-          );
+          console.error(`❌ Error subiendo cierre ${closure.id_local}:`, error);
           resultados.failed++;
           resultados.detalles.push({
             id_local: closure.id_local,
@@ -785,7 +911,7 @@ class SyncController extends BaseOfflineController {
       }
 
       console.log(
-        `✅ Sincronización de cierres completada: ${resultados.success} exitosas, ${resultados.failed} fallidas`
+        `✅ Sincronización completada: ${resultados.success} exitosas, ${resultados.failed} fallidas`
       );
       return resultados;
     } catch (error) {
@@ -793,7 +919,125 @@ class SyncController extends BaseOfflineController {
       return { total: 0, success: 0, failed: 0, error: error.message };
     }
   }
+  // En SyncController.js - AGREGAR este método
+  // async obtenerSesionServidorParaCierre(closure) {
+  //   try {
+  //     console.log(
+  //       `🔍 Buscando sesión servidor para cierre: ${closure.sesion_caja_id}`
+  //     );
 
+  //     // ✅ ESTRATEGIA 1: Buscar en mapeos existentes
+  //     const sessionMappings = await this.getSessionMappings();
+  //     let sesionServerId = sessionMappings[closure.sesion_caja_id];
+
+  //     if (sesionServerId) {
+  //       console.log(
+  //         `✅ Sesión encontrada en mappings: ${closure.sesion_caja_id} -> ${sesionServerId}`
+  //       );
+  //       return sesionServerId;
+  //     }
+
+  //     // ✅ ESTRATEGIA 2: Buscar sesión local y obtener su ID servidor
+  //     const sesionLocal = await SessionsOfflineController.getSessionById(
+  //       closure.sesion_caja_id
+  //     );
+  //     if (sesionLocal && sesionLocal.id_servidor) {
+  //       console.log(
+  //         `✅ Usando id_servidor de sesión local: ${sesionLocal.id_servidor}`
+  //       );
+  //       return sesionLocal.id_servidor;
+  //     }
+
+  //     // ✅ ESTRATEGIA 3: Buscar sesiones existentes en servidor por fecha y vendedor
+  //     const fechaCierre = new Date(closure.fecha_cierre || closure.created_at);
+  //     const fechaBusqueda = fechaCierre.toISOString().split("T")[0];
+
+  //     const response = await fetchConToken(
+  //       `sesiones-caja/vendedor/${closure.vendedor_id}?fecha=${fechaBusqueda}`
+  //     );
+
+  //     if (response && response.sesiones) {
+  //       // Buscar sesión del mismo día
+  //       const sesionMismoDia = response.sesiones.find((s) => {
+  //         const fechaSesion = new Date(s.fecha_apertura)
+  //           .toISOString()
+  //           .split("T")[0];
+  //         return (
+  //           fechaSesion === fechaBusqueda &&
+  //           s.vendedor_id === closure.vendedor_id
+  //         );
+  //       });
+
+  //       if (sesionMismoDia) {
+  //         console.log(`✅ Sesión encontrada por fecha: ${sesionMismoDia.id}`);
+  //         return sesionMismoDia.id;
+  //       }
+  //     }
+
+  //     // ✅ ESTRATEGIA 4: Crear sesión de emergencia
+  //     console.log("🆘 Creando sesión de emergencia para cierre...");
+  //     const sesionEmergenciaId = await this.crearSesionEmergenciaParaCierre(
+  //       closure
+  //     );
+  //     return sesionEmergenciaId;
+  //   } catch (error) {
+  //     console.error("❌ Error obteniendo sesión servidor:", error);
+  //     // Fallback final
+  //     return await this.crearSesionEmergenciaParaCierre(closure);
+  //   }
+  // }
+  // En SyncController.js - MEJORAR este método
+  // async crearSesionEmergenciaParaCierre(closure) {
+  //   try {
+  //     console.log("🆘 Creando sesión de emergencia para cierre offline...");
+
+  //     const sessionData = {
+  //       vendedor_id: closure.vendedor_id,
+  //       saldo_inicial: closure.saldo_inicial || 0,
+  //       observaciones: `Sesión automática para cierre offline - ${closure.id_local}`,
+  //     };
+
+  //     const response = await fetchConToken(
+  //       "sesiones-caja/abrir",
+  //       sessionData,
+  //       "POST"
+  //     );
+
+  //     if (response?.ok && response.sesion) {
+  //       const serverSessionId = response.sesion.id;
+  //       console.log(`✅ Sesión de emergencia creada: ${serverSessionId}`);
+
+  //       // ✅ CERRAR INMEDIATAMENTE LA SESIÓN (ya que es para un cierre)
+  //       try {
+  //         await fetchConToken(
+  //           `sesiones-caja/cerrar/${serverSessionId}`,
+  //           {
+  //             saldo_final:
+  //               closure.saldo_final_real || closure.saldo_inicial || 0,
+  //             observaciones:
+  //               "Sesión cerrada automáticamente para cierre offline",
+  //           },
+  //           "PUT"
+  //         );
+  //         console.log(`✅ Sesión ${serverSessionId} cerrada para cierre`);
+  //       } catch (closeError) {
+  //         console.warn(
+  //           "⚠️ No se pudo cerrar sesión, pero se usará para cierre:",
+  //           closeError.message
+  //         );
+  //       }
+
+  //       return serverSessionId;
+  //     } else {
+  //       throw new Error(
+  //         response?.error || "No se pudo crear sesión de emergencia"
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ Error creando sesión de emergencia:", error);
+  //     throw error;
+  //   }
+  // }
   // ✅ SINCRONIZAR PRODUCTOS PENDIENTES
   async syncPendingProducts() {
     try {
@@ -1010,27 +1254,27 @@ class SyncController extends BaseOfflineController {
   }
 
   // VERIFICAR SI EXISTE CIERRE
-  async verificarCierreExistente(closure) {
-    try {
-      const response = await fetchConToken(
-        `cierres?fecha=${
-          new Date(closure.fecha_cierre).toISOString().split("T")[0]
-        }`
-      );
+  // async verificarCierreExistente(closure) {
+  //   try {
+  //     const response = await fetchConToken(
+  //       `cierres?fecha=${
+  //         new Date(closure.fecha_cierre).toISOString().split("T")[0]
+  //       }`
+  //     );
 
-      if (response && response.ok && response.cierres) {
-        return response.cierres.find(
-          (c) =>
-            Math.abs(c.total_ventas - closure.total_ventas) /
-              closure.total_ventas <
-            0.1
-        );
-      }
-      return null;
-    } catch (error) {
-      return null;
-    }
-  }
+  //     if (response && response.ok && response.cierres) {
+  //       return response.cierres.find(
+  //         (c) =>
+  //           Math.abs(c.total_ventas - closure.total_ventas) /
+  //             closure.total_ventas <
+  //           0.1
+  //       );
+  //     }
+  //     return null;
+  //   } catch (error) {
+  //     return null;
+  //   }
+  // }
 
   // VERIFICAR SI EXISTE PRODUCTO
   async verificarProductoExistente(productoId) {

@@ -40,44 +40,44 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   });
 
   // ✅ CARGAR DATOS PENDIENTES - VERSIÓN CORREGIDA
-  const loadPendingData = async () => {
-    try {
-      const status = await SyncController.getSyncStatus();
+  // const loadPendingData = async () => {
+  //   try {
+  //     const status = await SyncController.getSyncStatus();
 
-      // ✅ IGNORAR VENTAS PENDIENTES - NO SE MUESTRAN NI SINCRONIZAN
-      setPendingCount(status.totalPending || 0);
-      setSyncStatus({
-        pendingSessions: status.pendingSessions || 0,
-        pendingSales: 0, // ✅ FORZAR A CERO EN UI
-        pendingClosures: status.pendingClosures || 0,
-        pendingStock: status.pendingStock || 0,
-        pendingProducts: status.pendingProducts || 0,
-      });
+  //     // ✅ IGNORAR VENTAS PENDIENTES - NO SE MUESTRAN NI SINCRONIZAN
+  //     setPendingCount(status.totalPending || 0);
+  //     setSyncStatus({
+  //       pendingSessions: status.pendingSessions || 0,
+  //       pendingSales: 0, // ✅ FORZAR A CERO EN UI
+  //       pendingClosures: status.pendingClosures || 0,
+  //       pendingStock: status.pendingStock || 0,
+  //       pendingProducts: status.pendingProducts || 0,
+  //     });
 
-      // ✅ LOG PARA DEBUG
-      if (status._debug && status._debug.ventasIgnoradas > 0) {
-        console.log(
-          `⏭️  Ignorando ${status._debug.ventasIgnoradas} ventas pendientes`
-        );
-      }
-    } catch (error) {
-      console.error("Error cargando estado de sincronización:", error);
-      // Valores por defecto - ventas siempre en 0
-      setPendingCount(0);
-      setSyncStatus({
-        pendingSessions: 0,
-        pendingSales: 0,
-        pendingClosures: 0,
-        pendingStock: 0,
-        pendingProducts: 0,
-      });
-    }
-  };
+  //     // ✅ LOG PARA DEBUG
+  //     if (status._debug && status._debug.ventasIgnoradas > 0) {
+  //       console.log(
+  //         `⏭️  Ignorando ${status._debug.ventasIgnoradas} ventas pendientes`
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("Error cargando estado de sincronización:", error);
+  //     // Valores por defecto - ventas siempre en 0
+  //     setPendingCount(0);
+  //     setSyncStatus({
+  //       pendingSessions: 0,
+  //       pendingSales: 0,
+  //       pendingClosures: 0,
+  //       pendingStock: 0,
+  //       pendingProducts: 0,
+  //     });
+  //   }
+  // };
   useEffect(() => {
-    loadPendingData();
+    // loadPendingData();
 
-    // Intervalo para actualizar estado cada 30 segundos
-    const interval = setInterval(loadPendingData, 30000);
+    // // Intervalo para actualizar estado cada 30 segundos
+    // const interval = setInterval(loadPendingData, 30000);
 
     // Listener para cambios de conexión - VERSIÓN CORREGIDA
     const handleOnline = () => {
@@ -116,7 +116,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     const handleOffline = () => {
       console.log("📴 Sin conexión a internet");
       setIsOnline(false);
-      loadPendingData();
+      // loadPendingData();
 
       // Mostrar alerta de offline
       Swal.fire({
@@ -144,7 +144,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
     window.addEventListener("offline", handleOffline);
 
     return () => {
-      clearInterval(interval);
+      // clearInterval(interval);
       removeListener();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -714,7 +714,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
           <FiAlertTriangle />
           <span>Debug</span>
         </button> */}
-
         {/* INDICADOR DE SINCRONIZACIÓN */}
         <div className={styles.syncIndicator} onClick={handleShowSyncDetails}>
           <div className={styles.syncIconContainer}>
@@ -750,8 +749,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
             )}
           </div>
         </div>
-
-        {/* INDICADOR DE GANANCIAS */}
+        {/* INDICADOR DE GANANCIAS
         {sesionAbierta ? (
           <div className={styles.earningsIndicator}>
             <div className={styles.earningsIcon}>
@@ -775,8 +773,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               <span className={styles.noSessionText}>Sin sesión</span>
             </div>
           </div>
-        )}
-
+        )} */}
         {/* USUARIO */}
         <div className={styles.userInfo}>
           <div className={styles.userAvatar}>
