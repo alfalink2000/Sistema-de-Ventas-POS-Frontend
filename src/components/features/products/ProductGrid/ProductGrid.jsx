@@ -1,4 +1,4 @@
-// components/features/products/ProductGrid/ProductGrid.jsx - ACTUALIZADO CON PERMISOS
+// components/features/products/ProductGrid/ProductGrid.jsx - CORREGIDO
 import ProductCard from "../ProductCard/ProductCard";
 import styles from "./ProductGrid.module.css";
 
@@ -8,8 +8,56 @@ const ProductGrid = ({
   error,
   onEdit,
   onDelete,
-  canManageProducts = true, // ✅ NUEVO: permisos
+  canManageProducts = true,
 }) => {
+  // ✅ FUNCIÓN MEJORADA PARA KEY ÚNICA
+  const getProductKey = (product) => {
+    if (!product) return Math.random().toString(36);
+
+    // Prioridad: ID del servidor, luego ID local, luego fallback
+    if (product.id && product.id !== product.id_local) {
+      return `server_${product.id}`;
+    }
+    if (product.id_local) {
+      return `local_${product.id_local}`;
+    }
+    if (product.id) {
+      return `id_${product.id}`;
+    }
+
+    // Último recurso: combinación de nombre y timestamp
+    return `temp_${product.nombre}_${Date.now()}_${Math.random().toString(36)}`;
+  };
+
+  // ✅ ELIMINAR DUPLICADOS EN TIEMPO REAL
+  const removeDuplicates = (productsArray) => {
+    if (!Array.isArray(productsArray)) return [];
+
+    const seen = new Map();
+    const uniqueProducts = [];
+
+    productsArray.forEach((product) => {
+      if (!product) return;
+
+      const key = getProductKey(product);
+
+      if (!seen.has(key)) {
+        seen.set(key, true);
+        uniqueProducts.push(product);
+      } else {
+        console.warn(`🔄 Eliminando duplicado en render: ${product.nombre}`, {
+          id: product.id,
+          id_local: product.id_local,
+          key: key,
+        });
+      }
+    });
+
+    return uniqueProducts;
+  };
+
+  const uniqueProducts = removeDuplicates(products);
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -29,7 +77,7 @@ const ProductGrid = ({
     );
   }
 
-  if (!products || products.length === 0) {
+  if (!uniqueProducts || uniqueProducts.length === 0) {
     return (
       <div className={styles.emptyContainer}>
         <div className={styles.emptyIcon}>📦</div>
@@ -39,15 +87,21 @@ const ProductGrid = ({
     );
   }
 
+  console.log(
+    `🎯 Renderizando ${uniqueProducts.length} productos únicos de ${
+      products?.length || 0
+    } totales`
+  );
+
   return (
     <div className={styles.productGrid}>
-      {products.map((product) => (
+      {uniqueProducts.map((product) => (
         <ProductCard
-          key={product.id}
+          key={getProductKey(product)} // ✅ KEY ÚNICA GARANTIZADA
           product={product}
           onEdit={onEdit}
           onDelete={onDelete}
-          canManageProducts={canManageProducts} // ✅ Pasar permisos a cada tarjeta
+          canManageProducts={canManageProducts}
         />
       ))}
     </div>

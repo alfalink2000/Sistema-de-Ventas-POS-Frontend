@@ -1,223 +1,144 @@
-// components/layout/Header/Header.jsx - VERSIÓN CORREGIDA SIN FiBug
+// components/layout/Header/Header.jsx - VERSIÓN COMPLETA CORREGIDA
 import { useDispatch, useSelector } from "react-redux";
 import {
   FiMenu,
-  FiTrendingUp,
-  FiDollarSign,
   FiWifi,
   FiWifiOff,
   FiRefreshCw,
   FiX,
-  FiCheck,
   FiPackage,
-  FiInfo,
-  FiAlertTriangle, // ✅ USAR ESTE ICONO EN LUGAR DE FiBug
-  FiSettings, // ✅ ALTERNATIVA 2
-  FiTool, // ✅ ALTERNATIVA 3
+  FiAlertTriangle,
+  FiDollarSign,
+  FiArchive,
+  FiTrash2,
 } from "react-icons/fi";
 import styles from "./Header.module.css";
 import { useState, useEffect } from "react";
-import SyncController from "../../../controllers/offline/SyncController/SyncController";
+import StockSyncController from "../../../controllers/offline/StockSyncController/StockSyncController";
 import Swal from "sweetalert2";
 
 const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
-  const dispatch = useDispatch();
-  const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
-  const { sales } = useSelector((state) => state.sales);
-  const { products } = useSelector((state) => state.products);
-
-  // ✅ ESTADOS SIMPLIFICADOS
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState({
-    pendingSessions: 0,
-    pendingSales: 0,
-    pendingClosures: 0,
     pendingStock: 0,
-    pendingProducts: 0,
+    pendingPrices: 0,
+    pendingClosures: 0,
+    lastSync: null,
+    hasPendingChanges: false,
   });
 
-  // ✅ CARGAR DATOS PENDIENTES - VERSIÓN CORREGIDA
-  // const loadPendingData = async () => {
-  //   try {
-  //     const status = await SyncController.getSyncStatus();
-
-  //     // ✅ IGNORAR VENTAS PENDIENTES - NO SE MUESTRAN NI SINCRONIZAN
-  //     setPendingCount(status.totalPending || 0);
-  //     setSyncStatus({
-  //       pendingSessions: status.pendingSessions || 0,
-  //       pendingSales: 0, // ✅ FORZAR A CERO EN UI
-  //       pendingClosures: status.pendingClosures || 0,
-  //       pendingStock: status.pendingStock || 0,
-  //       pendingProducts: status.pendingProducts || 0,
-  //     });
-
-  //     // ✅ LOG PARA DEBUG
-  //     if (status._debug && status._debug.ventasIgnoradas > 0) {
-  //       console.log(
-  //         `⏭️  Ignorando ${status._debug.ventasIgnoradas} ventas pendientes`
-  //       );
-  //     }
-  //   } catch (error) {
-  //     console.error("Error cargando estado de sincronización:", error);
-  //     // Valores por defecto - ventas siempre en 0
-  //     setPendingCount(0);
-  //     setSyncStatus({
-  //       pendingSessions: 0,
-  //       pendingSales: 0,
-  //       pendingClosures: 0,
-  //       pendingStock: 0,
-  //       pendingProducts: 0,
-  //     });
-  //   }
-  // };
-  useEffect(() => {
-    // loadPendingData();
-
-    // // Intervalo para actualizar estado cada 30 segundos
-    // const interval = setInterval(loadPendingData, 30000);
-
-    // Listener para cambios de conexión - VERSIÓN CORREGIDA
-    const handleOnline = () => {
-      console.log("🌐 Conexión a internet detectada");
-      setIsOnline(true);
-      loadPendingData();
-
-      // ✅ CORREGIDO: Mostrar alerta de reconexión y sincronizar automáticamente
-      if (pendingCount > 0) {
-        setTimeout(() => {
-          Swal.fire({
-            icon: "info",
-            title: "Internet detectado",
-            text: "Comenzando a procesar cambios pendientes...",
-            timer: 3000,
-            timerProgressBar: true,
-            showConfirmButton: false,
-          });
-
-          // Ejecutar sincronización silenciosa
-          handleAutoSync();
-        }, 1000);
-      } else {
-        // Solo mostrar notificación si no hay datos pendientes
-        Swal.fire({
-          icon: "success",
-          title: "Conexión restaurada",
-          text: "Estás conectado al servidor",
-          timer: 2000,
-          timerProgressBar: true,
-          showConfirmButton: false,
-        });
-      }
-    };
-
-    const handleOffline = () => {
-      console.log("📴 Sin conexión a internet");
-      setIsOnline(false);
-      // loadPendingData();
-
-      // Mostrar alerta de offline
-      Swal.fire({
-        icon: "warning",
-        title: "Modo Offline",
-        text: "Los datos se guardarán localmente",
-        timer: 3000,
-        timerProgressBar: true,
-        showConfirmButton: false,
-      });
-    };
-
-    // Listener para eventos de sincronización
-    const removeListener = SyncController.addSyncListener((event, data) => {
-      if (event === "sync_start") {
-        setIsSyncing(true);
-      } else if (event === "sync_complete" || event === "sync_error") {
-        setIsSyncing(false);
-        loadPendingData();
-      }
-    });
-
-    // Event listeners del DOM
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      // clearInterval(interval);
-      removeListener();
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, [pendingCount]);
-
-  // ✅ NUEVA FUNCIÓN PARA SINCRONIZACIÓN AUTOMÁTICA
-  const handleAutoSync = async () => {
-    if (!navigator.onLine) {
-      console.log("⏸️  Auto-sync cancelado: sin conexión");
-      return;
-    }
-
+  // ✅ CARGAR ESTADO DE SINCRONIZACIÓN
+  const loadSyncStatus = async () => {
     try {
-      setIsSyncing(true);
-      console.log("🔄 Iniciando sincronización automática...");
+      console.log("🔄 Cargando estado de sincronización...");
 
-      // Sincronización silenciosa sin alertas de confirmación
-      const syncResult = await SyncController.fullSync();
+      // ✅ OBTENER ESTADÍSTICAS ACTUALIZADAS
+      const stockStats = await StockSyncController.getPendingStats();
 
-      if (syncResult && syncResult.success) {
-        console.log("✅ Sincronización automática completada");
+      let priceStats = { total: 0 };
+      let closuresStats = { total: 0 };
 
-        // Mostrar resumen solo si hubo operaciones exitosas
-        const successfulSteps = [];
+      try {
+        const PriceSyncController = await import(
+          "../../../controllers/offline/PriceSyncController/PriceSyncController"
+        ).then((module) => module.default);
 
-        if (syncResult.steps) {
-          Object.entries(syncResult.steps).forEach(([name, step]) => {
-            if (step && !step.error) {
-              if (step.success !== undefined && step.success > 0) {
-                successfulSteps.push(`${name}: ${step.success} exitosos`);
-              } else if (step.exitosas !== undefined && step.exitosas > 0) {
-                successfulSteps.push(`${name}: ${step.exitosas} exitosos`);
-              }
-            }
-          });
+        if (PriceSyncController) {
+          // ✅ USAR MÉTODO ESTÁTICO CORREGIDO
+          priceStats = await PriceSyncController.getPendingStats();
         }
-
-        if (successfulSteps.length > 0) {
-          Swal.fire({
-            icon: "success",
-            title: "Sincronización completada",
-            html: `
-            <div style="text-align: left;">
-              <p><strong>Resultados:</strong></p>
-              <p>${successfulSteps.join(", ")}</p>
-            </div>
-          `,
-            timer: 4000,
-            timerProgressBar: true,
-            showConfirmButton: false,
-          });
-        }
-      } else {
-        console.warn(
-          "⚠️ Sincronización automática con resultados mixtos:",
-          syncResult
-        );
+      } catch (error) {
+        console.warn("⚠️ No se pudo cargar PriceSyncController:", error);
       }
+
+      try {
+        const ClosuresSyncController = await import(
+          "../../../controllers/offline/ClosuresSyncController/ClosuresSyncController"
+        ).then((module) => module.default);
+
+        if (ClosuresSyncController) {
+          closuresStats = await ClosuresSyncController.getPendingStats();
+        }
+      } catch (error) {
+        console.warn("⚠️ No se pudo cargar ClosuresSyncController:", error);
+      }
+
+      const hasPending =
+        stockStats.total > 0 || priceStats.total > 0 || closuresStats.total > 0;
+
+      setSyncStatus({
+        pendingStock: stockStats.total || 0,
+        pendingPrices: priceStats.total || 0,
+        pendingClosures: closuresStats.total || 0,
+        lastSync: new Date().toLocaleTimeString(),
+        hasPendingChanges: hasPending,
+      });
+
+      console.log(
+        `📊 Estado sync actualizado: ${stockStats.total} stock, ${priceStats.total} precios, ${closuresStats.total} cierres pendientes`
+      );
     } catch (error) {
-      console.error("❌ Error en sincronización automática:", error);
-      // No mostrar alerta de error en sync automático para no molestar al usuario
-    } finally {
-      setIsSyncing(false);
-      loadPendingData();
+      console.error("❌ Error cargando estado de sync:", error);
+      setSyncStatus({
+        pendingStock: 0,
+        pendingPrices: 0,
+        pendingClosures: 0,
+        lastSync: new Date().toLocaleTimeString(),
+        hasPendingChanges: false,
+      });
     }
   };
-  // ✅ SINCRONIZACIÓN MANUAL - VERSIÓN CORREGIDA
-  // ✅ SINCRONIZACIÓN MANUAL - VERSIÓN CORREGIDA (solo para botón manual)
-  const handleForceSync = async () => {
-    // ✅ ESTA ES LA VERSIÓN MANUAL - mantener la lógica original de confirmación
-    if (!navigator.onLine) {
+
+  // ✅ BOTÓN DE LIMPIEZA MANUAL
+  const handleForceCleanup = async () => {
+    try {
       Swal.fire({
+        title: "Limpiando...",
+        text: "Eliminando registros sincronizados",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
+
+      const PriceSyncController = await import(
+        "../../../controllers/offline/PriceSyncController/PriceSyncController"
+      ).then((module) => module.default);
+
+      if (PriceSyncController) {
+        const result = await PriceSyncController.cleanupSyncedPriceChanges();
+
+        Swal.close();
+
+        if (result.success) {
+          await Swal.fire({
+            icon: "success",
+            title: "Limpieza completada",
+            text: `${result.deletedCount} registros sincronizados eliminados`,
+            confirmButtonText: "Entendido",
+          });
+
+          // ✅ ACTUALIZAR ESTADO
+          await loadSyncStatus();
+        } else {
+          throw new Error(result.error);
+        }
+      }
+    } catch (error) {
+      Swal.close();
+      await Swal.fire({
+        icon: "error",
+        title: "Error en limpieza",
+        text: error.message,
+        confirmButtonText: "Entendido",
+      });
+    }
+  };
+
+  // ✅ SINCRONIZACIÓN MANUAL
+  const handleManualSync = async () => {
+    if (!isOnline) {
+      await Swal.fire({
         icon: "warning",
         title: "Sin conexión",
         text: "No hay conexión a internet para sincronizar",
@@ -226,285 +147,177 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       return;
     }
 
+    setIsSyncing(true);
     try {
-      setIsSyncing(true);
-
-      const { value: confirmar } = await Swal.fire({
-        title: "Sincronizar datos pendientes",
-        text: `¿Deseas sincronizar ${pendingCount} elementos pendientes?`,
-        icon: "question",
-        showCancelButton: true,
-        confirmButtonText: "Sí, sincronizar",
-        cancelButtonText: "Cancelar",
-      });
-
-      if (!confirmar) {
-        setIsSyncing(false);
-        return;
-      }
-
-      Swal.fire({
+      await Swal.fire({
         title: "Sincronizando...",
-        html: "Procesando datos pendientes<br/><small>Por favor espera</small>",
+        text: "Actualizando datos pendientes",
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading(),
       });
 
-      const syncResult = await SyncController.fullSync();
+      // Sincronizar cambios de stock
+      const stockResult = await StockSyncController.syncPendingStockChanges();
+      console.log("Resultado sync stock:", stockResult);
+
+      // Sincronizar cambios de precio
+      let priceResult = { success: false };
+      try {
+        const PriceSyncController = await import(
+          "../../../controllers/offline/PriceSyncController/PriceSyncController"
+        ).then((module) => module.default);
+        priceResult = await PriceSyncController.syncPendingPriceChanges();
+        console.log("Resultado sync precios:", priceResult);
+      } catch (error) {
+        console.error("Error sincronizando precios:", error);
+      }
+
+      // Sincronizar cierres
+      let closuresResult = { success: false };
+      try {
+        const ClosuresSyncController = await import(
+          "../../../controllers/offline/ClosuresSyncController/ClosuresSyncController"
+        ).then((module) => module.default);
+        closuresResult = await ClosuresSyncController.syncPendingClosures();
+        console.log("Resultado sync cierres:", closuresResult);
+      } catch (error) {
+        console.error("Error sincronizando cierres:", error);
+      }
 
       Swal.close();
 
-      if (syncResult && syncResult.success) {
-        let successMessage = "Sincronización completada";
-        let successDetails = "";
+      // Mostrar resumen
+      const totalSincronizados =
+        (stockResult.sincronizados || 0) +
+        (priceResult.sincronizados || 0) +
+        (closuresResult.sincronizados || 0);
 
-        // Construir mensaje detallado
-        if (syncResult.steps) {
-          const successfulSteps = [];
-
-          Object.entries(syncResult.steps).forEach(([name, step]) => {
-            if (step && !step.error) {
-              if (step.success !== undefined && step.success > 0) {
-                successfulSteps.push(`${name}: ${step.success} exitosos`);
-              } else if (step.exitosas !== undefined && step.exitosas > 0) {
-                successfulSteps.push(`${name}: ${step.exitosas} exitosos`);
-              } else if (step.total !== undefined && step.total > 0) {
-                successfulSteps.push(`${name}: ${step.total} procesados`);
-              }
-            }
-          });
-
-          if (successfulSteps.length > 0) {
-            successDetails = successfulSteps.join(", ");
-          }
-        }
-
+      if (totalSincronizados > 0) {
         await Swal.fire({
           icon: "success",
-          title: successMessage,
-          html: successDetails
-            ? `
-          <div style="text-align: left;">
-            <p><strong>Resultados:</strong></p>
-            <p>${successDetails}</p>
-          </div>
-        `
-            : "Todos los datos se sincronizaron correctamente",
-          confirmButtonText: "Aceptar",
+          title: "Sincronización completada",
+          text: `Se sincronizaron ${totalSincronizados} elementos`,
+          timer: 3000,
+          showConfirmButton: false,
         });
       } else {
-        throw new Error(
-          syncResult?.error || "Error desconocido en sincronización"
-        );
+        await Swal.fire({
+          icon: "info",
+          title: "Sincronización completada",
+          text: "No había elementos pendientes por sincronizar",
+          timer: 3000,
+          showConfirmButton: false,
+        });
       }
-    } catch (error) {
-      console.error("Error en sincronización manual:", error);
 
-      Swal.fire({
+      // Recargar estado
+      await loadSyncStatus();
+    } catch (error) {
+      console.error("❌ Error en sincronización manual:", error);
+      Swal.close();
+      await Swal.fire({
         icon: "error",
-        title: "Error de sincronización",
-        text: error.message || "Ocurrió un error durante la sincronización",
+        title: "Error",
+        text: error.message || "Error durante la sincronización",
         confirmButtonText: "Entendido",
       });
     } finally {
       setIsSyncing(false);
-      loadPendingData();
     }
   };
 
-  // ✅ BOTÓN DEBUG - NUEVA FUNCIÓN
-  const handleDebugSync = async () => {
-    try {
-      console.log("🐛 EJECUTANDO DEBUG DE SINCRONIZACIÓN...");
+  // ✅ EFFECT PRINCIPAL CORREGIDO (SOLO UNO)
+  useEffect(() => {
+    // Cargar estado inicial
+    loadSyncStatus();
 
-      Swal.fire({
-        title: "Ejecutando Debug...",
-        html: "Analizando problemas de sincronización<br/><small>Revisa la consola del navegador</small>",
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading(),
-      });
+    // Manejadores de eventos
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log("🌐 Conexión recuperada - Header");
+      loadSyncStatus();
 
-      // Ejecutar debug
-      const debugInfo = await SyncController.debugSyncIssues();
-
-      Swal.close();
-
-      // Mostrar resultados en un modal detallado
-      await Swal.fire({
-        title: "🔍 Debug de Sincronización",
-        html: `
-          <div style="text-align: left; max-height: 400px; overflow-y: auto;">
-            <h4>📊 Resumen General</h4>
-            <ul>
-              <li><strong>Online:</strong> ${
-                debugInfo.isOnline ? "✅ Sí" : "❌ No"
-              }</li>
-              <li><strong>Ventas pendientes:</strong> ${
-                debugInfo.pendingSales || 0
-              }</li>
-              <li><strong>Sesiones pendientes:</strong> ${
-                debugInfo.pendingSessions || 0
-              }</li>
-              <li><strong>Cierres pendientes:</strong> ${
-                debugInfo.pendingClosures || 0
-              }</li>
-              <li><strong>Mappings de sesiones:</strong> ${
-                debugInfo.sessionMappings || 0
-              }</li>
-            </ul>
-            
-            ${
-              debugInfo.lastSync
-                ? `
-            <h4>🕐 Última Sincronización</h4>
-            <p>${new Date(debugInfo.lastSync).toLocaleString()}</p>
-            `
-                : ""
-            }
-            
-            ${
-              debugInfo.error
-                ? `
-            <h4>❌ Errores</h4>
-            <p style="color: red;">${debugInfo.error}</p>
-            `
-                : ""
-            }
-            
-            ${
-              debugInfo.sessionMappingDetails
-                ? `
-            <h4>🗺️ Detalles de Mappings</h4>
-            <pre style="background: #f4f4f4; padding: 10px; border-radius: 5px; font-size: 12px;">${JSON.stringify(
-              debugInfo.sessionMappingDetails,
-              null,
-              2
-            )}</pre>
-            `
-                : ""
-            }
-          </div>
-        `,
-        width: "800px",
-        confirmButtonText: "Cerrar",
-        showCancelButton: true,
-        cancelButtonText: "Ejecutar Sync",
-      }).then((result) => {
-        if (result.dismiss === Swal.DismissReason.cancel) {
-          // Si presiona "Ejecutar Sync", iniciar sincronización
-          handleForceSync();
-        }
-      });
-    } catch (error) {
-      console.error("❌ Error en debug:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Error en Debug",
-        text: error.message || "No se pudo ejecutar el diagnóstico",
-        confirmButtonText: "Cerrar",
-      });
-    }
-  };
-
-  // ✅ ABRIR MODAL DE DETALLES - CORREGIDO
-  const handleShowSyncDetails = () => {
-    setShowSyncModal(true);
-  };
-
-  // ✅ CÁLCULO DE GANANCIAS - VERSIÓN SEGURA
-  // components/layout/Header/Header.jsx - FUNCIÓN CORREGIDA
-  const calcularGananciasSesion = () => {
-    if (!sesionAbierta || !sales || !Array.isArray(sales)) {
-      return { gananciaBruta: 0, ventasTotales: 0, cantidadVentas: 0 };
-    }
-
-    try {
-      // ✅ FILTRADO MEJORADO - considerar tanto ID local como ID de servidor
-      const ventasSesionActual = sales.filter((venta) => {
-        if (!venta) return false;
-
-        // Verificar por ID de sesión de caja
-        const coincideSesion =
-          venta.sesion_caja_id === sesionAbierta.id ||
-          venta.sesion_caja_id_local === sesionAbierta.id_local ||
-          venta.sesion_caja_id === sesionAbierta.id_local;
-
-        // Solo ventas completadas
-        const esCompletada = venta.estado !== "cancelada";
-
-        return coincideSesion && esCompletada;
-      });
-
-      console.log(`📊 Ventas para sesión actual: ${ventasSesionActual.length}`);
-
-      if (ventasSesionActual.length === 0) {
-        return { gananciaBruta: 0, ventasTotales: 0, cantidadVentas: 0 };
-      }
-
-      let gananciaBruta = 0;
-      let ventasTotales = 0;
-
-      ventasSesionActual.forEach((venta) => {
-        if (!venta) return;
-
-        const totalVenta = parseFloat(venta.total) || 0;
-        ventasTotales += totalVenta;
-
-        // ✅ CÁLCULO MEJORADO DE GANANCIA
-        if (venta.productos && Array.isArray(venta.productos)) {
-          // Calcular ganancia real basada en productos
-          const gananciaVenta = venta.productos.reduce((sum, producto) => {
-            const precioVenta = parseFloat(producto.precio_unitario) || 0;
-            const cantidad = parseInt(producto.cantidad) || 0;
-            const costo = precioVenta * 0.8; // 20% de ganancia estimada
-            return sum + (precioVenta - costo) * cantidad;
-          }, 0);
-
-          gananciaBruta += gananciaVenta;
-        } else {
-          // Estimación si no hay detalles de productos
-          gananciaBruta += totalVenta * 0.25; // 25% de margen estimado
-        }
-      });
-
-      console.log(
-        `💰 Resumen: Total $${ventasTotales}, Ganancia $${gananciaBruta}, Ventas: ${ventasSesionActual.length}`
-      );
-
-      return {
-        gananciaBruta: Math.round(gananciaBruta * 100) / 100,
-        ventasTotales: Math.round(ventasTotales * 100) / 100,
-        cantidadVentas: ventasSesionActual.length,
-      };
-    } catch (error) {
-      console.error("Error calculando ganancias:", error);
-      return { gananciaBruta: 0, ventasTotales: 0, cantidadVentas: 0 };
-    }
-  };
-
-  const { gananciaBruta, ventasTotales, cantidadVentas } =
-    calcularGananciasSesion();
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount || 0);
-  };
-
-  // ✅ FUNCIONES AUXILIARES PARA DESCRIBIR OPERACIONES
-  const getOperationDescription = (type, count) => {
-    const descriptions = {
-      sessions: `${count} sesión${count !== 1 ? "es" : ""} de caja`,
-      sales: `${count} venta${count !== 1 ? "s" : ""}`,
-      closures: `${count} cierre${count !== 1 ? "s" : ""} de caja`,
-      stock: `${count} actualización${count !== 1 ? "es" : ""} de stock`,
-      products: `${count} producto${count !== 1 ? "s" : ""}`,
+      // Sincronizar automáticamente al recuperar conexión
+      setTimeout(() => {
+        handleManualSync();
+      }, 3000);
     };
-    return descriptions[type] || `${count} elemento${count !== 1 ? "s" : ""}`;
-  };
 
-  // ✅ COMPONENTE MODAL DE SINCRONIZACIÓN - CORREGIDO
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log("📴 Sin conexión - Header");
+    };
+
+    const handleSyncStatusUpdated = () => {
+      console.log("📢 Evento de actualización de sync recibido");
+      loadSyncStatus();
+    };
+
+    const handlePriceChangesUpdated = () => {
+      console.log("💰 Evento de actualización de precios recibido");
+      loadSyncStatus();
+    };
+
+    const handleStockChangesUpdated = () => {
+      console.log("📦 Evento de actualización de stock recibido");
+      loadSyncStatus();
+    };
+
+    const handleClosuresChangesUpdated = () => {
+      console.log("📋 Evento de actualización de cierres recibido");
+      loadSyncStatus();
+    };
+
+    // Registrar event listeners
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("sync_status_updated", handleSyncStatusUpdated);
+    window.addEventListener("price_changes_updated", handlePriceChangesUpdated);
+    window.addEventListener("stock_changes_updated", handleStockChangesUpdated);
+    window.addEventListener(
+      "closures_changes_updated",
+      handleClosuresChangesUpdated
+    );
+
+    // Intervalo de actualización periódica
+    const interval = setInterval(() => {
+      if (isOnline && syncStatus.hasPendingChanges) {
+        console.log("⏰ Sincronización periódica...");
+        loadSyncStatus();
+      }
+    }, 60000); // Cada minuto
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener(
+        "sync_status_updated",
+        handleSyncStatusUpdated
+      );
+      window.removeEventListener(
+        "price_changes_updated",
+        handlePriceChangesUpdated
+      );
+      window.removeEventListener(
+        "stock_changes_updated",
+        handleStockChangesUpdated
+      );
+      window.removeEventListener(
+        "closures_changes_updated",
+        handleClosuresChangesUpdated
+      );
+      clearInterval(interval);
+    };
+  }, [isOnline, syncStatus.hasPendingChanges]); // Dependencias
+
+  // ✅ CALCULAR TOTAL DE PENDIENTES
+  const totalPending =
+    syncStatus.pendingStock +
+    syncStatus.pendingPrices +
+    syncStatus.pendingClosures;
+
+  // ✅ MODAL DE SINCRONIZACIÓN
   const SyncModal = () => {
     if (!showSyncModal) return null;
 
@@ -523,7 +336,7 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
 
           <div className={styles.modalBody}>
             {/* ESTADO DE CONEXIÓN */}
-            <div className={styles.syncStatusSection}>
+            <div className={styles.connectionStatus}>
               <div
                 className={`${styles.statusIndicator} ${
                   isOnline ? styles.online : styles.offline
@@ -545,137 +358,136 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
               </div>
             </div>
 
-            {/* RESUMEN DE DATOS PENDIENTES */}
-            <div className={styles.pendingSummary}>
-              <h4>Datos Pendientes de Sincronización</h4>
+            {/* SECCIÓN DE DETALLES */}
+            <div className={styles.syncDetails}>
+              <h4>Datos Pendientes</h4>
 
-              {pendingCount === 0 ? (
-                <div className={styles.noPendingData}>
-                  <FiCheck className={styles.successIcon} />
-                  <span>¡Todo sincronizado! No hay datos pendientes.</span>
+              {/* SECCIÓN DE STOCK */}
+              <div className={styles.syncItem}>
+                <div className={styles.syncIcon}>
+                  {syncStatus.pendingStock > 0 ? (
+                    <FiAlertTriangle className={styles.warningIcon} />
+                  ) : (
+                    <FiPackage className={styles.successIcon} />
+                  )}
                 </div>
-              ) : (
-                <div className={styles.pendingList}>
-                  {syncStatus.pendingSessions > 0 && (
-                    <div className={styles.pendingItem}>
-                      <FiInfo className={styles.itemIcon} />
-                      <span>
-                        {getOperationDescription(
-                          "sessions",
-                          syncStatus.pendingSessions
-                        )}
-                      </span>
-                    </div>
-                  )}
+                <div className={styles.syncInfo}>
+                  <span className={styles.syncLabel}>Cambios de Stock</span>
+                  <span
+                    className={`${styles.syncCount} ${
+                      syncStatus.pendingStock > 0
+                        ? styles.warning
+                        : styles.success
+                    }`}
+                  >
+                    {syncStatus.pendingStock} pendientes
+                  </span>
+                </div>
+              </div>
 
-                  {syncStatus.pendingSales > 0 && (
-                    <div className={styles.pendingItem}>
-                      <FiDollarSign className={styles.itemIcon} />
-                      <span>
-                        {getOperationDescription(
-                          "sales",
-                          syncStatus.pendingSales
-                        )}
-                      </span>
-                    </div>
+              {/* SECCIÓN DE PRECIOS */}
+              <div className={styles.syncItem}>
+                <div className={styles.syncIcon}>
+                  {syncStatus.pendingPrices > 0 ? (
+                    <FiAlertTriangle className={styles.warningIcon} />
+                  ) : (
+                    <FiDollarSign className={styles.successIcon} />
                   )}
+                </div>
+                <div className={styles.syncInfo}>
+                  <span className={styles.syncLabel}>Cambios de Precio</span>
+                  <span
+                    className={`${styles.syncCount} ${
+                      syncStatus.pendingPrices > 0
+                        ? styles.warning
+                        : styles.success
+                    }`}
+                  >
+                    {syncStatus.pendingPrices} pendientes
+                  </span>
+                </div>
+              </div>
 
-                  {syncStatus.pendingClosures > 0 && (
-                    <div className={styles.pendingItem}>
-                      <FiTrendingUp className={styles.itemIcon} />
-                      <span>
-                        {getOperationDescription(
-                          "closures",
-                          syncStatus.pendingClosures
-                        )}
-                      </span>
-                    </div>
+              {/* SECCIÓN DE CIERRES */}
+              <div className={styles.syncItem}>
+                <div className={styles.syncIcon}>
+                  {syncStatus.pendingClosures > 0 ? (
+                    <FiAlertTriangle className={styles.warningIcon} />
+                  ) : (
+                    <FiArchive className={styles.successIcon} />
                   )}
+                </div>
+                <div className={styles.syncInfo}>
+                  <span className={styles.syncLabel}>Cierres de Caja</span>
+                  <span
+                    className={`${styles.syncCount} ${
+                      syncStatus.pendingClosures > 0
+                        ? styles.warning
+                        : styles.success
+                    }`}
+                  >
+                    {syncStatus.pendingClosures} pendientes
+                  </span>
+                </div>
+              </div>
 
-                  {syncStatus.pendingStock > 0 && (
-                    <div className={styles.pendingItem}>
-                      <FiPackage className={styles.itemIcon} />
-                      <span>
-                        {getOperationDescription(
-                          "stock",
-                          syncStatus.pendingStock
-                        )}
-                      </span>
-                    </div>
-                  )}
-
-                  {syncStatus.pendingProducts > 0 && (
-                    <div className={styles.pendingItem}>
-                      <FiPackage className={styles.itemIcon} />
-                      <span>
-                        {getOperationDescription(
-                          "products",
-                          syncStatus.pendingProducts
-                        )}
-                      </span>
-                    </div>
-                  )}
+              {syncStatus.lastSync && (
+                <div className={styles.lastSync}>
+                  <small>Última verificación: {syncStatus.lastSync}</small>
                 </div>
               )}
             </div>
 
-            {/* INFORMACIÓN ADICIONAL */}
-            <div className={styles.syncInfo}>
-              <div className={styles.infoItem}>
-                <strong>Total pendiente:</strong> {pendingCount} elemento
-                {pendingCount !== 1 ? "s" : ""}
-              </div>
-              <div className={styles.infoItem}>
-                <strong>Estado:</strong>{" "}
-                {isSyncing
-                  ? "Sincronizando..."
-                  : isOnline
-                  ? "Listo"
-                  : "Offline"}
-              </div>
+            {/* SECCIÓN DE ACCIONES AVANZADAS */}
+            <div className={styles.advancedActions}>
+              <h4>Acciones Avanzadas</h4>
+              <button
+                className={styles.cleanupButton}
+                onClick={handleForceCleanup}
+                disabled={!isOnline}
+                title="Forzar limpieza de registros sincronizados"
+              >
+                <FiTrash2 />
+                Limpiar Registros Sincronizados
+              </button>
+              <small className={styles.helpText}>
+                Elimina los cambios que ya fueron sincronizados con el servidor
+              </small>
+            </div>
+
+            {/* ACCIONES PRINCIPALES */}
+            <div className={styles.syncActions}>
+              <button
+                className={`${styles.syncButton} ${
+                  !isOnline || isSyncing || totalPending === 0
+                    ? styles.disabled
+                    : ""
+                }`}
+                onClick={handleManualSync}
+                disabled={!isOnline || isSyncing || totalPending === 0}
+              >
+                <FiRefreshCw className={isSyncing ? styles.spinning : ""} />
+                {isSyncing ? "Sincronizando..." : "Sincronizar Ahora"}
+              </button>
+
               {!isOnline && (
                 <div className={styles.warningMessage}>
-                  ⚠️ Conecta a internet para sincronizar los datos pendientes
+                  <FiWifiOff /> Conecta a internet para sincronizar
+                </div>
+              )}
+
+              {isOnline && totalPending === 0 && (
+                <div className={styles.successMessage}>
+                  <FiPackage /> Todos los datos están sincronizados
+                </div>
+              )}
+
+              {isOnline && totalPending > 0 && (
+                <div className={styles.infoMessage}>
+                  Tienes {totalPending} cambios pendientes de sincronización
                 </div>
               )}
             </div>
-          </div>
-
-          <div className={styles.modalFooter}>
-            <button
-              className={styles.secondaryButton}
-              onClick={() => setShowSyncModal(false)}
-            >
-              Cerrar
-            </button>
-            {/* { ✅ BOTÓN DEBUG EN EL MODAL - CON ICONO ALTERNATIVO} */}
-            {/* <button
-              className={styles.debugButton}
-              onClick={handleDebugSync}
-              title="Diagnosticar problemas de sincronización"
-            >
-              <FiAlertTriangle /> 
-              Debug
-            </button> */}
-            {isOnline && pendingCount > 0 && (
-              <button
-                className={styles.primaryButton}
-                onClick={handleForceSync}
-                disabled={isSyncing}
-              >
-                {isSyncing ? (
-                  <>
-                    <FiRefreshCw className={styles.spinner} />
-                    Sincronizando...
-                  </>
-                ) : (
-                  <>
-                    <FiRefreshCw />
-                    Sincronizar Ahora
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -685,106 +497,63 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
   return (
     <header className={styles.header}>
       <div className={styles.headerLeft}>
-        <div className={styles.menuButtonContainer}>
-          <button className={styles.menuButton} onClick={onToggleSidebar}>
-            <FiMenu className={styles.menuIcon} />
-          </button>
-        </div>
+        <button className={styles.menuButton} onClick={onToggleSidebar}>
+          <FiMenu />
+        </button>
         <div className={styles.breadcrumb}>
           <span className={styles.appName}>KioskoFlow</span>
-          <span className={styles.welcomeText}>
-            Sistema POS
-            {!isOnline && (
-              <span className={styles.offlineHeaderBadge}>
-                <FiWifiOff />
-                Offline
-              </span>
-            )}
-          </span>
+          {!isOnline && (
+            <span className={styles.offlineBadge}>
+              <FiWifiOff /> Offline
+            </span>
+          )}
         </div>
       </div>
 
       <div className={styles.headerRight}>
-        {/* ✅ BOTÓN DEBUG EN EL HEADER - CON ICONO ALTERNATIVO */}
-        {/* <button
-          className={styles.debugHeaderButton}
-          onClick={handleDebugSync}
-          title="Diagnosticar problemas de sincronización"
-        >
-          <FiAlertTriangle />
-          <span>Debug</span>
-        </button> */}
         {/* INDICADOR DE SINCRONIZACIÓN */}
-        <div className={styles.syncIndicator} onClick={handleShowSyncDetails}>
+        <div
+          className={`${styles.syncIndicator} ${
+            totalPending > 0 ? styles.hasPending : ""
+          }`}
+          onClick={() => setShowSyncModal(true)}
+          title="Estado de sincronización"
+        >
           <div className={styles.syncIconContainer}>
             <div
               className={`${styles.syncIcon} ${
                 isOnline ? styles.online : styles.offline
-              } ${isSyncing ? styles.syncing : ""}`}
+              } ${totalPending > 0 ? styles.pending : ""}`}
             >
-              {isSyncing ? (
-                <FiRefreshCw className={styles.syncSpinner} />
-              ) : isOnline ? (
-                <FiWifi />
-              ) : (
-                <FiWifiOff />
-              )}
-              {pendingCount > 0 && (
-                <span className={styles.pendingBadge}>{pendingCount}</span>
-              )}
+              {isOnline ? <FiWifi /> : <FiWifiOff />}
             </div>
+            {totalPending > 0 && isOnline && (
+              <div className={styles.syncBadge}>
+                {totalPending > 99 ? "99+" : totalPending}
+              </div>
+            )}
           </div>
           <div className={styles.syncInfo}>
             <span className={styles.syncStatus}>
-              {isSyncing
-                ? "Sincronizando..."
-                : isOnline
-                ? "En línea"
-                : "Offline"}
+              {isOnline ? "En línea" : "Offline"}
             </span>
-            {pendingCount > 0 && (
-              <span className={styles.pendingCount}>
-                {pendingCount} pendiente{pendingCount !== 1 ? "s" : ""}
+            {totalPending > 0 && isOnline && (
+              <span className={styles.pendingText}>
+                {totalPending} pendientes
               </span>
             )}
           </div>
         </div>
-        {/* INDICADOR DE GANANCIAS
-        {sesionAbierta ? (
-          <div className={styles.earningsIndicator}>
-            <div className={styles.earningsIcon}>
-              <FiTrendingUp />
-            </div>
-            <div className={styles.earningsInfo}>
-              <span className={styles.earningsAmount}>
-                {formatCurrency(gananciaBruta)}
-              </span>
-              <span className={styles.salesCount}>
-                {cantidadVentas} venta{cantidadVentas !== 1 ? "s" : ""}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className={styles.noSessionIndicator}>
-            <div className={styles.noSessionIcon}>
-              <FiDollarSign />
-            </div>
-            <div className={styles.noSessionInfo}>
-              <span className={styles.noSessionText}>Sin sesión</span>
-            </div>
-          </div>
-        )} */}
+
         {/* USUARIO */}
         <div className={styles.userInfo}>
           <div className={styles.userAvatar}>
             <span className={styles.userInitial}>
-              {user?.nombre?.charAt(0) || user?.name?.charAt(0) || "U"}
+              {user?.nombre ? user.nombre.charAt(0).toUpperCase() : "U"}
             </span>
           </div>
           <div className={styles.userDetails}>
-            <span className={styles.userName}>
-              {user?.nombre || user?.name || "Usuario"}
-            </span>
+            <span className={styles.userName}>{user?.nombre || "Usuario"}</span>
             <span className={styles.userRole}>{user?.rol || "Vendedor"}</span>
           </div>
         </div>

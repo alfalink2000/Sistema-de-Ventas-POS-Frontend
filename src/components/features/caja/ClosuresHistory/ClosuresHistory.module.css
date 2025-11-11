@@ -1081,3 +1081,120 @@
 .hiddenIcon {
   color: #6b7280;
 }
+/* ✅ BOTÓN ELIMINAR INDIVIDUAL */
+.deleteButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+.deleteButton:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+}
+
+/* ✅ BOTÓN LIMPIAR TODOS LOS CIERRES */
+.clearAllButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.clearAllButton:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.clearAllIcon {
+  font-size: 1rem;
+}
+
+/* ✅ MEJORAR CONTENEDOR DE ACCIONES */
+.actionsCell {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  min-width: 150px;
+}
+
+/* ✅ RESPONSIVE PARA BOTONES DE ACCIÓN */
+@media (max-width: 768px) {
+  .actionsCell {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .individualExportButton,
+  .deleteButton {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+  }
+}
+
+/* ✅ ESTILOS PARA CONFIRMACIÓN DE ELIMINACIÓN */
+.deleteConfirmation {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 10px 0;
+}
+
+.deleteConfirmation h4 {
+  color: #dc2626;
+  margin-bottom: 8px;
+}
+
+.deleteConfirmation p {
+  color: #7f1d1d;
+  margin-bottom: 12px;
+}
+
+.confirmationButtons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confirmDelete {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cancelDelete {
+  background: #6b7280;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}

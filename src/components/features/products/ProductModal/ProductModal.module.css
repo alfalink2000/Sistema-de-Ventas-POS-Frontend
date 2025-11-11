@@ -625,3 +625,114 @@
   margin: 5px 0;
   color: #4a5568;
 }
+/* ProductModal.module.css - AGREGAR ESTOS ESTILOS */
+
+.inputWithLock {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.lockIcon {
+  position: absolute;
+  right: 12px;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.inputWithLock input[readonly] {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.helpIcon {
+  margin-right: 4px;
+  color: #6b7280;
+}
+
+/* Asegurar que los inputs deshabilitados tengan el estilo correcto */
+.input.disabled {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+/* Estilos para modo offline */
+.offlineWarning {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 20px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.offlineIcon {
+  color: #f39c12;
+  font-size: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.offlineText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.offlineText strong {
+  color: #e67e22;
+  font-size: 14px;
+}
+
+.offlineText span {
+  color: #7d6608;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.offlineText small {
+  color: #b7950b;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.offlineBadge {
+  background: #f39c12;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+.offlineFieldNote {
+  color: #e74c3c;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.offlineFieldNoteAvailable {
+  color: #27ae60;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.offlineSave {
+  background: linear-gradient(135deg, #f39c12, #e67e22) !important;
+}
+
+.offlineSave:hover {
+  background: linear-gradient(135deg, #e67e22, #d35400) !important;
+}

@@ -3,6 +3,7 @@ import BaseOfflineController from "../BaseOfflineController/BaseOfflineControlle
 import IndexedDBService from "../../../services/IndexedDBService";
 import SalesOfflineController from "../SalesOfflineController/SalesOfflineController";
 import SessionsOfflineController from "../SessionsOfflineController/SessionsOfflineController";
+import ClosuresSyncController from "../ClosuresSyncController/ClosuresSyncController";
 
 class ClosuresOfflineController extends BaseOfflineController {
   constructor() {
@@ -51,15 +52,26 @@ class ClosuresOfflineController extends BaseOfflineController {
         es_local: true,
         estado: "completado",
       };
+      // ✅ GUARDAR EN STORE DE PENDIENTES PARA SYNC
+      const syncResult = await ClosuresSyncController.registerClosure(
+        cierreCompleto
+      );
 
-      await IndexedDBService.put(this.storeName, cierreCompleto);
+      if (!syncResult.success) {
+        console.warn(
+          "⚠️ No se pudo registrar para sincronización, pero se guardará localmente"
+        );
+        // Fallback: guardar en store local
+        await IndexedDBService.put("cierres_pendientes", cierreCompleto);
+      }
 
-      console.log("✅ Cierre offline creado:", localId);
+      console.log("✅ Cierre offline creado y registrado para sync:", localId);
 
       return {
         success: true,
         cierre: cierreCompleto,
         id_local: localId,
+        syncRegistered: syncResult.success,
       };
     } catch (error) {
       console.error("❌ Error creando cierre offline:", error);

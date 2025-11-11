@@ -1,4 +1,3 @@
-// src/components/features/offline/OfflineDataStatus/OfflineDataStatus.jsx - VERSIÓN SIMPLIFICADA
 import { useState, useEffect } from "react";
 import { FiWifi, FiWifiOff, FiUsers, FiPackage } from "react-icons/fi";
 import styles from "./OfflineDataStatus.module.css";
@@ -11,6 +10,7 @@ const OfflineDataStatus = () => {
   const [productos, setProductos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [dbInitialized, setDbInitialized] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Inicializar IndexedDB y cargar datos
   useEffect(() => {
@@ -19,6 +19,7 @@ const OfflineDataStatus = () => {
 
   const initializeDB = async () => {
     try {
+      setLoading(true);
       const initialized = await IndexedDBService.init();
       setDbInitialized(initialized);
 
@@ -27,6 +28,8 @@ const OfflineDataStatus = () => {
       }
     } catch (error) {
       console.error("❌ Error inicializando DB:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -34,11 +37,16 @@ const OfflineDataStatus = () => {
     if (!dbInitialized) return;
 
     try {
-      // ✅ OBTENER USUARIOS
-      const storeExists = await IndexedDBService.storeExists("offline_users");
-      if (storeExists) {
-        const users = await IndexedDBService.getAll("offline_users");
+      setLoading(true);
+
+      // ✅ OBTENER USUARIOS (CORREGIDO)
+      const usersStoreExists = await IndexedDBService.storeExists("users");
+      if (usersStoreExists) {
+        const users = await IndexedDBService.getAll("users");
         setOfflineUsers(users || []);
+      } else {
+        console.log("ℹ️ Store 'users' no existe aún");
+        setOfflineUsers([]);
       }
 
       // ✅ Cargar productos
@@ -58,6 +66,9 @@ const OfflineDataStatus = () => {
         if (categoriesStoreExists) {
           const categories = await IndexedDBService.getAll("categorias");
           setCategorias(categories || []);
+        } else {
+          console.log("ℹ️ Store 'categorias' no existe aún");
+          setCategorias([]);
         }
       } catch (categoryError) {
         console.error("❌ Error cargando categorías:", categoryError);
@@ -65,6 +76,8 @@ const OfflineDataStatus = () => {
       }
     } catch (error) {
       console.error("❌ Error cargando datos offline:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,6 +116,8 @@ const OfflineDataStatus = () => {
 
     if (hasUsers && hasProducts && hasCategories) {
       return { type: "optimal", text: "Datos completos" };
+    } else if (hasProducts) {
+      return { type: "warning", text: "Datos básicos" };
     } else {
       return { type: "critical", text: "Datos insuficientes" };
     }
@@ -110,13 +125,26 @@ const OfflineDataStatus = () => {
 
   const dataStatus = getDataStatus();
 
+  if (loading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.statusHeader}>
+          <div className={styles.connectionStatus}>
+            <FiWifiOff className={styles.statusIcon} />
+            <span>Cargando datos offline...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!dbInitialized) {
     return (
       <div className={styles.container}>
         <div className={styles.statusHeader}>
           <div className={styles.connectionStatus}>
             <FiWifiOff className={styles.statusIcon} />
-            <span>Inicializando base de datos...</span>
+            <span>Error inicializando base de datos</span>
           </div>
         </div>
       </div>
@@ -126,7 +154,6 @@ const OfflineDataStatus = () => {
   return (
     <div className={styles.container}>
       <div className={styles.statusHeader}>
-        {/* GRUPO DE ESTADO Y DATOS */}
         <div className={styles.statusGroup}>
           {/* ESTADO DE CONEXIÓN */}
           <div
@@ -175,6 +202,8 @@ const OfflineDataStatus = () => {
               className={`${styles.statusIndicator} ${
                 dataStatus.type === "optimal"
                   ? styles.statusOptimal
+                  : dataStatus.type === "warning"
+                  ? styles.statusWarning
                   : styles.statusCritical
               }`}
             >

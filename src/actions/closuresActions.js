@@ -4,102 +4,8 @@ import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
 import ClosuresOfflineController from "../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
-import SyncController from "../controllers/offline/SyncController/SyncController";
+// import SyncController from "../controllers/offline/SyncController/SyncController";
 
-// export const loadClosures = (limite = 100, pagina = 1) => {
-//   return async (dispatch) => {
-//     dispatch({ type: types.closuresStartLoading });
-
-//     try {
-//       console.log(`🔄 [CLOSURES] Cargando cierres...`);
-
-//       let cierres = [];
-
-//       if (navigator.onLine) {
-//         // Si hay conexión, cargar desde API
-//         const response = await fetchConToken(
-//           `cierres?limite=${limite}&pagina=${pagina}`
-//         );
-
-//         console.log("📦 [CLOSURES] Respuesta:", {
-//           ok: response?.ok,
-//           cantidad: response?.cierres?.length || 0,
-//         });
-
-//         if (response && response.ok === true) {
-//           cierres = response.cierres || [];
-
-//           // Guardar en IndexedDB para offline
-//           await IndexedDBService.clear("cierres");
-//           for (const cierre of cierres) {
-//             await IndexedDBService.add("cierres", cierre);
-//           }
-//         } else {
-//           console.warn("⚠️ [CLOSURES] Respuesta no exitosa desde API");
-//         }
-//       } else {
-//         // Si no hay conexión, cargar desde IndexedDB
-//         cierres = await IndexedDBService.getAll("cierres");
-//         console.log(
-//           `📱 [CLOSURES] ${cierres.length} cierres cargados desde almacenamiento local`
-//         );
-//       }
-
-//       // ✅ ENRIQUECER DATOS PARA EL FRONTEND
-//       const cierresEnriquecidos = cierres.map((cierre) => ({
-//         ...cierre,
-//         estado_diferencia:
-//           cierre.diferencia === 0
-//             ? "exacto"
-//             : cierre.diferencia > 0
-//             ? "sobrante"
-//             : "faltante",
-//         diferencia_absoluta: Math.abs(cierre.diferencia || 0),
-//         eficiencia:
-//           cierre.total_ventas > 0
-//             ? ((cierre.ganancia_bruta / cierre.total_ventas) * 100).toFixed(1) +
-//               "%"
-//             : "0%",
-//       }));
-
-//       // ✅ ORDENAR POR FECHA DE CIERRE (MÁS RECIENTE PRIMERO)
-//       const cierresOrdenados = cierresEnriquecidos.sort((a, b) => {
-//         return new Date(b.fecha_cierre) - new Date(a.fecha_cierre);
-//       });
-
-//       console.log(
-//         `✅ [CLOSURES] ${cierresOrdenados.length} cierres cargados y ordenados`
-//       );
-
-//       dispatch({
-//         type: types.closuresLoad,
-//         payload: cierresOrdenados,
-//       });
-
-//       return cierresOrdenados;
-//     } catch (error) {
-//       console.error("❌ [CLOSURES] Error cargando cierres:", error);
-
-//       // En caso de error, intentar cargar desde local
-//       try {
-//         const cierresLocal = await IndexedDBService.getAll("cierres");
-//         dispatch({
-//           type: types.closuresLoad,
-//           payload: cierresLocal || [],
-//         });
-//         return cierresLocal || [];
-//       } catch (localError) {
-//         dispatch({
-//           type: types.closuresLoad,
-//           payload: [],
-//         });
-//         return [];
-//       }
-//     } finally {
-//       dispatch({ type: types.closuresFinishLoading });
-//     }
-//   };
-// };
 export const loadClosures = (limite = 100, pagina = 1) => {
   return async (dispatch) => {
     dispatch({ type: types.closuresStartLoading });
@@ -251,6 +157,195 @@ export const loadClosures = (limite = 100, pagina = 1) => {
       }
     } finally {
       dispatch({ type: types.closuresFinishLoading });
+    }
+  };
+}; // ✅ ELIMINAR CIERRE LOCALMENTE
+export const deleteLocalClosure = (closure) => {
+  return async (dispatch, getState) => {
+    try {
+      console.log("🗑️ [CLOSURES] Eliminando cierre local:", closure);
+
+      const { user } = getState().auth;
+
+      // ✅ CONFIRMACIÓN CON SWEETALERT2
+      const result = await Swal.fire({
+        title: "¿Eliminar cierre local?",
+        html: `
+          <div style="text-align: left;">
+            <p><strong>ID:</strong> ${closure.id || closure.id_local}</p>
+            <p><strong>Fecha:</strong> ${new Date(
+              closure.fecha_cierre
+            ).toLocaleDateString()}</p>
+            <p><strong>Vendedor:</strong> ${closure.vendedor_nombre}</p>
+            <p><strong>Total:</strong> $${(closure.total_ventas || 0).toFixed(
+              2
+            )}</p>
+          </div>
+        `,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Sí, eliminar",
+        cancelButtonText: "Cancelar",
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) {
+        return { success: false, message: "Eliminación cancelada" };
+      }
+
+      let eliminado = false;
+
+      // ✅ ELIMINAR DE AMBOS STORES POSIBLES
+      if (closure.id) {
+        // Cierre sincronizado (store "cierres")
+        eliminado = await IndexedDBService.delete("cierres", closure.id);
+        console.log(`🗑️ Eliminado de "cierres": ${closure.id}`, eliminado);
+      }
+
+      if (closure.id_local) {
+        // Cierre pendiente (store "cierres_pendientes")
+        eliminado =
+          (await IndexedDBService.delete(
+            "cierres_pendientes",
+            closure.id_local
+          )) || eliminado;
+        console.log(
+          `🗑️ Eliminado de "cierres_pendientes": ${closure.id_local}`,
+          eliminado
+        );
+      }
+
+      if (eliminado) {
+        // ✅ ACTUALIZAR ESTADO DE REDUX
+        dispatch({
+          type: types.closureDeleteLocal,
+          payload: closure.id || closure.id_local,
+        });
+
+        await Swal.fire({
+          icon: "success",
+          title: "Cierre eliminado",
+          text: "El cierre ha sido eliminado del almacenamiento local",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+
+        // ✅ RECARGAR DATOS LOCALES
+        setTimeout(() => {
+          dispatch(loadOfflineClosures());
+        }, 500);
+
+        return { success: true, message: "Cierre eliminado exitosamente" };
+      } else {
+        throw new Error(
+          "No se pudo eliminar el cierre de la base de datos local"
+        );
+      }
+    } catch (error) {
+      console.error("❌ [CLOSURES] Error eliminando cierre local:", error);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error al eliminar",
+        text: error.message || "No se pudo eliminar el cierre local",
+        confirmButtonText: "Entendido",
+      });
+
+      return { success: false, error: error.message };
+    }
+  };
+};
+
+// ✅ ELIMINAR TODOS LOS CIERRES LOCALES (OPCIONAL)
+export const clearAllLocalClosures = () => {
+  return async (dispatch, getState) => {
+    try {
+      const { user } = getState().auth;
+
+      const result = await Swal.fire({
+        title: "¿Eliminar TODOS los cierres locales?",
+        html: `
+          <div style="text-align: center; color: #dc2626;">
+            <p><strong>⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER</strong></p>
+            <p>Se eliminarán todos los cierres almacenados localmente</p>
+          </div>
+        `,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#dc2626",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Sí, eliminar todo",
+        cancelButtonText: "Cancelar",
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) {
+        return { success: false, message: "Eliminación cancelada" };
+      }
+
+      // ✅ LIMPIAR AMBOS STORES
+      await Promise.all([
+        IndexedDBService.clear("cierres"),
+        IndexedDBService.clear("cierres_pendientes"),
+      ]);
+
+      // ✅ ACTUALIZAR ESTADO
+      dispatch({
+        type: types.closuresClearAllLocal,
+      });
+
+      await Swal.fire({
+        icon: "success",
+        title: "Datos limpiados",
+        text: "Todos los cierres locales han sido eliminados",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      return { success: true, message: "Todos los cierres locales eliminados" };
+    } catch (error) {
+      console.error("❌ [CLOSURES] Error eliminando todos los cierres:", error);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error al limpiar",
+        text: "No se pudieron eliminar los cierres locales",
+        confirmButtonText: "Entendido",
+      });
+
+      return { success: false, error: error.message };
+    }
+  };
+};
+// ✅ VERIFICAR ESTADO DE DATOS LOCALES
+export const checkLocalClosuresStatus = () => {
+  return async (dispatch) => {
+    try {
+      const [cierresCount, pendientesCount] = await Promise.all([
+        IndexedDBService.count("cierres"),
+        IndexedDBService.count("cierres_pendientes"),
+      ]);
+
+      const status = {
+        cierresSincronizados: cierresCount,
+        cierresPendientes: pendientesCount,
+        totalLocal: cierresCount + pendientesCount,
+        lastChecked: new Date().toISOString(),
+      };
+
+      console.log("📊 Estado de cierres locales:", status);
+
+      dispatch({
+        type: types.closuresLocalStatus,
+        payload: status,
+      });
+
+      return status;
+    } catch (error) {
+      console.error("❌ Error verificando estado local:", error);
+      return null;
     }
   };
 };
@@ -636,13 +731,13 @@ const calcularTotalesDesdeVentas = (ventasSesion, sesion) => {
   return calculo;
 };
 
-// ✅ CORREGIDO: CREAR CIERRE con soporte offline
+// En closuresActions.js - SIMPLIFICAR createClosure
 export const createClosure = (closureData) => {
   return async (dispatch, getState) => {
     try {
       console.log("🔄 [CLOSURES] Creando cierre de caja...", closureData);
 
-      // Validaciones
+      // Validaciones básicas
       if (!closureData.sesion_caja_id && !closureData.sesion_caja_id_local) {
         throw new Error("ID de sesión de caja es requerido");
       }
@@ -657,10 +752,11 @@ export const createClosure = (closureData) => {
       const isOnline = navigator.onLine;
       let resultado;
 
-      if (isOnline && closureData.sesion_caja_id) {
-        // ✅ MODO ONLINE - Sesión del servidor
+      if (isOnline) {
+        // ✅ MODO ONLINE - Enviar directamente al servidor
         const datosCompletos = {
-          sesion_caja_id: closureData.sesion_caja_id,
+          sesion_caja_id:
+            closureData.sesion_caja_id || closureData.sesion_caja_id_local,
           total_ventas: closureData.total_ventas || 0,
           total_efectivo: closureData.total_efectivo || 0,
           total_tarjeta: closureData.total_tarjeta || 0,
@@ -668,157 +764,51 @@ export const createClosure = (closureData) => {
           ganancia_bruta: closureData.ganancia_bruta || 0,
           saldo_final_teorico: closureData.saldo_final_teorico || 0,
           saldo_final_real: parseFloat(closureData.saldo_final_real),
-          diferencia:
-            closureData.diferencia !== undefined
-              ? parseFloat(closureData.diferencia)
-              : parseFloat(closureData.saldo_final_real) -
-                parseFloat(closureData.saldo_final_teorico || 0),
+          diferencia: closureData.diferencia || 0,
           observaciones: closureData.observaciones || "",
           vendedor_id: closureData.vendedor_id,
         };
 
+        console.log("🌐 Enviando cierre al servidor:", datosCompletos);
         const response = await fetchConToken("cierres", datosCompletos, "POST");
-
-        console.log("📦 [CLOSURES] Respuesta creación:", response);
 
         if (response && response.ok === true) {
           resultado = response;
-          console.log("✅ [CLOSURES] Cierre creado exitosamente en servidor");
-
-          // Guardar en IndexedDB
-          if (response.cierre) {
-            await IndexedDBService.add("cierres", response.cierre);
-          }
+          console.log("✅ Cierre creado exitosamente en servidor");
         } else {
           throw new Error(response?.error || "Error al crear cierre");
         }
       } else {
         // ✅ MODO OFFLINE - Crear localmente
-        console.log("📱 [CLOSURES] Creando cierre localmente...");
+        console.log("📱 Creando cierre localmente...");
 
-        const { sesionesCaja } = getState();
-        const sesion = sesionesCaja.sesiones.find(
-          (s) =>
-            s.id === closureData.sesion_caja_id ||
-            s.id_local === closureData.sesion_caja_id_local
+        const closureResult = await ClosuresOfflineController.createClosure(
+          closureData
         );
-
-        if (!sesion) {
-          throw new Error("Sesión no encontrada");
-        }
-
-        const sesionIdLocal =
-          sesion.id_local || closureData.sesion_caja_id_local;
-        const saldoFinalReal = parseFloat(closureData.saldo_final_real);
-
-        // ✅ CORREGIDO: Usar ClosuresOfflineController
-        const closureResult = await ClosuresOfflineController.createClosure({
-          ...closureData,
-          sesion_caja_id_local: sesionIdLocal,
-          saldo_final_real: saldoFinalReal,
-        });
 
         if (closureResult.success) {
           resultado = {
             ok: true,
             cierre: closureResult.cierre,
-            message:
-              "Cierre guardado localmente. Se sincronizará cuando haya conexión.",
-            resumen: {
-              estado_caja:
-                closureResult.cierre.diferencia === 0
-                  ? "Exacto"
-                  : closureResult.cierre.diferencia > 0
-                  ? "Sobrante"
-                  : "Faltante",
-            },
+            message: "Cierre guardado localmente",
           };
-
-          await Swal.fire({
-            icon: "info",
-            title: "Modo Offline",
-            text: "El cierre se guardó localmente y se sincronizará cuando recuperes la conexión",
-            confirmButtonText: "Entendido",
-          });
         } else {
           throw new Error(closureResult.error);
         }
       }
 
-      // ✅ DISPATCH CORRECTO PARA EL REDUCER
+      // Dispatch y notificación...
       if (resultado.cierre) {
-        const cierreEnriquecido = {
-          ...resultado.cierre,
-          estado_diferencia:
-            resultado.cierre.diferencia === 0
-              ? "exacto"
-              : resultado.cierre.diferencia > 0
-              ? "sobrante"
-              : "faltante",
-          diferencia_absoluta: Math.abs(resultado.cierre.diferencia || 0),
-        };
-
         dispatch({
           type: types.closureAddNew,
-          payload: {
-            cierre: cierreEnriquecido,
-          },
+          payload: { cierre: resultado.cierre },
         });
       }
 
-      // Mostrar resumen al usuario
-      if (resultado.resumen && isOnline) {
-        await Swal.fire({
-          icon: "success",
-          title: "Cierre de Caja Exitoso",
-          html: `
-            <div style="text-align: left;">
-              <p><strong>Resumen del Cierre:</strong></p>
-              <p>💰 Ventas Totales: $${(
-                resultado.cierre?.total_ventas || 0
-              ).toFixed(2)}</p>
-              <p>💵 Efectivo: $${(
-                resultado.cierre?.total_efectivo || 0
-              ).toFixed(2)}</p>
-              <p>💳 Tarjeta: $${(resultado.cierre?.total_tarjeta || 0).toFixed(
-                2
-              )}</p>
-              <p>🎯 Ganancia Bruta: $${(
-                resultado.cierre?.ganancia_bruta || 0
-              ).toFixed(2)}</p>
-              <p>📊 Diferencia: <span style="color: ${
-                resultado.resumen.estado_caja === "Exacto"
-                  ? "green"
-                  : resultado.resumen.estado_caja === "Sobrante"
-                  ? "orange"
-                  : "red"
-              }">$${(resultado.cierre?.diferencia || 0).toFixed(2)}</span></p>
-              <p><strong>Estado: ${resultado.resumen.estado_caja}</strong></p>
-            </div>
-          `,
-          confirmButtonText: "Aceptar",
-        });
-      }
-
-      return {
-        success: true,
-        cierre: resultado.cierre,
-        message: resultado.message,
-      };
+      return { success: true, cierre: resultado.cierre };
     } catch (error) {
-      console.error("❌ [CLOSURES] Error creando cierre:", error);
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error en Cierre",
-        text: error.message || "Error al procesar el cierre de caja",
-        confirmButtonText: "Entendido",
-      });
-
-      return {
-        success: false,
-        error: error.message,
-      };
+      console.error("❌ Error creando cierre:", error);
+      throw error;
     }
   };
 };
@@ -934,22 +924,55 @@ export const syncPendingClosures = () => {
   return async (dispatch) => {
     try {
       if (!navigator.onLine) {
-        await Swal.fire({ icon: "warning", title: "Sin conexión" });
+        await Swal.fire({
+          icon: "warning",
+          title: "Sin conexión",
+          text: "No hay conexión a internet para sincronizar cierres",
+          confirmButtonText: "Entendido",
+        });
         return false;
       }
 
-      // ✅ USAR SyncController correctamente
-      const syncResult = await SyncController.fullSync();
+      await Swal.fire({
+        title: "Sincronizando cierres...",
+        text: "Sincronizando cierres pendientes con el servidor",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
 
-      if (syncResult.success) {
-        // Recargar datos actualizados
+      const resultado = await ClosuresSyncController.syncPendingClosures();
+
+      Swal.close();
+
+      if (resultado.success) {
+        // Recargar cierres después de sincronizar
         await dispatch(loadClosures());
+
+        await Swal.fire({
+          icon: "success",
+          title: "Cierres sincronizados",
+          text: `Se sincronizaron ${resultado.sincronizados} cierres correctamente`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+
         return true;
       } else {
-        throw new Error(syncResult.error);
+        throw new Error(resultado.error || "Error al sincronizar cierres");
       }
     } catch (error) {
-      console.error("Error sincronizando cierres:", error);
+      console.error("❌ Error sincronizando cierres:", error);
+
+      Swal.close();
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "No se pudieron sincronizar los cierres",
+        confirmButtonText: "Entendido",
+      });
+
       return false;
     }
   };

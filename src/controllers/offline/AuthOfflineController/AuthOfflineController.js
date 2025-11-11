@@ -1,4 +1,4 @@
-// src/controllers/offline/AuthOfflineController/AuthOfflineController.js - COMPLETO
+// src/controllers/offline/AuthOfflineController/AuthOfflineController.js - CORREGIDO
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
 import IndexedDBService from "../../../services/IndexedDBService";
 
@@ -8,7 +8,7 @@ class AuthOfflineController extends BaseOfflineController {
     this.storeName = "offline_users";
   }
 
-  // ✅ GUARDAR USUARIO PARA OFFLINE
+  // ✅ GUARDAR USUARIO PARA OFFLINE - CORREGIDO
   async saveUser(userData, token) {
     try {
       console.log(
@@ -52,10 +52,10 @@ class AuthOfflineController extends BaseOfflineController {
         storeName: this.storeName,
       });
 
-      // ✅ VERIFICAR SI EL USUARIO YA EXISTE
+      // ✅ VERIFICAR SI EL USUARIO YA EXISTE - POR USERNAME (clave primaria)
       const existingUser = await IndexedDBService.get(
         this.storeName,
-        userData.id
+        userData.username // ✅ CORREGIDO: Buscar por username (keyPath)
       );
 
       if (existingUser) {
@@ -67,6 +67,7 @@ class AuthOfflineController extends BaseOfflineController {
           loginCount: (existingUser.loginCount || 0) + 1,
         };
 
+        // ✅ CORREGIDO: Usar put en lugar de add para actualizar
         const updateResult = await IndexedDBService.put(
           this.storeName,
           updatedUser
@@ -81,7 +82,9 @@ class AuthOfflineController extends BaseOfflineController {
       } else {
         // ✅ CREAR NUEVO USUARIO OFFLINE
         console.log("🆕 Creando nuevo usuario offline...");
-        const addResult = await IndexedDBService.add(
+
+        // ✅ CORREGIDO: Usar addOrUpdate en lugar de add
+        const addResult = await IndexedDBService.addOrUpdate(
           this.storeName,
           offlineUser
         );
@@ -90,7 +93,7 @@ class AuthOfflineController extends BaseOfflineController {
         // ✅ VERIFICAR QUE REALMENTE SE GUARDÓ
         const verifyUser = await IndexedDBService.get(
           this.storeName,
-          userData.id
+          userData.username // ✅ CORREGIDO: Verificar por username
         );
         console.log(
           "🔍 Usuario verificado después de guardar:",
@@ -159,7 +162,8 @@ class AuthOfflineController extends BaseOfflineController {
       throw error;
     }
   }
-  // controllers/offline/AuthOfflineController/AuthOfflineController.js - AGREGAR MÉTODO
+
+  // ✅ CONTAR USUARIOS OFFLINE
   async getOfflineUsersCount() {
     try {
       const users = await IndexedDBService.getAll(this.storeName);
@@ -170,75 +174,33 @@ class AuthOfflineController extends BaseOfflineController {
       return 0;
     }
   }
-  // ✅ VERIFICAR CREDENCIALES OFFLINE
-  // ✅ MEJORA EN verifyCredentials - AuthOfflineController.js
-  async verifyCredentials(username, password) {
+  // ✅ VERIFICACIÓN OFFLINE PURA - SIN TOKEN
+  async verifyOfflineAccess(username) {
     try {
-      console.log("🔐 Verificando credenciales offline para:", username);
+      console.log("🔐 Verificación offline pura para:", username);
 
-      // ✅ VERIFICAR QUE INDEXEDDB ESTÉ INICIALIZADO
       if (!IndexedDBService.initialized) {
         await IndexedDBService.init();
       }
 
-      const users = await IndexedDBService.getAll(this.storeName);
-      console.log(`📊 Usuarios en BD: ${users.length}`);
-
-      const user = users.find(
-        (u) => u.username === username && u.activo !== false
-      );
+      const user = await IndexedDBService.get(this.storeName, username);
 
       if (!user) {
-        console.log("❌ Usuario no encontrado en datos offline:", username);
         return {
           success: false,
-          error:
-            "Usuario no disponible offline. Conecta a internet para primer acceso.",
+          error: "Usuario no disponible offline",
         };
       }
 
-      console.log("✅ Usuario encontrado, verificando token...");
-
-      // ✅ VERIFICAR TOKEN JWT
-      if (user.token) {
-        try {
-          const tokenParts = user.token.split(".");
-          if (tokenParts.length !== 3) {
-            return {
-              success: false,
-              error: "Token inválido. Conecta a internet para renovar.",
-            };
-          }
-
-          const tokenPayload = JSON.parse(atob(tokenParts[1]));
-          const isTokenValid = tokenPayload.exp * 1000 > Date.now();
-
-          if (!isTokenValid) {
-            console.warn("⚠️ Token expirado para usuario:", username);
-            return {
-              success: false,
-              error: "Sesión expirada. Conecta a internet para renovar.",
-            };
-          }
-
-          console.log("✅ Token válido para usuario:", username);
-        } catch (tokenError) {
-          console.error("❌ Error decodificando token:", tokenError);
-          return {
-            success: false,
-            error: "Error de sesión. Conecta a internet.",
-          };
-        }
-      } else {
-        console.warn("⚠️ Usuario sin token:", username);
+      if (user.activo === false || user.isActive === false) {
         return {
           success: false,
-          error: "Credenciales incompletas. Conecta a internet.",
+          error: "Usuario inactivo",
         };
       }
 
-      // ✅ ACTUALIZAR ÚLTIMO LOGIN
-      await this.updateLastLogin(user.id);
+      // ✅ ACTUALIZAR ÚLTIMO ACCESO OFFLINE
+      await this.updateLastLogin(username);
 
       return {
         success: true,
@@ -249,8 +211,66 @@ class AuthOfflineController extends BaseOfflineController {
           nombre: user.nombre,
           rol: user.rol,
           activo: user.activo,
+          vendedor_id: user.vendedor_id,
         },
-        token: user.token,
+        isOffline: true,
+      };
+    } catch (error) {
+      console.error("❌ Error en verificación offline pura:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+  // ✅ VERIFICAR CREDENCIALES OFFLINE - CORREGIDO
+  async verifyCredentials(username, password) {
+    try {
+      console.log("🔐 Verificando credenciales offline para:", username);
+
+      if (!IndexedDBService.initialized) {
+        await IndexedDBService.init();
+      }
+
+      // ✅ CORREGIDO: Buscar por username
+      const user = await IndexedDBService.get(this.storeName, username);
+
+      if (!user) {
+        console.log("❌ Usuario no encontrado en datos offline:", username);
+        return {
+          success: false,
+          error:
+            "Usuario no disponible offline. Conecta a internet para primer acceso.",
+        };
+      }
+
+      // ✅ VERIFICAR SI EL USUARIO ESTÁ ACTIVO
+      if (user.activo === false || user.isActive === false) {
+        console.log("❌ Usuario inactivo en cache offline:", username);
+        return {
+          success: false,
+          error: "Usuario inactivo. Conecta a internet para verificar estado.",
+        };
+      }
+
+      console.log("✅ Usuario encontrado - Modo offline activado");
+
+      // ✅ ACTUALIZAR ÚLTIMO LOGIN
+      await this.updateLastLogin(username);
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          nombre: user.nombre,
+          rol: user.rol,
+          activo: user.activo,
+          vendedor_id: user.vendedor_id,
+        },
+        token: user.token, // ✅ Mantenemos el token pero NO lo validamos offline
+        isOffline: true, // ✅ Nueva bandera
       };
     } catch (error) {
       console.error("❌ Error verificando credenciales offline:", error);
@@ -261,26 +281,53 @@ class AuthOfflineController extends BaseOfflineController {
     }
   }
 
-  async updateLastLogin(userId) {
+  // ✅ ACTUALIZAR ÚLTIMO LOGIN - CORREGIDO
+  async updateLastLogin(username) {
     try {
-      const user = await IndexedDBService.get(this.storeName, userId);
+      // ✅ CORREGIDO: Buscar por username (clave primaria)
+      const user = await IndexedDBService.get(this.storeName, username);
       if (user) {
-        user.lastLogin = new Date().toISOString();
-        user.loginCount = (user.loginCount || 0) + 1;
-        await IndexedDBService.put(this.storeName, user);
+        const updatedUser = {
+          ...user,
+          lastLogin: new Date().toISOString(),
+          loginCount: (user.loginCount || 0) + 1,
+        };
+
+        // ✅ CORREGIDO: Usar put para actualizar
+        await IndexedDBService.put(this.storeName, updatedUser);
+        console.log("✅ Último login actualizado para:", username);
       }
     } catch (error) {
       console.error("Error actualizando último login:", error);
     }
   }
 
-  // ✅ OBTENER USUARIO POR USERNAME
+  // ✅ OBTENER USUARIO POR USERNAME - CORREGIDO
   async getUserByUsername(username) {
     try {
-      const users = await IndexedDBService.getAll(this.storeName);
-      return users.find((u) => u.username === username && u.activo !== false);
+      console.log("🔍 Buscando usuario en offline_users:", username);
+
+      if (!IndexedDBService.initialized) {
+        await IndexedDBService.init();
+      }
+
+      const storeExists = await IndexedDBService.storeExists(this.storeName);
+      if (!storeExists) {
+        console.warn(`❌ Store ${this.storeName} no existe`);
+        return null;
+      }
+
+      // ✅ CORREGIDO: Buscar directamente por clave primaria
+      const user = await IndexedDBService.get(this.storeName, username);
+
+      console.log(
+        "🔍 Resultado búsqueda usuario:",
+        user ? "ENCONTRADO" : "NO ENCONTRADO"
+      );
+
+      return user;
     } catch (error) {
-      console.error("Error obteniendo usuario:", error);
+      console.error("❌ Error en getUserByUsername:", error);
       return null;
     }
   }
@@ -355,7 +402,7 @@ class AuthOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ NUEVO: OBTENER TODOS LOS USUARIOS OFFLINE
+  // ✅ OBTENER TODOS LOS USUARIOS OFFLINE
   async getAllOfflineUsers() {
     try {
       const users = await IndexedDBService.getAll(this.storeName);
@@ -366,16 +413,16 @@ class AuthOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ NUEVO: LIMPIAR USUARIOS DUPLICADOS
+  // ✅ LIMPIAR USUARIOS DUPLICADOS - CORREGIDO
   async cleanupDuplicateUsers() {
     try {
       const users = await this.getAllOfflineUsers();
       const uniqueUsers = [];
-      const seenIds = new Set();
+      const seenUsernames = new Set(); // ✅ CORREGIDO: Usar username como clave única
 
       for (const user of users) {
-        if (!seenIds.has(user.id)) {
-          seenIds.add(user.id);
+        if (!seenUsernames.has(user.username)) {
+          seenUsernames.add(user.username);
           uniqueUsers.push(user);
         }
       }
@@ -383,7 +430,8 @@ class AuthOfflineController extends BaseOfflineController {
       // Limpiar y guardar usuarios únicos
       await IndexedDBService.clear(this.storeName);
       for (const user of uniqueUsers) {
-        await IndexedDBService.add(this.storeName, user);
+        // ✅ CORREGIDO: Usar addOrUpdate para evitar errores de clave duplicada
+        await IndexedDBService.addOrUpdate(this.storeName, user);
       }
 
       return {
@@ -396,36 +444,73 @@ class AuthOfflineController extends BaseOfflineController {
       return { success: false, error: error.message };
     }
   }
-  // controllers/offline/AuthOfflineController/AuthOfflineController.js - AGREGAR
-  async getUserByUsername(username) {
-    try {
-      console.log("🔍 Buscando usuario en offline_users:", username);
 
+  // ✅ NUEVO MÉTODO: ELIMINAR USUARIO OFFLINE
+  async removeOfflineUser(username) {
+    try {
       if (!IndexedDBService.initialized) {
         await IndexedDBService.init();
       }
 
-      const storeExists = await IndexedDBService.storeExists("offline_users");
-      if (!storeExists) {
-        console.warn("❌ Store offline_users no existe");
-        return null;
+      const result = await IndexedDBService.delete(this.storeName, username);
+
+      if (result) {
+        console.log(`✅ Usuario offline eliminado: ${username}`);
+        return { success: true };
+      } else {
+        console.log(`⚠️ Usuario no encontrado para eliminar: ${username}`);
+        return { success: false, error: "Usuario no encontrado" };
       }
-
-      const users = await IndexedDBService.getAll("offline_users");
-      console.log(`📊 Total de usuarios en BD: ${users.length}`);
-
-      const user = users.find(
-        (u) => u.username === username && u.activo !== false
-      );
-
-      console.log(
-        "🔍 Resultado búsqueda usuario:",
-        user ? "ENCONTRADO" : "NO ENCONTRADO"
-      );
-      return user;
     } catch (error) {
-      console.error("❌ Error en getUserByUsername:", error);
-      return null;
+      console.error("❌ Error eliminando usuario offline:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ NUEVO MÉTODO: VERIFICAR SI USUARIO EXISTE OFFLINE
+  async userExistsOffline(username) {
+    try {
+      const user = await IndexedDBService.get(this.storeName, username);
+      return user !== null && user !== undefined;
+    } catch (error) {
+      console.error("Error verificando usuario offline:", error);
+      return false;
+    }
+  }
+
+  // ✅ NUEVO MÉTODO: GUARDAR USUARIO DE FORMA SEGURA
+  async safeSaveUser(userData, token) {
+    try {
+      const exists = await this.userExistsOffline(userData.username);
+
+      const offlineUser = {
+        ...userData,
+        token: token,
+        lastLogin: new Date().toISOString(),
+        savedAt: new Date().toISOString(),
+        isActive: true,
+      };
+
+      if (exists) {
+        console.log("🔄 Usuario ya existe, actualizando...");
+        // ✅ Obtener usuario existente para preservar loginCount
+        const existingUser = await IndexedDBService.get(
+          this.storeName,
+          userData.username
+        );
+        offlineUser.loginCount = (existingUser.loginCount || 0) + 1;
+
+        return await IndexedDBService.put(this.storeName, offlineUser);
+      } else {
+        console.log("🆕 Usuario nuevo, insertando...");
+        offlineUser.loginCount = 1;
+        offlineUser.createdAt = new Date().toISOString();
+
+        return await IndexedDBService.addOrUpdate(this.storeName, offlineUser);
+      }
+    } catch (error) {
+      console.error("❌ Error en safeSaveUser:", error);
+      return false;
     }
   }
 }

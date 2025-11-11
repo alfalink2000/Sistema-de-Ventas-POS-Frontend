@@ -10,7 +10,58 @@ class ProductsOfflineController extends BaseOfflineController {
     this.storeName = "productos_pendientes";
     this.cacheStore = "productos";
   }
+  // En ProductsOfflineController.js - AGREGAR ESTE MÉTODO
+  async forceCleanDuplicates() {
+    try {
+      console.log("🧹 EJECUTANDO LIMPIEZA FORZADA DE DUPLICADOS...");
 
+      const allProducts = await IndexedDBService.getAll("productos");
+      console.log(`📦 Total productos encontrados: ${allProducts.length}`);
+
+      const uniqueProducts = [];
+      const seenIds = new Set();
+      let duplicatesRemoved = 0;
+
+      // Ordenar por fecha de creación (mantener el más reciente)
+      const sortedProducts = allProducts.sort(
+        (a, b) =>
+          new Date(b.fecha_creacion || b.last_sync || 0) -
+          new Date(a.fecha_creacion || a.last_sync || 0)
+      );
+
+      for (const product of sortedProducts) {
+        if (!product || !product.id) {
+          console.log("⚠️ Producto sin ID:", product);
+          continue;
+        }
+
+        if (!seenIds.has(product.id)) {
+          seenIds.add(product.id);
+          uniqueProducts.push(product);
+        } else {
+          console.log(
+            `🗑️ Eliminando duplicado: ${product.id} - ${product.nombre}`
+          );
+          await IndexedDBService.delete("productos", product.id);
+          duplicatesRemoved++;
+        }
+      }
+
+      console.log(
+        `✅ Limpieza completada: ${duplicatesRemoved} duplicados eliminados`
+      );
+      console.log(`📊 Productos únicos: ${uniqueProducts.length}`);
+
+      return {
+        success: true,
+        duplicatesRemoved,
+        uniqueCount: uniqueProducts.length,
+      };
+    } catch (error) {
+      console.error("❌ Error en forceCleanDuplicates:", error);
+      return { success: false, error: error.message };
+    }
+  }
   // En ProductsOfflineController.js - AGREGAR método de sincronización forzada
   async forceProductsSync() {
     try {
@@ -113,7 +164,39 @@ class ProductsOfflineController extends BaseOfflineController {
       return [];
     }
   }
+  // En ProductsOfflineController.js - AGREGAR
+  async trackStockChange(productoId, stockData) {
+    try {
+      console.log(
+        `📝 [STOCK TRACK] Registrando cambio: ${productoId}`,
+        stockData
+      );
 
+      // ✅ USAR EL NUEVO STOCK SYNC CONTROLLER
+      const resultado = await StockSyncController.registerStockChange(
+        productoId,
+        stockData
+      );
+
+      if (resultado.success) {
+        console.log(
+          `✅ Cambio de stock registrado para sincronización: ${productoId}`
+        );
+
+        // ✅ EMITIR EVENTO PARA ACTUALIZAR UI
+        window.dispatchEvent(
+          new CustomEvent("stock_changes_updated", {
+            detail: { productoId, ...stockData },
+          })
+        );
+      }
+
+      return resultado;
+    } catch (error) {
+      console.error("❌ Error registrando cambio de stock:", error);
+      return { success: false, error: error.message };
+    }
+  }
   // ✅ VALIDAR STOCK SIMPLE (método que falta)
   async validateStockForSaleSimple(productos) {
     try {
@@ -321,60 +404,40 @@ class ProductsOfflineController extends BaseOfflineController {
     }
   }
   // ✅ MÉTODO CORREGIDO - OBTENER TODOS LOS PRODUCTOS
-  async getAllProducts() {
+  // En ProductsOfflineController.js - método para obtener productos
+  static async getAllProducts() {
     try {
-      console.log(
-        "🔍 [PRODUCTS] Obteniendo todos los productos de IndexedDB..."
-      );
-
-      // ✅ VERIFICAR PRIMERO SI EL STORE EXISTE
-      const storeExists = await IndexedDBService.storeExists("productos");
-      if (!storeExists) {
-        console.warn("⚠️ El store 'productos' no existe en IndexedDB");
-        return [];
-      }
-
-      // ✅ OBTENER DIRECTAMENTE TODOS LOS PRODUCTOS
       const products = await IndexedDBService.getAll("productos");
 
+      // ✅ NORMALIZAR ESTRUCTURA AL CARGAR
+      const normalizedProducts = products.map((product) => {
+        const imagen =
+          product.imagen_url || product.imagen || product.image || null;
+
+        return {
+          ...product,
+          imagen_url: imagen,
+          imagen: imagen,
+          // Asegurar otras propiedades críticas
+          nombre: product.nombre || "Sin nombre",
+          precio: product.precio || product.precio_venta || 0,
+          stock: product.stock || 0,
+        };
+      });
+
       console.log(
-        `📦 [PRODUCTS] ${products.length} productos obtenidos de IndexedDB`
+        `📦 [PRODUCTS] ${normalizedProducts.length} productos obtenidos de IndexedDB`
       );
+      console.log(`🖼️ Estructura normalizada - primer producto:`, {
+        nombre: normalizedProducts[0]?.nombre,
+        imagen_url: normalizedProducts[0]?.imagen_url,
+        imagen: normalizedProducts[0]?.imagen,
+      });
 
-      // ✅ FILTRAR PRODUCTOS VÁLIDOS
-      const validProducts = products.filter(
-        (product) =>
-          product && product.id && product.nombre && product.activo !== false
-      );
-
-      console.log(
-        `✅ [PRODUCTS] ${validProducts.length} productos válidos después de filtro`
-      );
-
-      // ✅ DEBUG: Mostrar primeros 3 productos
-      if (validProducts.length > 0) {
-        console.log("🔍 Primeros 3 productos en IndexedDB:");
-        validProducts.slice(0, 3).forEach((p, i) => {
-          console.log(
-            `   ${i + 1}. ${p.nombre} (ID: ${p.id}, Stock: ${p.stock})`
-          );
-        });
-      }
-
-      return validProducts;
+      return normalizedProducts;
     } catch (error) {
-      console.error("❌ [PRODUCTS] Error crítico obteniendo productos:", error);
-
-      // ✅ INTENTAR RECUPERACIÓN DE EMERGENCIA
-      try {
-        console.log("🔄 Intentando recuperación de emergencia...");
-        const allData = await IndexedDBService.getAll("productos");
-        console.log(`📊 Datos crudos obtenidos: ${allData.length} registros`);
-        return allData.filter((item) => item && typeof item === "object");
-      } catch (fallbackError) {
-        console.error("❌ Error en recuperación de emergencia:", fallbackError);
-        return [];
-      }
+      console.error("❌ Error obteniendo productos de IndexedDB:", error);
+      return [];
     }
   }
   // ✅ SINCRONIZAR PRODUCTOS PENDIENTES
@@ -412,83 +475,68 @@ class ProductsOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ GUARDAR PRODUCTOS EN INDEXEDDB
-  // ✅ GUARDAR PRODUCTOS EN INDEXEDDB - VERSIÓN MEJORADA
-  async saveProducts(products) {
+  // ✅ AGREGAR MÉTODO saveProducts QUE FALTA
+  static async saveProducts(products) {
     try {
-      console.log(`💾 Guardando ${products.length} productos en IndexedDB...`);
+      console.log(
+        "💾 ProductsOfflineController: Guardando productos en IndexedDB..."
+      );
 
-      if (!products || products.length === 0) {
-        console.warn("⚠️ No hay productos para guardar");
-        return { success: false, error: "No hay productos para guardar" };
+      if (!products || !Array.isArray(products)) {
+        console.error(
+          "❌ ProductsOfflineController: productos no es un array válido"
+        );
+        return { success: false, error: "Datos de productos inválidos" };
       }
 
-      // ✅ PRIMERO: LIMPIAR PRODUCTOS EXISTENTES
-      await this.clearProducts();
-      console.log("✅ Productos anteriores limpiados");
+      // ✅ NORMALIZAR ESTRUCTURA ANTES DE GUARDAR
+      const normalizedProducts = products.map((product) => {
+        // Asegurar que tengamos una propiedad de imagen consistente
+        const imagen =
+          product.imagen_url || product.imagen || product.image || null;
 
+        return {
+          ...product,
+          imagen_url: imagen, // Mantener para compatibilidad online
+          imagen: imagen, // Mantener para compatibilidad offline
+          // Asegurar otras propiedades críticas
+          nombre: product.nombre || "Sin nombre",
+          precio: product.precio || product.precio_venta || 0,
+          stock: product.stock || 0,
+          categoria_nombre:
+            product.categoria_nombre ||
+            product.categoria?.nombre ||
+            "Sin categoría",
+          last_sync: new Date().toISOString(),
+          sincronizado: true,
+        };
+      });
+
+      console.log("📦 Productos normalizados:", normalizedProducts.length);
+
+      // Limpiar productos existentes
+      await this.clearProducts();
+
+      // Guardar productos normalizados
       let savedCount = 0;
       let errorCount = 0;
 
-      for (const product of products) {
+      for (const product of normalizedProducts) {
         try {
-          // Validar producto mínimo
-          if (!product.id || !product.nombre) {
-            console.warn("⚠️ Producto inválido, saltando:", product);
-            errorCount++;
-            continue;
-          }
-
-          // ✅ USAR put EN LUGAR DE add PARA EVITAR DUPLICADOS
-          const productForOffline = {
-            id: product.id.toString(), // ✅ MANTENER ID ORIGINAL
-            nombre: product.nombre,
-            precio: parseFloat(product.precio) || 0,
-            precio_compra:
-              parseFloat(product.precio_compra) || product.precio * 0.8,
-            stock: parseInt(product.stock) || 0,
-            categoria_id: product.categoria_id?.toString() || "1",
-            codigo: product.codigo || product.id,
-            activo: product.activo !== false,
-            descripcion: product.descripcion || "",
-            last_sync: new Date().toISOString(),
-            imagen: product.imagen || null,
-            created_at: product.created_at || new Date().toISOString(),
-            updated_at: product.updated_at || new Date().toISOString(),
-            sincronizado: true, // ✅ MARCAR COMO SINCRONIZADO
-          };
-
-          console.log(
-            `💾 Guardando producto: ${productForOffline.nombre} (${productForOffline.id})`
-          );
-
-          // ✅ USAR put EN LUGAR DE add - SOBREESCRIBE SI EXISTE
-          const success = await IndexedDBService.put(
-            "productos",
-            productForOffline
-          );
-
-          if (success) {
-            savedCount++;
-          } else {
-            errorCount++;
-            console.error(`❌ Error guardando producto: ${product.nombre}`);
-          }
-        } catch (productError) {
+          await IndexedDBService.put("productos", product);
+          savedCount++;
+        } catch (error) {
+          console.error(`❌ Error guardando producto ${product.id}:`, error);
           errorCount++;
-          console.error(
-            `❌ Error procesando producto ${product.id}:`,
-            productError
-          );
         }
       }
 
       console.log(
-        `✅ ${savedCount} productos guardados en IndexedDB, ${errorCount} errores`
+        `✅ ${savedCount} productos guardados exitosamente en IndexedDB, ${errorCount} errores`
       );
       return {
-        success: savedCount > 0,
-        saved: savedCount,
+        success: true,
+        count: savedCount,
         errors: errorCount,
       };
     } catch (error) {
@@ -496,6 +544,31 @@ class ProductsOfflineController extends BaseOfflineController {
       return { success: false, error: error.message };
     }
   }
+
+  // ✅ AGREGAR MÉTODO clearProducts SI NO EXISTE
+  static async clearProducts() {
+    try {
+      await IndexedDBService.clearStore("productos");
+      console.log("✅ Productos limpiados correctamente");
+      return true;
+    } catch (error) {
+      console.error("❌ Error limpiando productos:", error);
+      return false;
+    }
+  }
+
+  // ✅ AGREGAR MÉTODO saveProduct SI NO EXISTE
+  static async saveProduct(product) {
+    try {
+      await IndexedDBService.put("productos", product);
+      return { success: true };
+    } catch (error) {
+      console.error(`❌ Error guardando producto ${product.id}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ✅ AGREGAR MÉTODO clearProducts SI NO EXISTE
 
   // ✅ NUEVO: OBTENER PRODUCTO POR ID
   // ✅ OBTENER PRODUCTO POR ID
@@ -713,15 +786,14 @@ class ProductsOfflineController extends BaseOfflineController {
     }
   }
   // ✅ LIMPIAR PRODUCTOS (para resincronización)
-  async clearProducts() {
+  static async clearProducts() {
     try {
-      console.log("🗑️ Limpiando productos en IndexedDB...");
-      await IndexedDBService.clear(this.storeName);
+      await IndexedDBService.clearStore("productos");
       console.log("✅ Productos limpiados correctamente");
-      return { success: true };
+      return true;
     } catch (error) {
       console.error("❌ Error limpiando productos:", error);
-      return { success: false, error: error.message };
+      return false;
     }
   }
   // ✅ OBTENER ESTADÍSTICAS

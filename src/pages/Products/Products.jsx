@@ -1,16 +1,21 @@
-// pages/Products/Products.jsx - CON VALIDACIONES DE ROLES
+// pages/Products/Products.jsx - VERSIÓN CORREGIDA SIN ERRORES
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ProductGrid from "../../components/features/products/ProductGrid/ProductGrid";
 import ProductSearch from "../../components/features/products/ProductSearch/ProductSearch";
 import ProductModal from "../../components/features/products/ProductModal/ProductModal";
 import CategoryModal from "../../components/features/categories/CategoryModal";
+import IndexedDBService from "../../services/IndexedDBService";
+
 import {
   loadProducts,
   loadProductsIfNeeded,
   createProduct,
   updateProduct,
   deleteProduct,
+  syncProductsFromServer,
+  cleanDuplicateProducts, // ✅ IMPORTAR LA FUNCIÓN CORRECTA
+  emergencyCleanDuplicates,
 } from "../../actions/productsActions";
 import {
   loadCategories,
@@ -31,6 +36,7 @@ import {
   FiChevronUp,
   FiShield,
   FiEye,
+  FiRefreshCw,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import styles from "./Products.module.css";
@@ -44,6 +50,8 @@ const Products = () => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [categories, setCategories] = useState([]);
   const [categoriesExpanded, setCategoriesExpanded] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [cleaningDuplicates, setCleaningDuplicates] = useState(false);
 
   const dispatch = useDispatch();
   const { products, loading, dataLoaded, error } = useSelector(
@@ -51,7 +59,85 @@ const Products = () => {
   );
   const { categories: categoriesFromStore, loading: categoriesLoading } =
     useSelector((state) => state.categories);
-  const { user: currentUser } = useSelector((state) => state.auth); // ✅ OBTENER USUARIO ACTUAL
+  const { user: currentUser } = useSelector((state) => state.auth);
+
+  // Agregar esto en Products.jsx como función de emergencia
+
+  const emergencyCleanDuplicates = async () => {
+    try {
+      console.log("🚨 EJECUTANDO LIMPIEZA DE EMERGENCIA COMPLETA...");
+
+      // 1. Obtener todos los productos de IndexedDB
+      const allProducts = await IndexedDBService.getAll("productos");
+      console.log(`📦 Total productos en BD: ${allProducts.length}`);
+
+      // 2. Aplicar limpieza agresiva
+      const uniqueProducts = [];
+      const seenIds = new Set();
+      const seenLocalIds = new Set();
+
+      allProducts.forEach((product) => {
+        if (!product) return;
+
+        let isDuplicate = false;
+
+        // Verificar por ID del servidor
+        if (product.id && seenIds.has(product.id)) {
+          isDuplicate = true;
+          console.log(`🗑️ Duplicado por ID: ${product.id} - ${product.nombre}`);
+        }
+
+        // Verificar por ID local
+        if (product.id_local && seenLocalIds.has(product.id_local)) {
+          isDuplicate = true;
+          console.log(
+            `🗑️ Duplicado por ID local: ${product.id_local} - ${product.nombre}`
+          );
+        }
+
+        if (!isDuplicate) {
+          if (product.id) seenIds.add(product.id);
+          if (product.id_local) seenLocalIds.add(product.id_local);
+          uniqueProducts.push(product);
+        }
+      });
+
+      console.log(
+        `✅ Productos únicos después de limpieza: ${uniqueProducts.length}`
+      );
+
+      // 3. Limpiar y restaurar
+      await IndexedDBService.clear("productos");
+
+      for (const product of uniqueProducts) {
+        await IndexedDBService.add("productos", product);
+      }
+
+      // 4. Recargar en Redux
+      dispatch({
+        type: types.productsLoad,
+        payload: uniqueProducts,
+      });
+
+      await Swal.fire({
+        icon: "success",
+        title: "Limpieza completada",
+        text: `Se eliminaron ${
+          allProducts.length - uniqueProducts.length
+        } productos duplicados`,
+        timer: 3000,
+      });
+
+      return uniqueProducts;
+    } catch (error) {
+      console.error("❌ Error en limpieza de emergencia:", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudieron limpiar los duplicados",
+      });
+    }
+  };
 
   // ✅ EFFECT UNIFICADO Y CORREGIDO
   useEffect(() => {
@@ -79,6 +165,111 @@ const Products = () => {
       setCategories(categoriesFromStore);
     }
   }, [categoriesFromStore]);
+
+  // ✅ FUNCIÓN CORREGIDA PARA VERIFICAR DUPLICADOS
+  // const checkForDuplicates = async () => {
+  //   try {
+  //     console.log("🔍 Verificando productos duplicados...");
+
+  //     // ✅ USAR LA FUNCIÓN DEL ACTION CORRECTAMENTE
+  //     const duplicates = await dispatch(checkForDuplicateProducts());
+
+  //     if (duplicates && duplicates.length > 0) {
+  //       console.warn(
+  //         `⚠️ Encontrados ${duplicates.length} productos duplicados`
+  //       );
+  //       setShowDuplicates(true);
+  //     } else {
+  //       console.log("✅ No se encontraron productos duplicados");
+  //       setShowDuplicates(false);
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ Error verificando duplicados:", error);
+  //   }
+  // };
+
+  // ✅ FUNCIÓN CORREGIDA PARA LIMPIAR DUPLICADOS
+  const handleCleanDuplicates = async () => {
+    try {
+      setCleaningDuplicates(true);
+      console.log("🧹 Iniciando limpieza de duplicados...");
+
+      // ✅ IMPORTAR EL SERVICIO CORRECTAMENTE
+      const IndexedDBService = await import(
+        "../../services/IndexedDBService"
+      ).then((module) => module.default);
+
+      if (!IndexedDBService) {
+        throw new Error("No se pudo cargar IndexedDBService");
+      }
+
+      const allProducts = await IndexedDBService.getAll("productos");
+      const seenIds = new Set();
+      const duplicates = [];
+
+      // Identificar duplicados
+      allProducts.forEach((product) => {
+        if (seenIds.has(product.id)) {
+          duplicates.push(product.id);
+        } else {
+          seenIds.add(product.id);
+        }
+      });
+
+      if (duplicates.length > 0) {
+        console.log(
+          `🔄 Eliminando ${duplicates.length} productos duplicados...`
+        );
+
+        // Eliminar duplicados
+        for (const duplicateId of duplicates) {
+          await IndexedDBService.delete("productos", duplicateId);
+        }
+
+        // Recargar productos
+        await dispatch(loadProducts());
+
+        setShowDuplicates(false);
+
+        await Swal.fire({
+          icon: "success",
+          title: "Limpieza completada",
+          text: `Se eliminaron ${duplicates.length} productos duplicados`,
+          timer: 3000,
+          showConfirmButton: false,
+        });
+      } else {
+        await Swal.fire({
+          icon: "info",
+          title: "Sin duplicados",
+          text: "No se encontraron productos duplicados para limpiar",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error limpiando duplicados:", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudieron limpiar los duplicados",
+        confirmButtonText: "Entendido",
+      });
+    } finally {
+      setCleaningDuplicates(false);
+    }
+  };
+
+  // // ✅ VERIFICAR DUPLICADOS CUANDO SE CARGAN LOS PRODUCTOS
+  // useEffect(() => {
+  //   if (products && products.length > 0) {
+  //     const timer = setTimeout(() => {
+  //       checkForDuplicates();
+  //     }, 3000);
+
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [products]);
 
   // ✅ FUNCIÓN PARA SOLICITAR CONTRASEÑA DE ADMIN
   const requestAdminPassword = async (action = "realizar esta acción") => {
@@ -154,7 +345,7 @@ const Products = () => {
     dispatch(deleteProduct(productId));
   };
 
-  // En Products.jsx - ACTUALIZAR handleSaveProduct
+  // ✅ MANEJAR GUARDADO DE PRODUCTO
   const handleSaveProduct = async (
     productData,
     productId,
@@ -270,6 +461,46 @@ const Products = () => {
     }
   };
 
+  // ✅ FUNCIÓN PARA SINCRONIZAR PRODUCTOS
+  const handleSyncProducts = async () => {
+    try {
+      await Swal.fire({
+        title: "Sincronizando...",
+        text: "Actualizando catálogo de productos",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const result = await dispatch(syncProductsFromServer());
+
+      Swal.close();
+
+      if (result.success) {
+        await Swal.fire({
+          icon: "success",
+          title: "Sincronización completada",
+          text: `✅ ${
+            result.count || result.data?.length || 0
+          } productos actualizados`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      } else {
+        throw new Error(result.error || "Error en sincronización");
+      }
+    } catch (error) {
+      Swal.close();
+      await Swal.fire({
+        icon: "error",
+        title: "Error de sincronización",
+        text: error.message || "No se pudieron actualizar los productos",
+        confirmButtonText: "Entendido",
+      });
+    }
+  };
+
   const toggleCategoriesSection = () => {
     setCategoriesExpanded(!categoriesExpanded);
   };
@@ -288,7 +519,8 @@ const Products = () => {
   const filteredProducts = safeProducts.filter((product) => {
     const matchesSearch =
       product.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
+      product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.codigo_barras?.includes(searchTerm);
     const matchesCategory =
       selectedCategory === "all" ||
       product.categoria_nombre === selectedCategory;
@@ -297,7 +529,7 @@ const Products = () => {
   });
 
   const lowStockProducts = safeProducts.filter(
-    (p) => p.stock <= (p.stock_minimo || 5)
+    (p) => p.stock > 0 && p.stock <= (p.stock_minimo || 5)
   ).length;
   const outOfStockProducts = safeProducts.filter((p) => p.stock === 0).length;
 
@@ -339,6 +571,30 @@ const Products = () => {
           </div>
         </div>
       </div>
+
+      {/* ✅ ALERTA DE DUPLICADOS */}
+      {showDuplicates && (
+        <div className={styles.duplicateAlert}>
+          <div className={styles.alertContent}>
+            <div className={styles.alertText}>
+              <strong>⚠️ Productos Duplicados Detectados</strong>
+              <p>
+                Se encontraron productos duplicados en la base de datos local.
+              </p>
+            </div>
+            <button
+              onClick={handleCleanDuplicates}
+              disabled={cleaningDuplicates}
+              className={styles.cleanButton}
+            >
+              <FiRefreshCw
+                className={cleaningDuplicates ? styles.spinning : ""}
+              />
+              {cleaningDuplicates ? "Limpiando..." : "Limpiar Duplicados"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {(outOfStockProducts > 0 || lowStockProducts > 0) && (
         <div className={styles.alertsSection}>
@@ -395,6 +651,16 @@ const Products = () => {
               )}
 
               <div className={styles.actionButtons}>
+                {/* <button
+                  className={styles.syncButton}
+                  onClick={handleSyncProducts}
+                  disabled={loading}
+                  title="Sincronizar con servidor"
+                >
+                  <FiRefreshCw className={loading ? styles.spinning : ""} />
+                  Sincronizar
+                </button> */}
+
                 <button
                   className={`${styles.addButton} ${styles.categoryButton} ${
                     !canManageCategories ? styles.viewOnly : ""
@@ -466,7 +732,85 @@ const Products = () => {
             </span>
           </div>
         </div>
+        // En Products.jsx - AGREGAR ESTOS BOTONES ADICIONALES
+        <div className={styles.debugActions}>
+          <button
+            className={styles.debugButton}
+            onClick={async () => {
+              const result = await dispatch(cleanDuplicateProducts());
+              if (result.success) {
+                Swal.fire({
+                  icon: "success",
+                  title: "Limpieza completada",
+                  text: `Se eliminaron ${result.removed} productos duplicados`,
+                  timer: 3000,
+                });
+              } else {
+                Swal.fire({
+                  icon: "error",
+                  title: "Error",
+                  text: result.error || "Error en limpieza",
+                });
+              }
+            }}
+            title="Limpieza normal de duplicados"
+          >
+            🧹 Limpiar Duplicados
+          </button>
 
+          <div className={styles.debugActions}>
+            <button
+              className={styles.emergencyButton}
+              onClick={emergencyCleanDuplicates}
+              title="Limpieza agresiva de duplicados"
+            >
+              🚨 Limpiar Duplicados (Emergencia)
+            </button>
+          </div>
+
+          <button
+            className={styles.debugButton}
+            onClick={async () => {
+              // Debug: mostrar estado actual de productos
+              const products = await IndexedDBService.getAll("productos");
+              console.log("🔍 DEBUG - Productos actuales:", products);
+
+              // Buscar el producto problemático específico
+              const problemProduct = products.find(
+                (p) =>
+                  p.id === "prod_1762804099660_1ohwul8to" ||
+                  p.id_local === "prod_1762804099660_1ohwul8to"
+              );
+
+              console.log("🔍 Producto problemático:", problemProduct);
+
+              Swal.fire({
+                icon: "info",
+                title: "Debug Info",
+                html: `
+          <div style="text-align: left;">
+            <p><strong>Total productos:</strong> ${products.length}</p>
+            <p><strong>Producto problemático:</strong> ${
+              problemProduct ? "ENCONTRADO" : "NO ENCONTRADO"
+            }</p>
+            ${
+              problemProduct
+                ? `
+              <p><strong>Nombre:</strong> ${problemProduct.nombre}</p>
+              <p><strong>ID:</strong> ${problemProduct.id}</p>
+              <p><strong>ID Local:</strong> ${problemProduct.id_local}</p>
+            `
+                : ""
+            }
+          </div>
+        `,
+              });
+            }}
+            title="Debug información de productos"
+          >
+            🔍 Debug Info
+          </button>
+        </div>
         {/* ✅ SECCIÓN DE CATEGORÍAS COLAPSABLE */}
         <div
           className={`${styles.categoriesSection} ${
@@ -615,7 +959,6 @@ const Products = () => {
             </div>
           )}
         </div>
-
         <ProductGrid
           products={filteredProducts}
           loading={loading}

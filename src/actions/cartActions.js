@@ -1,6 +1,6 @@
 // actions/cartActions.js - CON SOPORTE OFFLINE
 import { types } from "../types/types";
-import { useOfflineOperations } from "../hook/useOfflineOperations";
+import { useOfflineOperations } from "../hooks/useOfflineOperations";
 
 export const addToCart = (product) => ({
   type: types.cartAddItem,

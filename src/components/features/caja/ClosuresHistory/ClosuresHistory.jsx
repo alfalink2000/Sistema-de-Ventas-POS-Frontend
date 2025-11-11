@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   FiCalendar,
+  FiTrash,
+  FiTrash2,
   FiDollarSign,
   FiClock,
   FiUser,
@@ -18,6 +20,10 @@ import {
 import { loadClosures } from "../../../../actions/closuresActions";
 import ClosuresOfflineController from "../../../../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
 import styles from "./ClosuresHistory.module.css";
+import {
+  deleteLocalClosure,
+  clearAllLocalClosures,
+} from "../../../../actions/closuresActions";
 
 const ClosuresHistory = () => {
   const [expandedRow, setExpandedRow] = useState(null);
@@ -58,6 +64,31 @@ const ClosuresHistory = () => {
     loadOfflineClosures();
   }, [dispatch]);
 
+  // ✅ FUNCIÓN PARA ELIMINAR CIERRE INDIVIDUAL
+  const handleDeleteClosure = async (closure) => {
+    try {
+      const result = await dispatch(deleteLocalClosure(closure));
+
+      if (result.success) {
+        console.log("✅ Cierre eliminado exitosamente");
+      }
+    } catch (error) {
+      console.error("❌ Error eliminando cierre:", error);
+    }
+  };
+
+  // ✅ FUNCIÓN PARA LIMPIAR TODOS LOS CIERRES
+  const handleClearAllClosures = async () => {
+    try {
+      const result = await dispatch(clearAllLocalClosures());
+
+      if (result.success) {
+        console.log("✅ Todos los cierres locales eliminados");
+      }
+    } catch (error) {
+      console.error("❌ Error eliminando todos los cierres:", error);
+    }
+  };
   // ✅ REFRESCAR DATOS OFFLINE
   const handleRetry = async () => {
     setLocalLoading(true);
@@ -71,50 +102,49 @@ const ClosuresHistory = () => {
     }
   };
 
-  // ✅ EXPORTAR CIERRE INDIVIDUAL A CSV
   const exportClosureToCSV = (closure) => {
     try {
       console.log("📊 Exportando cierre individual a CSV:", closure);
 
-      // Preparar datos del cierre
+      // Preparar datos del cierre con formato mejorado
       const closureData = [
-        ["REPORTE INDIVIDUAL DE CIERRE DE CAJA - MODO OFFLINE"],
+        ["REPORTE DETALLADO DE CIERRE DE CAJA"],
+        ["Sistema de Punto de Venta - Modo Offline"],
         [""],
+        ["INFORMACIÓN BÁSICA DEL CIERRE"],
         ["ID del Cierre:", closure.id || closure.id_local],
         [
           "Fecha de Cierre:",
           new Date(closure.fecha_cierre).toLocaleString("es-MX"),
         ],
-        ["Estado:", "Almacenado localmente"],
-        ["Origen:", "Offline"],
+        ["Estado:", "Almacenado localmente (Offline)"],
         [""],
         ["INFORMACIÓN DE LA SESIÓN"],
         [
-          "Fecha Apertura:",
+          "Fecha de Apertura:",
           new Date(closure.fecha_apertura).toLocaleString("es-MX"),
         ],
         [
-          "Fecha Cierre:",
+          "Fecha de Cierre:",
           new Date(closure.fecha_cierre).toLocaleString("es-MX"),
         ],
         [
           "Duración Total:",
           calculateDuration(closure.fecha_apertura, closure.fecha_cierre),
         ],
-        ["Vendedor:", closure.vendedor_nombre || "N/A"],
+        ["Vendedor:", closure.vendedor_nombre || "No especificado"],
         ["Saldo Inicial:", formatCurrency(closure.saldo_inicial || 0)],
         [""],
-        ["RESUMEN FINANCIERO"],
-        ["Total Ventas:", formatCurrency(closure.total_ventas || 0)],
-        ["Total Efectivo:", formatCurrency(closure.total_efectivo || 0)],
-        ["Total Tarjeta:", formatCurrency(closure.total_tarjeta || 0)],
+        ["DETALLE DE VENTAS POR MÉTODO DE PAGO"],
+        ["Ventas en Efectivo:", formatCurrency(closure.total_efectivo || 0)],
+        ["Ventas con Tarjeta:", formatCurrency(closure.total_tarjeta || 0)],
         [
-          "Total Transferencia:",
+          "Ventas por Transferencia:",
           formatCurrency(closure.total_transferencia || 0),
         ],
-        ...(isAdmin
-          ? [["Ganancia Bruta:", formatCurrency(closure.ganancia_bruta || 0)]]
-          : []),
+        ["TOTAL VENTAS:", formatCurrency(closure.total_ventas || 0)],
+        [""],
+        ["RESUMEN FINAL DE CAJA"],
         [
           "Saldo Final Teórico:",
           formatCurrency(closure.saldo_final_teorico || 0),
@@ -122,16 +152,19 @@ const ClosuresHistory = () => {
         ["Saldo Final Real:", formatCurrency(closure.saldo_final_real || 0)],
         ["Diferencia:", formatCurrency(closure.diferencia || 0)],
         [
-          "Estado Cierre:",
+          "Estado del Cierre:",
           closure.diferencia === 0
-            ? "Exacto"
+            ? "✅ EXACTO"
             : closure.diferencia > 0
-            ? "Sobrante"
-            : "Faltante",
+            ? "📈 SOBRANTE"
+            : "📉 FALTANTE",
         ],
         [""],
-        ["OBSERVACIONES"],
-        [closure.observaciones || "Sin observaciones"],
+        ["INFORMACIÓN ADICIONAL"],
+        [
+          "Observaciones:",
+          closure.observaciones || "Sin observaciones registradas",
+        ],
         [""],
         ["INFORMACIÓN DE EXPORTACIÓN"],
         ["Fecha de Exportación:", new Date().toLocaleString("es-MX")],
@@ -139,7 +172,15 @@ const ClosuresHistory = () => {
           "Exportado por:",
           currentUser?.name || currentUser?.nombre || "Usuario",
         ],
+        ["Rol del Usuario:", currentUser?.rol || "No especificado"],
         ["Modo:", "Offline"],
+        [""],
+        ["NOTAS"],
+        [
+          "• Este reporte fue generado automáticamente desde el sistema offline",
+        ],
+        ["• Los datos reflejan el estado al momento del cierre de caja"],
+        ["• Para consultas contactar al administrador del sistema"],
       ];
 
       // Convertir a CSV
@@ -153,10 +194,10 @@ const ClosuresHistory = () => {
       const link = document.createElement("a");
       link.setAttribute("href", url);
 
-      // Nombre del archivo
-      const fileName = `cierre_offline_${closure.id || closure.id_local}_${
-        new Date(closure.fecha_cierre).toISOString().split("T")[0]
-      }.csv`;
+      // Nombre del archivo más descriptivo
+      const fileName = `cierre_caja_${closure.id || closure.id_local}_${
+        closure.vendedor_nombre || "vendedor"
+      }_${new Date(closure.fecha_cierre).toISOString().split("T")[0]}.csv`;
       link.setAttribute("download", fileName);
       link.style.visibility = "hidden";
 
@@ -171,33 +212,38 @@ const ClosuresHistory = () => {
     }
   };
 
-  // ✅ EXPORTAR TODOS LOS CIERRES
+  // ✅ EXPORTAR TODOS LOS CIERRES - MEJORADO
   const exportAllToCSV = () => {
     try {
       console.log("📊 Exportando TODOS los cierres offline a CSV");
 
+      // Encabezados mejorados
       const headers = [
-        "ID",
-        "Fecha Cierre",
-        "Vendedor",
-        "Ventas Totales",
-        "Efectivo",
-        "Tarjeta",
-        "Transferencia",
-        ...(isAdmin ? ["Ganancia Bruta"] : []),
-        "Saldo Final Teórico",
-        "Saldo Final Real",
-        "Diferencia",
-        "Duración",
-        "Estado",
-        "Origen",
+        "ID CIERRE",
+        "FECHA CIERRE",
+        "VENDEDOR",
+        "SALDO INICIAL",
+        "VENTAS TOTALES",
+        "EFECTIVO",
+        "TARJETA",
+        "TRANSFERENCIA",
+        // ✅ SOLO INCLUIR GANANCIA BRUTA SI ES ADMIN
+        ...(isAdmin ? ["GANANCIA BRUTA"] : []),
+        "SALDO FINAL TEÓRICO",
+        "SALDO FINAL REAL",
+        "DIFERENCIA",
+        "ESTADO",
+        "DURACIÓN",
+        "OBSERVACIONES",
       ].join(",");
 
+      // Datos de cada cierre
       const csvData = filteredClosures.map((closure) => {
         const baseData = [
           closure.id || closure.id_local,
-          new Date(closure.fecha_cierre).toLocaleDateString(),
-          closure.vendedor_nombre,
+          new Date(closure.fecha_cierre).toLocaleDateString("es-MX"),
+          `"${closure.vendedor_nombre}"`,
+          closure.saldo_inicial,
           closure.total_ventas,
           closure.total_efectivo,
           closure.total_tarjeta,
@@ -213,24 +259,49 @@ const ClosuresHistory = () => {
           closure.saldo_final_teorico,
           closure.saldo_final_real,
           closure.diferencia,
-          calculateDuration(closure.fecha_apertura, closure.fecha_cierre),
           closure.diferencia === 0
-            ? "exacto"
+            ? "EXACTO"
             : closure.diferencia > 0
-            ? "sobrante"
-            : "faltante",
-          "Offline"
+            ? "SOBRANTE"
+            : "FALTANTE",
+          calculateDuration(closure.fecha_apertura, closure.fecha_cierre),
+          `"${closure.observaciones || "Sin observaciones"}"`
         );
 
         return baseData.join(",");
       });
 
-      const csv = [headers, ...csvData].join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
+      // Crear contenido completo con encabezado informativo
+      const fullCSVContent = [
+        "REPORTE GENERAL DE CIERRES DE CAJA",
+        `Fecha de generación: ${new Date().toLocaleString("es-MX")}`,
+        `Total de cierres: ${filteredClosures.length}`,
+        `Generado por: ${
+          currentUser?.name || currentUser?.nombre || "Usuario"
+        } (${currentUser?.rol || "Rol no especificado"})`,
+        "Modo: Offline",
+        "",
+        headers,
+        ...csvData,
+        "",
+        "NOTAS:",
+        "• Este reporte contiene todos los cierres de caja almacenados localmente",
+        "• Los datos están filtrados según los criterios aplicados en pantalla",
+        ...(isAdmin
+          ? []
+          : [
+              "• La ganancia bruta solo está disponible para usuarios administradores",
+            ]),
+        "• Para más detalles consulte los reportes individuales",
+      ].join("\n");
+
+      const blob = new Blob([fullCSVContent], {
+        type: "text/csv;charset=utf-8;",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cierres_offline_${
+      a.download = `reporte_general_cierres_${
         new Date().toISOString().split("T")[0]
       }.csv`;
       a.click();
@@ -515,6 +586,17 @@ const ClosuresHistory = () => {
               Exportar Todos
             </button>
           )}
+          {/* ✅ BOTÓN PARA LIMPIAR TODOS LOS CIERRES LOCALES */}
+          {filteredClosures.length > 0 && (
+            <button
+              className={styles.clearAllButton}
+              onClick={handleClearAllClosures}
+              title="Eliminar todos los cierres locales"
+            >
+              <FiTrash className={styles.clearAllIcon} />
+              Limpiar Todo
+            </button>
+          )}
         </div>
       </div>
 
@@ -638,6 +720,18 @@ const ClosuresHistory = () => {
                         >
                           <FiDownload />
                           CSV
+                        </button>
+                        {/* ✅ NUEVO BOTÓN PARA ELIMINAR CIERRE */}
+                        <button
+                          className={styles.deleteButton}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClosure(closure);
+                          }}
+                          title="Eliminar este cierre local"
+                        >
+                          <FiTrash2 />
+                          Eliminar
                         </button>
                       </td>
                     </tr>

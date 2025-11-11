@@ -1,4 +1,4 @@
-// pages/Users/Users.jsx - CORREGIDO
+// pages/Users/Users.jsx - VERSIÓN MEJORADA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -14,6 +14,7 @@ import {
   FiWifi,
   FiWifiOff,
   FiRefreshCw,
+  FiAlertCircle,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import UserModal from "../../components/features/users/UserModal";
@@ -32,6 +33,7 @@ const Users = () => {
   const [filterRole, setFilterRole] = useState("all");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [retryCount, setRetryCount] = useState(0);
+  const [hasAuthError, setHasAuthError] = useState(false);
 
   const dispatch = useDispatch();
   const { users, loading, error } = useSelector((state) => state.users);
@@ -41,9 +43,10 @@ const Users = () => {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
+      setHasAuthError(false);
       // Recargar datos cuando se recupera la conexión
       if (retryCount > 0) {
-        dispatch(loadUsers());
+        handleLoadUsers();
       }
     };
     const handleOffline = () => setIsOnline(false);
@@ -57,26 +60,40 @@ const Users = () => {
     };
   }, [dispatch, retryCount]);
 
-  // Users.jsx - VERSIÓN CORREGIDA
-  useEffect(() => {
-    if (isOnline) {
-      console.log("🌐 Users: Online - cargando usuarios desde API");
-      dispatch(loadUsers());
-    } else {
-      console.log("📴 Users: Offline - no se pueden cargar usuarios");
-      // Podrías cargar usuarios cacheados si los tienes
+  // ✅ FUNCIÓN MEJORADA PARA CARGAR USUARIOS
+  const handleLoadUsers = async () => {
+    try {
+      setHasAuthError(false);
+      const result = await dispatch(loadUsers());
+
+      if (result?.isAuthError) {
+        setHasAuthError(true);
+      }
+    } catch (error) {
+      console.error("Error en handleLoadUsers:", error);
     }
-  }, [dispatch, isOnline]); // ✅ Solo cargar cuando hay conexión
+  };
+
+  // ✅ EFECTO MEJORADO PARA CARGAR USUARIOS
+  useEffect(() => {
+    if (isOnline && !hasAuthError) {
+      console.log("🌐 Users: Online - cargando usuarios desde API");
+      handleLoadUsers();
+    } else {
+      console.log("📴 Users: Offline o error de auth - no se cargan usuarios");
+    }
+  }, [dispatch, isOnline, retryCount]);
 
   // ✅ MANEJAR REINTENTO DE CARGA
   const handleRetry = () => {
     setRetryCount((prev) => prev + 1);
-    dispatch(loadUsers());
+    setHasAuthError(false);
+    handleLoadUsers();
   };
 
   // ✅ FUNCIÓN PARA SOLICITAR CONTRASEÑA DE ADMIN
   const requestAdminPassword = async (action = "realizar esta acción") => {
-    if (currentUser.rol === "admin") {
+    if (currentUser?.rol === "admin") {
       return true;
     }
 
@@ -118,7 +135,7 @@ const Users = () => {
       return;
     }
 
-    if (currentUser.rol !== "admin") {
+    if (currentUser?.rol !== "admin") {
       const adminPassword = await requestAdminPassword(
         "crear un nuevo usuario"
       );
@@ -141,7 +158,7 @@ const Users = () => {
       return;
     }
 
-    if (currentUser.rol !== "admin" && user.id !== currentUser.id) {
+    if (currentUser?.rol !== "admin" && user.id !== currentUser?.id) {
       const adminPassword = await requestAdminPassword(
         `editar al usuario ${user.nombre}`
       );
@@ -164,7 +181,7 @@ const Users = () => {
       return;
     }
 
-    if (user.id === currentUser.id) {
+    if (user.id === currentUser?.id) {
       await Swal.fire({
         icon: "error",
         title: "No puedes eliminarte a ti mismo",
@@ -174,7 +191,7 @@ const Users = () => {
       return;
     }
 
-    if (currentUser.rol !== "admin") {
+    if (currentUser?.rol !== "admin") {
       const adminPassword = await requestAdminPassword(
         `eliminar al usuario ${user.nombre}`
       );
@@ -193,7 +210,12 @@ const Users = () => {
     });
 
     if (result.isConfirmed) {
-      dispatch(deleteUser(user.id));
+      const deleteResult = await dispatch(deleteUser(user.id));
+
+      // ✅ SI HAY ERROR DE AUTENTICACIÓN EN LA ELIMINACIÓN
+      if (deleteResult?.isAuthError) {
+        setHasAuthError(true);
+      }
     }
   };
 
@@ -201,7 +223,7 @@ const Users = () => {
     try {
       let result;
 
-      if (currentUser.rol !== "admin") {
+      if (currentUser?.rol !== "admin") {
         const adminPassword = await requestAdminPassword(
           editingUser ? "actualizar este usuario" : "crear un nuevo usuario"
         );
@@ -215,10 +237,16 @@ const Users = () => {
         result = await dispatch(createUser(userData));
       }
 
+      // ✅ SI HAY ERROR DE AUTENTICACIÓN
+      if (result?.isAuthError) {
+        setHasAuthError(true);
+        return;
+      }
+
       if (result?.success) {
         setShowUserModal(false);
         setEditingUser(null);
-        dispatch(loadUsers());
+        handleLoadUsers(); // Recargar usuarios
       }
     } catch (error) {
       console.error("Error guardando usuario:", error);
@@ -241,6 +269,27 @@ const Users = () => {
   const inactiveUsers = users.filter((u) => !u.activo).length;
   const adminUsers = users.filter((u) => u.rol === "admin").length;
   const vendedorUsers = users.filter((u) => u.rol === "vendedor").length;
+
+  // ✅ COMPONENTE DE ERROR DE AUTENTICACIÓN
+  const renderAuthErrorState = () => (
+    <div className={styles.authErrorState}>
+      <div className={styles.authErrorContent}>
+        <FiAlertCircle className={styles.authErrorIcon} />
+        <h3>Error de Autenticación</h3>
+        <p>Tu sesión ha expirado. Serás redirigido al login automáticamente.</p>
+        <div className={styles.authErrorActions}>
+          <button
+            className={styles.retryButton}
+            onClick={handleRetry}
+            disabled={true}
+          >
+            <FiRefreshCw className={styles.retryIcon} />
+            Redirigiendo...
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ✅ COMPONENTE DE ESTADO OFFLINE
   const renderOfflineState = () => (
@@ -282,6 +331,11 @@ const Users = () => {
     </div>
   );
 
+  // ✅ SI HAY ERROR DE AUTENTICACIÓN, MOSTRAR ESTADO ESPECIAL
+  if (hasAuthError) {
+    return renderAuthErrorState();
+  }
+
   return (
     <div className={styles.usersPage}>
       {/* Header con estado de conexión */}
@@ -313,7 +367,7 @@ const Users = () => {
               )}
             </div>
 
-            {currentUser.rol !== "admin" && (
+            {currentUser?.rol !== "admin" && (
               <div className={styles.adminWarning}>
                 <FiShield className={styles.warningIcon} />
                 <span>
@@ -346,10 +400,10 @@ const Users = () => {
 
       {/* ✅ MOSTRAR ESTADO OFFLINO O ERROR */}
       {!isOnline && renderOfflineState()}
-      {isOnline && error && renderErrorState()}
+      {isOnline && error && !hasAuthError && renderErrorState()}
 
       {/* Barra de acciones y filtros - DESHABILITADA EN OFFLINE */}
-      {isOnline && !error && (
+      {isOnline && !error && !hasAuthError && (
         <>
           <div className={styles.actionsBar}>
             <div className={styles.searchSection}>
@@ -383,14 +437,14 @@ const Users = () => {
                 className={styles.addButton}
                 onClick={handleCreateUser}
                 title={
-                  currentUser.rol !== "admin"
+                  currentUser?.rol !== "admin"
                     ? "Requiere autorización de administrador"
                     : "Crear nuevo usuario"
                 }
               >
                 <FiPlus className={styles.addIcon} />
                 Nuevo Usuario
-                {currentUser.rol !== "admin" && (
+                {currentUser?.rol !== "admin" && (
                   <FiShield className={styles.shieldIcon} />
                 )}
               </button>
@@ -417,14 +471,14 @@ const Users = () => {
                   className={styles.addFirstUser}
                   onClick={handleCreateUser}
                   title={
-                    currentUser.rol !== "admin"
+                    currentUser?.rol !== "admin"
                       ? "Requiere autorización de administrador"
                       : "Crear primer usuario"
                   }
                 >
                   <FiPlus className={styles.addIcon} />
                   Agregar Primer Usuario
-                  {currentUser.rol !== "admin" && (
+                  {currentUser?.rol !== "admin" && (
                     <FiShield className={styles.shieldIcon} />
                   )}
                 </button>
@@ -450,7 +504,7 @@ const Users = () => {
                           <span className={styles.username}>
                             {user.username}
                           </span>
-                          {user.id === currentUser.id && (
+                          {user.id === currentUser?.id && (
                             <span className={styles.currentUserBadge}>
                               (Tú)
                             </span>
@@ -500,33 +554,33 @@ const Users = () => {
                               className={styles.editBtn}
                               onClick={() => handleEditUser(user)}
                               title={
-                                currentUser.rol !== "admin" &&
-                                user.id !== currentUser.id
+                                currentUser?.rol !== "admin" &&
+                                user.id !== currentUser?.id
                                   ? "Requiere autorización de administrador"
                                   : "Editar usuario"
                               }
                             >
                               <FiEdit />
-                              {currentUser.rol !== "admin" &&
-                                user.id !== currentUser.id && (
+                              {currentUser?.rol !== "admin" &&
+                                user.id !== currentUser?.id && (
                                   <FiShield className={styles.actionShield} />
                                 )}
                             </button>
                             <button
                               className={styles.deleteBtn}
                               onClick={() => handleDeleteUser(user)}
-                              disabled={user.id === currentUser.id}
+                              disabled={user.id === currentUser?.id}
                               title={
-                                user.id === currentUser.id
+                                user.id === currentUser?.id
                                   ? "No puedes eliminarte a ti mismo"
-                                  : currentUser.rol !== "admin"
+                                  : currentUser?.rol !== "admin"
                                   ? "Requiere autorización de administrador"
                                   : "Eliminar usuario"
                               }
                             >
                               <FiTrash2 />
-                              {currentUser.rol !== "admin" &&
-                                user.id !== currentUser.id && (
+                              {currentUser?.rol !== "admin" &&
+                                user.id !== currentUser?.id && (
                                   <FiShield className={styles.actionShield} />
                                 )}
                             </button>

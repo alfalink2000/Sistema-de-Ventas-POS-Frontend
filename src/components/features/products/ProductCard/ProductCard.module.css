@@ -16,7 +16,7 @@
 
 .imageContainer {
   position: relative;
-  height: 160px;
+  height: 300px;
   background: var(--color-gray-100);
   display: flex;
   align-items: center;
@@ -27,7 +27,9 @@
 .productImage {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover; /* ✅ Esto es clave para que las imágenes se ajusten */
+  object-position: center; /* ✅ Centra la imagen */
+  transition: transform 0.3s ease; /* Efecto hover opcional */
 }
 
 .placeholderImage {
@@ -266,4 +268,84 @@
 .shieldIcon {
   font-size: 0.75rem;
   color: #f59e0b;
+}
+.placeholderContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  height: 200px;
+}
+
+.placeholderText {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6c757d;
+}
+/* Estilos adicionales para mejoras visuales */
+
+/* Skeleton loading para imágenes */
+.imageSkeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loadingSpinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mejoras responsive */
+@media (max-width: 768px) {
+  .imageContainer {
+    height: 180px;
+  }
+}
+
+@media (max-width: 480px) {
+  .imageContainer {
+    height: 160px;
+  }
+}
+
+/* Asegurar que todas las imágenes se comporten igual */
+.imageContainer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }

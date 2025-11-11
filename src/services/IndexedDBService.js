@@ -3,7 +3,7 @@ import { openDB } from "idb";
 class IndexedDBService {
   constructor() {
     this.dbName = "OfflinePOS";
-    this.dbVersion = 5;
+    this.dbVersion = 15; // Incrementado para nuevos stores
     this.db = null;
     this.initialized = false;
   }
@@ -15,131 +15,311 @@ class IndexedDBService {
       this.db = await openDB(this.dbName, this.dbVersion, {
         upgrade(db, oldVersion, newVersion, transaction) {
           console.log(`📊 Actualizando BD de v${oldVersion} a v${newVersion}`);
-          if (!db.objectStoreNames.contains("productos_pendientes")) {
-            const pendingProductsStore = db.createObjectStore(
-              "productos_pendientes",
-              {
-                keyPath: "id_local",
-                autoIncrement: true,
-              }
-            );
-            pendingProductsStore.createIndex("operacion", "operacion");
-            pendingProductsStore.createIndex("sincronizado", "sincronizado");
-            pendingProductsStore.createIndex("producto_id", "producto_id");
-            pendingProductsStore.createIndex("timestamp", "timestamp");
-            console.log('✅ Object store "productos_pendientes" creado');
-          }
-          // ✅ AGREGAR OBJECT STORE PARA USUARIOS OFFLINE (NUEVO)
-          if (!db.objectStoreNames.contains("offline_users")) {
-            const userStore = db.createObjectStore("offline_users", {
-              keyPath: "id",
-            });
-            userStore.createIndex("username", "username");
-            userStore.createIndex("activo", "activo");
-            userStore.createIndex("lastLogin", "lastLogin");
-            console.log('✅ Object store "offline_users" creado');
-          }
-          // ✅ CREAR OBJECT STORES SI NO EXISTEN
+
+          // =============================================
+          // 🗂️ STORES PRINCIPALES (Sincronizados desde Backend)
+          // =============================================
+
+          // 📦 PRODUCTOS
           if (!db.objectStoreNames.contains("productos")) {
             const productStore = db.createObjectStore("productos", {
               keyPath: "id",
             });
             productStore.createIndex("categoria_id", "categoria_id");
             productStore.createIndex("activo", "activo");
+            productStore.createIndex("nombre", "nombre");
+            productStore.createIndex("stock", "stock");
+            productStore.createIndex("codigo_barras", "codigo_barras");
+            productStore.createIndex("sincronizado", "sincronizado"); // ✅ NUEVO ÍNDICE
             console.log('✅ Object store "productos" creado');
           }
-
+          // 🟡 STORE PARA CAMBIOS DE STOCK PENDIENTES
+          if (!db.objectStoreNames.contains("cambios_stock_pendientes")) {
+            const cambiosStockStore = db.createObjectStore(
+              "cambios_stock_pendientes",
+              {
+                keyPath: "id",
+              }
+            );
+            cambiosStockStore.createIndex("producto_id", "producto_id");
+            cambiosStockStore.createIndex("sincronizado", "sincronizado");
+            cambiosStockStore.createIndex("timestamp", "timestamp");
+            cambiosStockStore.createIndex("tipo", "tipo");
+            console.log('✅ Object store "cambios_stock_pendientes" creado');
+          }
+          // 📂 CATEGORÍAS
           if (!db.objectStoreNames.contains("categorias")) {
             const categoryStore = db.createObjectStore("categorias", {
               keyPath: "id",
             });
             categoryStore.createIndex("activo", "activo");
+            categoryStore.createIndex("nombre", "nombre");
+            categoryStore.createIndex("sincronizado", "sincronizado"); // ✅ NUEVO ÍNDICE
             console.log('✅ Object store "categorias" creado');
           }
 
+          // 👥 USUARIOS DEL SISTEMA
+          if (!db.objectStoreNames.contains("users")) {
+            const userStore = db.createObjectStore("users", {
+              keyPath: "id",
+            });
+            userStore.createIndex("username", "username");
+            userStore.createIndex("activo", "activo");
+            userStore.createIndex("rol", "rol");
+            userStore.createIndex("email", "email");
+            userStore.createIndex("sincronizado", "sincronizado"); // ✅ NUEVO ÍNDICE
+            console.log('✅ Object store "users" creado');
+          }
+
+          // 🏦 SESIONES DE CAJA
+          if (!db.objectStoreNames.contains("sesiones_caja")) {
+            const sessionStore = db.createObjectStore("sesiones_caja", {
+              keyPath: "id",
+            });
+            sessionStore.createIndex("estado", "estado");
+            sessionStore.createIndex("vendedor_id", "vendedor_id");
+            sessionStore.createIndex("fecha_apertura", "fecha_apertura");
+            sessionStore.createIndex("fecha_cierre", "fecha_cierre");
+            sessionStore.createIndex("id_local", "id_local");
+            console.log('✅ Object store "sesiones_caja" creado');
+          }
+          // 🏷️ STORE PARA CAMBIOS DE PRECIO PENDIENTES
+          if (!db.objectStoreNames.contains("cambios_precios_pendientes")) {
+            const cambiosPreciosStore = db.createObjectStore(
+              "cambios_precios_pendientes",
+              {
+                keyPath: "id",
+              }
+            );
+            cambiosPreciosStore.createIndex("producto_id", "producto_id");
+            cambiosPreciosStore.createIndex("sincronizado", "sincronizado");
+            cambiosPreciosStore.createIndex("timestamp", "timestamp");
+            cambiosPreciosStore.createIndex("tipo", "tipo");
+            console.log('✅ Object store "cambios_precios_pendientes" creado');
+          }
+          // 💰 CIERRES DE CAJA
+          if (!db.objectStoreNames.contains("cierres")) {
+            const closureStore = db.createObjectStore("cierres", {
+              keyPath: "id",
+            });
+            closureStore.createIndex("sesion_caja_id", "sesion_caja_id");
+            closureStore.createIndex("fecha_cierre", "fecha_cierre");
+            closureStore.createIndex("vendedor_id", "vendedor_id");
+            closureStore.createIndex("estado", "estado");
+            closureStore.createIndex("id_local", "id_local");
+            console.log('✅ Object store "cierres" creado');
+          }
+
+          // 🧾 VENTAS
+          if (!db.objectStoreNames.contains("ventas")) {
+            const ventasStore = db.createObjectStore("ventas", {
+              keyPath: "id",
+            });
+            ventasStore.createIndex("sesion_caja_id", "sesion_caja_id");
+            ventasStore.createIndex("vendedor_id", "vendedor_id");
+            ventasStore.createIndex("fecha_venta", "fecha_venta");
+            ventasStore.createIndex("estado", "estado");
+            ventasStore.createIndex("metodo_pago", "metodo_pago");
+            ventasStore.createIndex("id_local", "id_local");
+            console.log('✅ Object store "ventas" creado');
+          }
+
+          // 📋 DETALLES DE VENTA
+          if (!db.objectStoreNames.contains("detalles_venta")) {
+            const detallesStore = db.createObjectStore("detalles_venta", {
+              keyPath: "id",
+            });
+            detallesStore.createIndex("venta_id", "venta_id");
+            detallesStore.createIndex("producto_id", "producto_id");
+            detallesStore.createIndex("id_local", "id_local");
+            console.log('✅ Object store "detalles_venta" creado');
+          }
+
+          // =============================================
+          // 📱 STORES PARA DATOS OFFLINE (Pendientes de Sincronización)
+          // =============================================
+          // 🛒 PRODUCTOS PENDIENTES (Offline)
+          if (!db.objectStoreNames.contains("productos_pendientes")) {
+            const pendingProductsStore = db.createObjectStore(
+              "productos_pendientes",
+              {
+                keyPath: "id_local",
+              }
+            );
+            pendingProductsStore.createIndex("sincronizado", "sincronizado");
+            pendingProductsStore.createIndex("operacion", "operacion");
+            pendingProductsStore.createIndex("producto_id", "producto_id");
+            pendingProductsStore.createIndex("timestamp", "timestamp");
+            console.log('✅ Object store "productos_pendientes" creado');
+          }
+          // 🛒 VENTAS PENDIENTES (Offline)
           if (!db.objectStoreNames.contains("ventas_pendientes")) {
             const pendingSalesStore = db.createObjectStore(
               "ventas_pendientes",
-              { keyPath: "id_local" }
+              {
+                keyPath: "id_local",
+              }
             );
             pendingSalesStore.createIndex("sincronizado", "sincronizado");
+            pendingSalesStore.createIndex("sesion_caja_id", "sesion_caja_id");
             pendingSalesStore.createIndex(
               "sesion_caja_id_local",
               "sesion_caja_id_local"
             );
             pendingSalesStore.createIndex("fecha_venta", "fecha_venta");
+            pendingSalesStore.createIndex("vendedor_id", "vendedor_id");
+            pendingSalesStore.createIndex("estado", "estado");
+            pendingSalesStore.createIndex("es_sesion_local", "es_sesion_local");
             console.log('✅ Object store "ventas_pendientes" creado');
           }
 
+          // 📝 DETALLES VENTA PENDIENTES (Offline)
           if (!db.objectStoreNames.contains("detalles_venta_pendientes")) {
             const pendingDetailsStore = db.createObjectStore(
               "detalles_venta_pendientes",
-              { keyPath: "id_local" }
+              {
+                keyPath: "id_local",
+              }
             );
             pendingDetailsStore.createIndex("venta_id_local", "venta_id_local");
             pendingDetailsStore.createIndex("producto_id", "producto_id");
+            pendingDetailsStore.createIndex("sincronizado", "sincronizado");
             console.log('✅ Object store "detalles_venta_pendientes" creado');
           }
 
-          if (!db.objectStoreNames.contains("sesiones_caja_offline")) {
-            const sessionStore = db.createObjectStore("sesiones_caja_offline", {
-              keyPath: "id_local",
-            });
-            sessionStore.createIndex("sincronizado", "sincronizado");
-            sessionStore.createIndex("estado", "estado");
-            sessionStore.createIndex("vendedor_id", "vendedor_id");
-            sessionStore.createIndex("fecha_apertura", "fecha_apertura");
-            console.log('✅ Object store "sesiones_caja_offline" creado');
+          // 🏦 SESIONES PENDIENTES (Offline)
+          if (!db.objectStoreNames.contains("sesiones_pendientes")) {
+            const pendingSessionsStore = db.createObjectStore(
+              "sesiones_pendientes",
+              {
+                keyPath: "id_local",
+              }
+            );
+            pendingSessionsStore.createIndex("sincronizado", "sincronizado");
+            pendingSessionsStore.createIndex("estado", "estado");
+            pendingSessionsStore.createIndex("vendedor_id", "vendedor_id");
+            pendingSessionsStore.createIndex(
+              "fecha_apertura",
+              "fecha_apertura"
+            );
+            console.log('✅ Object store "sesiones_pendientes" creado');
           }
 
+          // 💰 CIERRES PENDIENTES (Offline)
           if (!db.objectStoreNames.contains("cierres_pendientes")) {
-            const closureStore = db.createObjectStore("cierres_pendientes", {
-              keyPath: "id_local",
-            });
-            closureStore.createIndex("sincronizado", "sincronizado");
-            closureStore.createIndex(
+            const pendingClosuresStore = db.createObjectStore(
+              "cierres_pendientes",
+              {
+                keyPath: "id_local",
+              }
+            );
+            pendingClosuresStore.createIndex("sincronizado", "sincronizado");
+            pendingClosuresStore.createIndex(
+              "sesion_caja_id",
+              "sesion_caja_id"
+            );
+            pendingClosuresStore.createIndex("vendedor_id", "vendedor_id");
+            pendingClosuresStore.createIndex("fecha_cierre", "fecha_cierre");
+            pendingClosuresStore.createIndex(
               "sesion_caja_id_local",
               "sesion_caja_id_local"
             );
-            closureStore.createIndex("fecha_cierre", "fecha_cierre");
             console.log('✅ Object store "cierres_pendientes" creado');
           }
 
-          if (!db.objectStoreNames.contains("cierres")) {
-            const closureStore = db.createObjectStore("cierres", {
-              keyPath: "id",
+          // =============================================
+          // 🔐 STORES PARA AUTENTICACIÓN OFFLINE
+          // =============================================
+
+          // 👤 USUARIOS OFFLINE (Para login sin conexión)
+          if (!db.objectStoreNames.contains("offline_users")) {
+            const offlineUsersStore = db.createObjectStore("offline_users", {
+              keyPath: "username", // Usar username como clave para búsqueda rápida
             });
-            closureStore.createIndex("fecha_cierre", "fecha_cierre");
-            closureStore.createIndex("sesion_caja_id", "sesion_caja_id");
-            console.log('✅ Object store "cierres" creado');
+            offlineUsersStore.createIndex("id", "id");
+            offlineUsersStore.createIndex("rol", "rol");
+            offlineUsersStore.createIndex("activo", "activo");
+            offlineUsersStore.createIndex("email", "email");
+            offlineUsersStore.createIndex("savedAt", "savedAt");
+            console.log('✅ Object store "offline_users" creado');
           }
 
-          if (!db.objectStoreNames.contains("cache_maestros")) {
-            const cacheStore = db.createObjectStore("cache_maestros", {
-              keyPath: "tipo",
-            });
-            cacheStore.createIndex("timestamp", "timestamp");
-            console.log('✅ Object store "cache_maestros" creado');
+          // =============================================
+          // 🏗️ STORES PARA CACHE MEJORADO
+          // =============================================
+
+          // 🏪 SESIONES CAJA OFFLINE (Cache mejorado)
+          if (!db.objectStoreNames.contains("sesiones_caja_offline")) {
+            const sesionesOfflineStore = db.createObjectStore(
+              "sesiones_caja_offline",
+              {
+                keyPath: "id_local",
+              }
+            );
+            sesionesOfflineStore.createIndex("vendedor_id", "vendedor_id");
+            sesionesOfflineStore.createIndex("estado", "estado");
+            sesionesOfflineStore.createIndex(
+              "fecha_apertura",
+              "fecha_apertura"
+            );
+            sesionesOfflineStore.createIndex("sincronizado", "sincronizado");
+            sesionesOfflineStore.createIndex("id_servidor", "id_servidor");
+            console.log('✅ Object store "sesiones_caja_offline" creado');
           }
 
-          if (!db.objectStoreNames.contains("sync_metrics")) {
-            const metricsStore = db.createObjectStore("sync_metrics", {
-              keyPath: "id",
+          // =============================================
+          // 📊 STORES DE CONTROL Y MÉTRICAS
+          // =============================================
+
+          // 🕐 METADATOS DE SINCRONIZACIÓN
+          if (!db.objectStoreNames.contains("sync_metadata")) {
+            const metadataStore = db.createObjectStore("sync_metadata", {
+              keyPath: "key",
             });
-            metricsStore.createIndex("timestamp", "timestamp");
-            metricsStore.createIndex("success", "success");
-            console.log('✅ Object store "sync_metrics" creado');
+            metadataStore.createIndex("timestamp", "timestamp");
+            metadataStore.createIndex("tipo", "tipo");
+            console.log('✅ Object store "sync_metadata" creado');
           }
-          if (!db.objectStoreNames.contains("stock_pendientes")) {
-            const stockStore = db.createObjectStore("stock_pendientes", {
-              keyPath: "id_local",
+
+          // 📋 COLA DE SINCRONIZACIÓN
+          if (!db.objectStoreNames.contains("sync_queue")) {
+            const queueStore = db.createObjectStore("sync_queue", {
+              keyPath: "id",
               autoIncrement: true,
             });
-            stockStore.createIndex("producto_id", "producto_id");
-            stockStore.createIndex("sincronizado", "sincronizado");
-            stockStore.createIndex("timestamp", "timestamp");
-            console.log('✅ Object store "stock_pendientes" creado');
+            queueStore.createIndex("tipo", "tipo");
+            queueStore.createIndex("estado", "estado");
+            queueStore.createIndex("timestamp", "timestamp");
+            queueStore.createIndex("prioridad", "prioridad");
+            console.log('✅ Object store "sync_queue" creado');
           }
+
+          // 📈 ESTADÍSTICAS Y MÉTRICAS
+          if (!db.objectStoreNames.contains("estadisticas")) {
+            const statsStore = db.createObjectStore("estadisticas", {
+              keyPath: "id",
+            });
+            statsStore.createIndex("tipo", "tipo");
+            statsStore.createIndex("fecha", "fecha");
+            console.log('✅ Object store "estadisticas" creado');
+          }
+
+          // 🔄 LOGS DE OPERACIONES
+          if (!db.objectStoreNames.contains("operation_logs")) {
+            const logsStore = db.createObjectStore("operation_logs", {
+              keyPath: "id",
+              autoIncrement: true,
+            });
+            logsStore.createIndex("tipo", "tipo");
+            logsStore.createIndex("fecha", "fecha");
+            logsStore.createIndex("estado", "estado");
+            console.log('✅ Object store "operation_logs" creado');
+          }
+
+          console.log(
+            "🎯 Estructura de IndexedDB completamente alineada con backend"
+          );
+          console.log(`📊 Total de stores: ${db.objectStoreNames.length}`);
         },
       });
 
@@ -153,232 +333,15 @@ class IndexedDBService {
     }
   }
 
-  async debugProductSearch(productId) {
-    try {
-      console.log(`🔍 DEBUG PRODUCT SEARCH: ${productId}`);
+  // =============================================
+  // 🛠️ MÉTODOS PRINCIPALES MEJORADOS
+  // =============================================
 
-      if (!this.initialized) {
-        await this.init();
-      }
-
-      const result = {
-        productId,
-        storeExists: this.db.objectStoreNames.contains("productos"),
-        directGet: null,
-        allProducts: null,
-        error: null,
-      };
-
-      // 1. Intentar get directo
-      try {
-        result.directGet = await this.get("productos", productId);
-        console.log(`🔍 Direct get result:`, result.directGet);
-      } catch (error) {
-        result.directGet = { error: error.message };
-      }
-
-      // 2. Obtener todos los productos
-      try {
-        result.allProducts = await this.getAll("productos");
-        console.log(`🔍 All products:`, result.allProducts);
-      } catch (error) {
-        result.allProducts = { error: error.message };
-      }
-
-      // 3. Buscar en todos los productos
-      if (result.allProducts && Array.isArray(result.allProducts)) {
-        result.foundInAll = result.allProducts.find((p) => p.id === productId);
-        result.foundByName = result.allProducts.find(
-          (p) => p.nombre?.toLowerCase().includes("coca") // Buscar por nombre parcial
-        );
-      }
-
-      console.log(`🔍 DEBUG RESULT:`, result);
-      return result;
-    } catch (error) {
-      console.error(`❌ Error en debugProductSearch:`, error);
-      return { error: error.message };
-    }
-  }
-  async verifyProductExistence(productId) {
-    try {
-      console.log(`🔍 VERIFY PRODUCT: ${productId}`);
-
-      if (!this.initialized) {
-        await this.init();
-      }
-
-      const product = await this.get("productos", productId);
-      console.log(`📦 VERIFY RESULT:`, product);
-
-      return {
-        exists: !!product,
-        product: product,
-        details: product
-          ? {
-              id: product.id,
-              nombre: product.nombre,
-              stock: product.stock,
-            }
-          : null,
-      };
-    } catch (error) {
-      console.error(`❌ VERIFY ERROR:`, error);
-      return { exists: false, error: error.message };
-    }
-  }
-
-  async getPendingRecords(storeName) {
-    try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
-      if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
-        return [];
-      }
-
-      const store = this.db
-        .transaction(storeName, "readonly")
-        .objectStore(storeName);
-      const allData = await store.getAll();
-
-      // ✅ FILTRADO MEJORADO Y CONSISTENTE
-      return allData.filter((item) => {
-        if (!item) return false;
-
-        // Múltiples verificaciones para "no sincronizado"
-        const isNotSynced =
-          item.sincronizado === false ||
-          item.sincronizado === undefined ||
-          item.sincronizado === null ||
-          !item.hasOwnProperty("sincronizado");
-
-        // Verificar que no esté marcado como eliminado
-        const isNotDeleted = item.eliminado !== true && item.activo !== false;
-
-        return isNotSynced && isNotDeleted;
-      });
-    } catch (error) {
-      console.error(`❌ Error en getPendingRecords(${storeName}):`, error);
-
-      // ✅ FALLBACK MEJORADO
-      try {
-        const allData = await this.getAll(storeName);
-        return allData.filter(
-          (item) => item && (item.sincronizado === false || !item.sincronizado)
-        );
-      } catch (fallbackError) {
-        return [];
-      }
-    }
-  }
-
-  // ✅ MÉTODO SEGURO PARA OBTENER TODOS LOS REGISTROS
-  async safeGetAll(storeName, indexName = null, value = null) {
-    try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
-      if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
-        return [];
-      }
-
-      const store = this.db
-        .transaction(storeName, "readonly")
-        .objectStore(storeName);
-
-      // Si se especifica un índice y valor, usar el índice
-      if (indexName && value !== null) {
-        // Verificar si el índice existe
-        const indexNames = Array.from(store.indexNames);
-        if (!indexNames.includes(indexName)) {
-          console.warn(
-            `⚠️ Índice "${indexName}" no existe en "${storeName}", usando getAll`
-          );
-          return await store.getAll();
-        }
-
-        // ✅ CORREGIDO: IndexedDB no acepta booleanos directamente, convertir a número
-        let normalizedValue = value;
-        if (typeof value === "boolean") {
-          normalizedValue = value ? 1 : 0;
-          console.log(
-            `🔄 Convirtiendo valor booleano ${value} a número ${normalizedValue} para índice`
-          );
-        }
-
-        const index = store.index(indexName);
-        return await index.getAll(normalizedValue);
-      }
-
-      // Si no hay índice, obtener todos los registros
-      return await store.getAll();
-    } catch (error) {
-      console.error(
-        `❌ Error en safeGetAll(${storeName}, ${indexName}, ${value}):`,
-        error
-      );
-
-      // En caso de error con índice, intentar sin índice
-      if (error.name === "NotFoundError" || error.name === "DataError") {
-        console.log(`🔄 Reintentando sin índice ${indexName}...`);
-        try {
-          const store = this.db
-            .transaction(storeName, "readonly")
-            .objectStore(storeName);
-          const allData = await store.getAll();
-
-          // Filtrar manualmente si tenemos un valor
-          if (indexName && value !== null) {
-            return allData.filter((item) => item[indexName] === value);
-          }
-
-          return allData;
-        } catch (fallbackError) {
-          console.error(`❌ Error en fallback:`, fallbackError);
-          return [];
-        }
-      }
-
-      return [];
-    }
-  }
-
-  // ✅ MÉTODO PARA OBTENER TODOS LOS REGISTROS (sin filtros)
-  async getAll(storeName) {
-    try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
-      if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
-        return [];
-      }
-
-      const store = this.db
-        .transaction(storeName, "readonly")
-        .objectStore(storeName);
-      return await store.getAll();
-    } catch (error) {
-      console.error(`❌ Error en getAll(${storeName}):`, error);
-      return [];
-    }
-  }
-
-  // ✅ MÉTODO PARA OBTENER UN REGISTRO POR KEY
   async get(storeName, key) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
+        console.warn(`⚠️ Store ${storeName} no existe`);
         return null;
       }
 
@@ -392,111 +355,67 @@ class IndexedDBService {
     }
   }
 
-  // ✅ MÉTODO PARA AGREGAR UN REGISTRO
+  async getAll(storeName) {
+    try {
+      if (!this.initialized) await this.init();
+      if (!this.db.objectStoreNames.contains(storeName)) {
+        console.warn(`⚠️ Store ${storeName} no existe`);
+        return [];
+      }
+
+      const store = this.db
+        .transaction(storeName, "readonly")
+        .objectStore(storeName);
+      return await store.getAll();
+    } catch (error) {
+      console.error(`❌ Error en getAll(${storeName}):`, error);
+      return [];
+    }
+  }
+
   async add(storeName, data) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
+        console.error(`❌ Store ${storeName} no existe para add`);
         return false;
       }
 
       const store = this.db
         .transaction(storeName, "readwrite")
         .objectStore(storeName);
-
-      // ✅ VERIFICACIÓN CRÍTICA: Asegurar que los datos tengan la clave primaria
-      const storeInfo = this.getStoreKeyPath(storeName);
-
-      if (storeInfo.keyPath && !data[storeInfo.keyPath]) {
-        console.error(
-          `❌ Datos sin clave primaria (${storeInfo.keyPath}):`,
-          data
-        );
-        throw new Error(
-          `Los datos deben tener el campo '${storeInfo.keyPath}'`
-        );
-      }
-
-      console.log(`💾 Agregando a ${storeName}:`, data);
       await store.add(data);
-      console.log(`✅ ${storeName} agregado exitosamente`);
       return true;
     } catch (error) {
-      console.error(`❌ Error en add(${storeName}):`, error);
-      console.error(`📋 Datos que causaron el error:`, data);
+      console.error(`❌ Error en add(${storeName}):`, error, data);
       return false;
     }
   }
 
-  // ✅ MÉTODO PARA ACTUALIZAR UN REGISTRO - CORREGIDO
   async put(storeName, data) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
+        console.error(`❌ Store ${storeName} no existe para put`);
         return false;
       }
 
       const store = this.db
         .transaction(storeName, "readwrite")
         .objectStore(storeName);
-
-      // ✅ VERIFICACIÓN CRÍTICA: Asegurar que los datos tengan la clave primaria
-      const storeInfo = this.getStoreKeyPath(storeName);
-
-      if (storeInfo.keyPath && !data[storeInfo.keyPath]) {
-        console.error(
-          `❌ Datos sin clave primaria (${storeInfo.keyPath}):`,
-          data
-        );
-        throw new Error(
-          `Los datos deben tener el campo '${storeInfo.keyPath}'`
-        );
-      }
-
-      console.log(`💾 Actualizando en ${storeName}:`, data);
       await store.put(data);
-      console.log(`✅ ${storeName} actualizado exitosamente`);
       return true;
     } catch (error) {
-      console.error(`❌ Error en put(${storeName}):`, error);
-      console.error(`📋 Datos que causaron el error:`, data);
+      console.error(`❌ Error en put(${storeName}):`, error, data);
       return false;
     }
   }
-  // ✅ NUEVO MÉTODO: Obtener información del objectStore
-  getStoreKeyPath(storeName) {
-    const storeConfigs = {
-      sesiones_caja_offline: { keyPath: "id_local", autoIncrement: false },
-      ventas_pendientes: { keyPath: "id_local", autoIncrement: false },
-      detalles_venta_pendientes: { keyPath: "id_local", autoIncrement: false },
-      cierres_pendientes: { keyPath: "id_local", autoIncrement: false },
-      productos: { keyPath: "id", autoIncrement: false },
-      categorias: { keyPath: "id", autoIncrement: false },
-      cierres: { keyPath: "id", autoIncrement: false },
-      cache_maestros: { keyPath: "tipo", autoIncrement: false },
-      sync_metrics: { keyPath: "id", autoIncrement: true },
-      offline_users: { keyPath: "id", autoIncrement: false },
-    };
 
-    return storeConfigs[storeName] || { keyPath: null, autoIncrement: false };
-  }
-  // ✅ MÉTODO PARA ELIMINAR UN REGISTRO
   async delete(storeName, key) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
+        console.warn(`⚠️ Store ${storeName} no existe para delete`);
         return false;
       }
 
@@ -511,15 +430,11 @@ class IndexedDBService {
     }
   }
 
-  // ✅ MÉTODO PARA LIMPIAR UN OBJECT STORE
   async clear(storeName) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
+        console.warn(`⚠️ Store ${storeName} no existe para clear`);
         return false;
       }
 
@@ -534,76 +449,162 @@ class IndexedDBService {
     }
   }
 
-  // ✅ MÉTODO PARA OBTENER INFORMACIÓN DE LA BD
-  async getDBInfo() {
+  async getByIndex(storeName, indexName, value) {
     try {
-      if (!this.initialized) {
-        await this.init();
+      if (!this.initialized) await this.init();
+      if (!this.db.objectStoreNames.contains(storeName)) {
+        console.warn(`⚠️ Store ${storeName} no existe`);
+        return [];
       }
 
-      const objectStores = Array.from(this.db.objectStoreNames);
-      const info = {
-        objectStores: objectStores,
-        version: this.dbVersion,
-        initialized: this.initialized,
-      };
+      const store = this.db
+        .transaction(storeName, "readonly")
+        .objectStore(storeName);
 
-      // Obtener conteos de cada store
-      info.counts = {};
-      for (const storeName of objectStores) {
-        try {
-          const store = this.db
-            .transaction(storeName, "readonly")
-            .objectStore(storeName);
-          info.counts[storeName] = await store.count();
-        } catch (error) {
-          info.counts[storeName] = "error";
-        }
+      // ✅ VERIFICAR QUE EL ÍNDICE EXISTE
+      const indexNames = Array.from(store.indexNames);
+      if (!indexNames.includes(indexName)) {
+        console.warn(`⚠️ Índice ${indexName} no existe en store ${storeName}`);
+        console.log(`📋 Índices disponibles:`, indexNames);
+
+        // Fallback: filtrar manualmente
+        const allRecords = await this.getAll(storeName);
+        return allRecords.filter((record) => {
+          // Manejar diferentes tipos de datos
+          const recordValue = record[indexName];
+          if (typeof recordValue === "boolean" && typeof value === "boolean") {
+            return recordValue === value;
+          }
+          // Convertir a string para comparación segura
+          return String(recordValue) === String(value);
+        });
       }
 
-      return info;
+      const index = store.index(indexName);
+
+      // ✅ CONVERTIR VALOR PARA EVITAR DataError
+      let safeValue = value;
+
+      // Si el valor es booleano, convertirlo a número (0 o 1) para compatibilidad
+      if (typeof value === "boolean") {
+        safeValue = value ? 1 : 0;
+        console.log(
+          `🔄 Convertido booleano ${value} → número ${safeValue} para índice ${indexName}`
+        );
+      }
+
+      // Si el valor es undefined o null, usar valor por defecto
+      if (value === undefined || value === null) {
+        safeValue = 0;
+        console.log(
+          `🔄 Valor ${value} convertido a ${safeValue} para índice ${indexName}`
+        );
+      }
+
+      console.log(`🔍 Buscando en índice ${indexName} con valor:`, safeValue);
+      const result = await index.getAll(safeValue);
+      console.log(`✅ Encontrados ${result.length} registros`);
+
+      return result;
     } catch (error) {
-      console.error("❌ Error obteniendo información de BD:", error);
-      return {
-        objectStores: [],
-        version: 0,
-        initialized: false,
-        counts: {},
-      };
+      console.error(
+        `❌ Error en getByIndex(${storeName}, ${indexName}, ${value}):`,
+        error
+      );
+
+      // ✅ FALLBACK ROBUSTO
+      try {
+        console.log(`🔄 Intentando fallback para ${storeName}...`);
+        const allRecords = await this.getAll(storeName);
+        const filtered = allRecords.filter((record) => {
+          try {
+            const recordValue = record[indexName];
+
+            // Manejo especial para valores booleanos
+            if (
+              typeof value === "boolean" &&
+              typeof recordValue === "boolean"
+            ) {
+              return recordValue === value;
+            }
+
+            // Manejo especial para números vs strings
+            if (typeof value === "number" && typeof recordValue === "string") {
+              return Number(recordValue) === value;
+            }
+            if (typeof value === "string" && typeof recordValue === "number") {
+              return recordValue === Number(value);
+            }
+
+            // Comparación por defecto
+            return String(recordValue) === String(value);
+          } catch (filterError) {
+            console.warn(`⚠️ Error filtrando registro:`, filterError);
+            return false;
+          }
+        });
+
+        console.log(
+          `✅ Fallback exitoso: ${filtered.length} registros encontrados`
+        );
+        return filtered;
+      } catch (fallbackError) {
+        console.error("❌ Fallback también falló:", fallbackError);
+        return [];
+      }
     }
   }
-
-  // ✅ MÉTODO PARA ESTIMAR EL TAMAÑO DEL ALMACENAMIENTO
-  async estimateSize() {
+  // IndexedDBService.js - AGREGAR este método mejorado
+  async safeGetByIndex(storeName, indexName, value) {
     try {
-      if (!this.initialized || !navigator.storage) {
-        return null;
-      }
+      console.log(
+        `🛡️ [SAFE] Buscando en ${storeName}.${indexName} con valor:`,
+        value
+      );
 
-      if (navigator.storage && navigator.storage.estimate) {
-        const estimation = await navigator.storage.estimate();
-        return {
-          usage: estimation.usage,
-          quota: estimation.quota,
-          usagePercentage: estimation.quota
-            ? (estimation.usage / estimation.quota) * 100
-            : 0,
-        };
-      }
-
-      return null;
+      // Primero intentar con getByIndex normal
+      const result = await this.getByIndex(storeName, indexName, value);
+      return result;
     } catch (error) {
-      console.error("❌ Error estimando tamaño de almacenamiento:", error);
-      return null;
+      console.error(`❌ [SAFE] Error en safeGetByIndex:`, error);
+
+      // Último recurso: obtener todo y filtrar
+      try {
+        const allData = await this.getAll(storeName);
+        const filtered = allData.filter((item) => {
+          try {
+            // Conversión segura de tipos
+            const itemValue = item[indexName];
+            const searchValue = value;
+
+            // Manejar diferentes combinaciones de tipos
+            if (itemValue === searchValue) return true;
+            if (String(itemValue) === String(searchValue)) return true;
+            if (itemValue == searchValue) return true; // Comparación flexible
+
+            return false;
+          } catch (e) {
+            return false;
+          }
+        });
+
+        console.log(
+          `🛡️ [SAFE] Fallback manual: ${filtered.length} de ${allData.length} registros`
+        );
+        return filtered;
+      } catch (finalError) {
+        console.error(`💥 [SAFE] Error crítico en fallback:`, finalError);
+        return [];
+      }
     }
   }
+  // =============================================
+  // 🔍 MÉTODOS ESPECIALIZADOS
+  // =============================================
 
-  // ✅ MÉTODO PARA VERIFICAR SI UN OBJECT STORE EXISTE
   async storeExists(storeName) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
+      if (!this.initialized) await this.init();
       return this.db.objectStoreNames.contains(storeName);
     } catch (error) {
       console.error(`❌ Error verificando store ${storeName}:`, error);
@@ -611,68 +612,313 @@ class IndexedDBService {
     }
   }
 
-  // ✅ MÉTODO PARA VERIFICAR SI UN ÍNDICE EXISTE
-  async indexExists(storeName, indexName) {
+  async safeGetAll(storeName) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
+        console.warn(`⚠️ Store ${storeName} no existe`);
+        return [];
+      }
+      return await this.getAll(storeName);
+    } catch (error) {
+      console.error(`❌ Error en safeGetAll(${storeName}):`, error);
+      return [];
+    }
+  }
+
+  async update(storeName, key, updates) {
+    try {
+      if (!this.initialized) await this.init();
+      if (!this.db.objectStoreNames.contains(storeName)) {
+        console.error(`❌ Store ${storeName} no existe para update`);
         return false;
       }
 
-      const store = this.db
-        .transaction(storeName, "readonly")
-        .objectStore(storeName);
-      const indexNames = Array.from(store.indexNames);
-      return indexNames.includes(indexName);
+      const existing = await this.get(storeName, key);
+      if (!existing) {
+        console.warn(`⚠️ Item con key ${key} no encontrado en ${storeName}`);
+        return false;
+      }
+
+      const updated = { ...existing, ...updates };
+      return await this.put(storeName, updated);
     } catch (error) {
-      console.error(
-        `❌ Error verificando índice ${indexName} en ${storeName}:`,
-        error
-      );
+      console.error(`❌ Error en update(${storeName}, ${key}):`, error);
       return false;
     }
   }
 
-  // ✅ MÉTODO PARA OBTENER REGISTROS POR ÍNDICE (CON VERIFICACIÓN)
-  async getByIndex(storeName, indexName, value) {
+  async count(storeName) {
     try {
-      if (!this.initialized) {
-        await this.init();
-      }
-
+      if (!this.initialized) await this.init();
       if (!this.db.objectStoreNames.contains(storeName)) {
-        console.warn(`⚠️ Object store "${storeName}" no existe`);
-        return [];
+        return 0;
       }
 
       const store = this.db
         .transaction(storeName, "readonly")
         .objectStore(storeName);
-
-      // Verificar si el índice existe
-      const indexExists = Array.from(store.indexNames).includes(indexName);
-      if (!indexExists) {
-        console.warn(`⚠️ Índice "${indexName}" no existe en "${storeName}"`);
-        return [];
-      }
-
-      // ✅ CORREGIDO: Normalizar valores booleanos
-      let normalizedValue = value;
-      if (typeof value === "boolean") {
-        normalizedValue = value ? 1 : 0;
-      }
-
-      const index = store.index(indexName);
-      return await index.getAll(normalizedValue);
+      return await store.count();
     } catch (error) {
-      console.error(
-        `❌ Error en getByIndex(${storeName}, ${indexName}, ${value}):`,
-        error
+      console.error(`❌ Error en count(${storeName}):`, error);
+      return 0;
+    }
+  }
+
+  // =============================================
+  // 🛠️ MÉTODOS MEJORADOS PARA OFFLINE FIRST
+  // =============================================
+
+  /**
+   * ✅ MÉTODO SEGURO PARA GUARDAR VENTAS OFFLINE
+   * Siempre usa "ventas_pendientes" para datos offline
+   */
+  async putSaleOffline(ventaData) {
+    try {
+      if (!this.initialized) await this.init();
+
+      // ✅ VALIDAR QUE TENGA id_local
+      if (!ventaData.id_local) {
+        throw new Error("Venta offline debe tener id_local");
+      }
+
+      // ✅ GUARDAR SOLO EN VENTAS_PENDIENTES
+      const result = await this.put("ventas_pendientes", ventaData);
+
+      if (!result) {
+        throw new Error("No se pudo guardar la venta offline");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("❌ Error en putSaleOffline:", error, ventaData);
+      return false;
+    }
+  }
+
+  /**
+   * ✅ MÉTODO SEGURO PARA GUARDAR VENTAS DEL SERVIDOR
+   * Usa "ventas" para datos con ID del servidor
+   */
+  async putSaleOnline(ventaData) {
+    try {
+      if (!this.initialized) await this.init();
+
+      // ✅ VALIDAR QUE TENGA id (del servidor)
+      if (!ventaData.id) {
+        throw new Error("Venta online debe tener id del servidor");
+      }
+
+      const result = await this.put("ventas", ventaData);
+
+      if (!result) {
+        throw new Error("No se pudo guardar la venta online");
+      }
+
+      console.log("✅ Venta online guardada en ventas:", ventaData.id);
+      return true;
+    } catch (error) {
+      console.error("❌ Error en putSaleOnline:", error, ventaData);
+      return false;
+    }
+  }
+
+  /**
+   * ✅ OBTENER VENTAS POR SESIÓN (compatible con ambos sistemas)
+   */
+  async getSalesBySession(sesionId) {
+    try {
+      if (!this.initialized) await this.init();
+
+      console.log(`🔍 Buscando ventas para sesión: ${sesionId}`);
+
+      let ventas = [];
+
+      // ✅ BUSCAR EN VENTAS PENDIENTES (offline)
+      const ventasPendientes = await this.getAll("ventas_pendientes");
+      const ventasPendientesFiltradas = ventasPendientes.filter(
+        (venta) =>
+          venta.sesion_caja_id === sesionId ||
+          venta.sesion_caja_id_local === sesionId
       );
+
+      // ✅ BUSCAR EN VENTAS (online/sincronizadas)
+      const ventasOnline = await this.getAll("ventas");
+      const ventasOnlineFiltradas = ventasOnline.filter(
+        (venta) => venta.sesion_caja_id === sesionId
+      );
+
+      ventas = [...ventasPendientesFiltradas, ...ventasOnlineFiltradas];
+
+      console.log(
+        `📊 Ventas encontradas: ${ventas.length} (${ventasPendientesFiltradas.length} pendientes, ${ventasOnlineFiltradas.length} sincronizadas)`
+      );
+
+      return ventas;
+    } catch (error) {
+      console.error("❌ Error en getSalesBySession:", error);
       return [];
+    }
+  }
+  // =============================================
+  // 🔄 MÉTODOS DE SINCRONIZACIÓN
+  // =============================================
+
+  async sincronizarMaestros(tipo, datos) {
+    try {
+      if (!this.initialized) await this.init();
+
+      console.log(`🔄 Sincronizando ${tipo}:`, datos.length, "registros");
+
+      const storeName = this._getStoreNameForTipo(tipo);
+      if (!storeName) {
+        throw new Error(`Tipo de datos no soportado: ${tipo}`);
+      }
+
+      // Limpiar store existente
+      await this.clear(storeName);
+
+      // Agregar nuevos datos
+      for (const item of datos) {
+        await this.add(storeName, item);
+      }
+
+      // Guardar metadata de sincronización
+      await this.put("sync_metadata", {
+        key: `last_sync_${tipo}`,
+        timestamp: new Date().toISOString(),
+        count: datos.length,
+        tipo: tipo,
+      });
+
+      console.log(`✅ ${tipo} sincronizados: ${datos.length} registros`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error sincronizando ${tipo}:`, error);
+      return false;
+    }
+  }
+
+  async getPendingRecords(storeName) {
+    try {
+      if (!this.initialized) await this.init();
+      return await this.getByIndex(storeName, "sincronizado", false);
+    } catch (error) {
+      console.error(`❌ Error obteniendo pendientes de ${storeName}:`, error);
+      return [];
+    }
+  }
+
+  async markAsSynced(storeName, key) {
+    try {
+      if (!this.initialized) await this.init();
+      return await this.update(storeName, key, { sincronizado: true });
+    } catch (error) {
+      console.error(`❌ Error marcando como sincronizado:`, error);
+      return false;
+    }
+  }
+
+  // =============================================
+  // 🛠️ MÉTODOS AUXILIARES
+  // =============================================
+
+  _getStoreNameForTipo(tipo) {
+    const mapping = {
+      productos: "productos",
+      categorias: "categorias",
+      usuarios: "users",
+      users: "users",
+      sesiones: "sesiones_caja",
+      cierres: "cierres",
+      ventas: "ventas",
+      detalles_venta: "detalles_venta",
+    };
+
+    return mapping[tipo] || null;
+  }
+  // 🆕 MÉTODO PARA INSERTAR O ACTUALIZAR
+  async addOrUpdate(storeName, data) {
+    try {
+      if (!this.initialized) await this.init();
+      if (!this.db.objectStoreNames.contains(storeName)) {
+        console.error(`❌ Store ${storeName} no existe para addOrUpdate`);
+        return false;
+      }
+
+      const store = this.db
+        .transaction(storeName, "readwrite")
+        .objectStore(storeName);
+
+      // ✅ Usar put que actualiza si existe, inserta si no existe
+      await store.put(data);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error en addOrUpdate(${storeName}):`, error, data);
+      return false;
+    }
+  }
+  async getDatabaseInfo() {
+    try {
+      if (!this.initialized) await this.init();
+
+      const info = {
+        name: this.dbName,
+        version: this.dbVersion,
+        stores: [],
+        totalRecords: 0,
+      };
+
+      for (const storeName of this.db.objectStoreNames) {
+        const count = await this.count(storeName);
+        info.stores.push({
+          name: storeName,
+          recordCount: count,
+        });
+        info.totalRecords += count;
+      }
+
+      return info;
+    } catch (error) {
+      console.error("❌ Error obteniendo info de BD:", error);
+      return null;
+    }
+  }
+
+  async exportData() {
+    try {
+      if (!this.initialized) await this.init();
+
+      const exportData = {};
+
+      for (const storeName of this.db.objectStoreNames) {
+        exportData[storeName] = await this.getAll(storeName);
+      }
+
+      return exportData;
+    } catch (error) {
+      console.error("❌ Error exportando datos:", error);
+      return null;
+    }
+  }
+
+  async importData(importData) {
+    try {
+      if (!this.initialized) await this.init();
+
+      for (const [storeName, data] of Object.entries(importData)) {
+        if (this.db.objectStoreNames.contains(storeName)) {
+          await this.clear(storeName);
+          for (const item of data) {
+            await this.add(storeName, item);
+          }
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("❌ Error importando datos:", error);
+      return false;
     }
   }
 }

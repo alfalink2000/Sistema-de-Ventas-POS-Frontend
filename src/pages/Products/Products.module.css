@@ -811,3 +811,40 @@
   margin-bottom: 0.25rem;
   font-size: 0.875rem;
 }
+/* En Products.module.css - AGREGAR ESTOS ESTILOS */
+.debugActions {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.debugButton {
+  padding: 8px 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.emergencyButton {
+  padding: 8px 12px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.debugButton:hover {
+  background: #2563eb;
+}
+
+.emergencyButton:hover {
+  background: #dc2626;
+}

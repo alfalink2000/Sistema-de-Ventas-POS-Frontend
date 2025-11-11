@@ -1,4 +1,3 @@
-// store/store.js
 import { createStore, applyMiddleware, combineReducers, compose } from "redux";
 import { thunk } from "redux-thunk";
 import {
@@ -7,7 +6,6 @@ import {
   cartReducer,
   categoriesReducer,
   salesReducer,
-  inventoryReducer,
   closuresReducer,
   detallesVentaReducer,
   sesionesCajaReducer,
@@ -20,7 +18,6 @@ const rootReducer = combineReducers({
   cart: cartReducer,
   categories: categoriesReducer,
   sales: salesReducer,
-  inventory: inventoryReducer,
   closures: closuresReducer,
   detallesVenta: detallesVentaReducer,
   sesionesCaja: sesionesCajaReducer,

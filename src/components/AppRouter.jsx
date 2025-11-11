@@ -15,6 +15,7 @@ import LoadingSpinner from "../components/ui/LoadingSpinner/LoadingSpinner";
 import { startChecking, startOfflineChecking } from "../actions/authActions";
 import { reloadProductsAfterSale } from "../actions/salesActions";
 import styles from "./AppRouter.module.css";
+import ImageCacheService from "../services/ImageCacheService";
 
 const AppRouter = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -68,6 +69,20 @@ const AppRouter = () => {
       checkAuth();
     }
   }, [dispatch, isOnline, checking]);
+
+  useEffect(() => {
+    const testCache = async () => {
+      try {
+        // ✅ Ahora debería funcionar correctamente
+        const result = await ImageCacheService.testCachePersistence();
+        console.log("🧪 Test de persistencia:", result);
+      } catch (error) {
+        console.error("❌ Error en test de persistencia:", error);
+      }
+    };
+
+    testCache();
+  }, []);
 
   // ✅ MANEJADOR DE CAMBIO DE VISTA MEJORADO
   const handleViewChange = (view) => {

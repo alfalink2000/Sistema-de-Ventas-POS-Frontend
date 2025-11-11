@@ -1,13 +1,96 @@
-// components/features/products/ProductCard/ProductCard.jsx - ACTUALIZADO CON PERMISOS
-import { FiEdit, FiTrash2, FiPackage, FiEye, FiShield } from "react-icons/fi";
+// components/features/products/ProductCard/ProductCard.jsx (actualizado)
+import { useState } from "react";
+import { FiEdit, FiTrash2, FiEye, FiPackage } from "react-icons/fi";
+import OfflineImage from "../../../ui/OfflineImage/OfflineImage";
 import styles from "./ProductCard.module.css";
+
+// ✅ FUNCIÓN MEJORADA: Buscar imagen en múltiples propiedades
+const getImageUrl = (product) => {
+  if (!product) return null;
+
+  // Lista de propiedades posibles donde puede estar la imagen
+  const possibleImageProps = [
+    "imagen_url",
+    "imagen",
+    "image_url",
+    "image",
+    "url_imagen",
+    "img",
+    "picture",
+    "foto",
+    "url",
+    "thumbnail",
+    "imagenUrl",
+    "imageUrl",
+    "photo",
+    "photo_url",
+    "foto_url",
+  ];
+
+  // Buscar en todas las propiedades posibles
+  for (const prop of possibleImageProps) {
+    if (
+      product[prop] &&
+      typeof product[prop] === "string" &&
+      product[prop].trim() !== ""
+    ) {
+      return product[prop];
+    }
+  }
+
+  // ✅ BUSCAR EN CUALQUIER PROPIEDAD QUE CONTENGA "URL" Y SEA DE IMGBB
+  for (const key in product) {
+    if (
+      product.hasOwnProperty(key) &&
+      typeof product[key] === "string" &&
+      product[key].includes("i.ibb.co")
+    ) {
+      return product[key];
+    }
+  }
+
+  return null;
+};
+
+// ✅ COMPONENTE MEJORADO: ImageWithFallback
+const ImageWithFallback = ({ src, alt, className, fallback }) => {
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  if (error || !src) {
+    return fallback;
+  }
+
+  return (
+    <>
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        onLoad={() => setLoading(false)}
+        onError={() => setError(true)}
+        style={{
+          opacity: loading ? 0 : 1,
+          transition: "opacity 0.3s ease",
+        }}
+      />
+      {loading && (
+        <div className={styles.imageSkeleton}>
+          <div className={styles.loadingSpinner}></div>
+        </div>
+      )}
+    </>
+  );
+};
 
 const ProductCard = ({
   product,
   onEdit,
   onDelete,
-  canManageProducts = true, // ✅ NUEVO: permisos
+  canManageProducts = true,
 }) => {
+  const imageUrl = getImageUrl(product);
+
   const handleEdit = (e) => {
     e.stopPropagation();
     if (onEdit) onEdit(product);
@@ -26,17 +109,25 @@ const ProductCard = ({
 
   const stockStatus = getStockStatus();
 
+  const fallbackContent = (
+    <div className={styles.placeholderContainer}>
+      <FiPackage className={styles.placeholderImage} />
+      <span className={styles.placeholderText}>Sin imagen</span>
+    </div>
+  );
+
   return (
     <div className={styles.productCard}>
       <div className={styles.imageContainer}>
-        {product.imagen_url ? (
-          <img
-            src={product.imagen_url}
+        {imageUrl ? (
+          <ImageWithFallback
+            src={imageUrl}
             alt={product.nombre}
             className={styles.productImage}
+            fallback={fallbackContent}
           />
         ) : (
-          <FiPackage className={styles.placeholderImage} />
+          fallbackContent
         )}
 
         {/* Botones de acción */}
@@ -104,19 +195,7 @@ const ProductCard = ({
         <div className={styles.productFooter}>
           <div className={styles.priceSection}>
             <span className={styles.price}>${product.precio?.toFixed(2)}</span>
-            {product.precio_compra && (
-              <span className={styles.costPrice}>
-                Costo: ${product.precio_compra.toFixed(2)}
-              </span>
-            )}
           </div>
-
-          {!canManageProducts && (
-            <div className={styles.permissionIndicator}>
-              <FiShield className={styles.shieldIcon} />
-              <span>Solo lectura</span>
-            </div>
-          )}
         </div>
       </div>
     </div>

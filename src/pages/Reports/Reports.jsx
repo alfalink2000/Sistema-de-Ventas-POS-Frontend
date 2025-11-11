@@ -5,7 +5,6 @@ import ClosuresHistory from "../../components/features/caja/ClosuresHistory/Clos
 import {
   loadClosures,
   loadOfflineClosures, // ✅ NUEVO MÉTODO
-  syncPendingClosures,
 } from "../../actions/closuresActions";
 import {
   FiCalendar,
@@ -146,21 +145,6 @@ const Reports = () => {
               {syncing ? "Sincronizando..." : "Sincronizar"}
             </button>
           )}
-
-          <button
-            className={styles.refreshButton}
-            onClick={() => {
-              if (isOnline) {
-                dispatch(loadClosures(100));
-              } else {
-                dispatch(loadOfflineClosures());
-              }
-            }}
-            disabled={loading}
-          >
-            <FiRefreshCw className={loading ? styles.spinning : ""} />
-            Actualizar
-          </button>
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import Input from "../../../ui/Input/Input";
 import styles from "./LoginForm.module.css";
 import AuthOfflineController from "../../../../controllers/offline/AuthOfflineController/AuthOfflineController";
 import { types } from "../../../../types/types";
+import Swal from "sweetalert2";
 
 const LoginForm = () => {
   const [formData, setFormData] = useState({
@@ -62,21 +63,32 @@ const LoginForm = () => {
       let result;
 
       if (offlineMode) {
-        // ✅ MODO OFFLINE: Usar controlador offline
-        console.log("📱 Intentando login offline...");
-        result = await AuthOfflineController.verifyCredentials(
-          formData.username.trim(),
-          formData.password
+        // ✅ MODO OFFLINE: Usar verificación offline pura
+        console.log("📱 Intentando login offline puro...");
+        result = await AuthOfflineController.verifyOfflineAccess(
+          formData.username.trim()
         );
 
         if (result.success) {
-          console.log("✅ Login offline exitoso");
+          console.log("✅ Login offline puro exitoso");
 
-          // ✅ CORRECCIÓN: Usar la acción startLogin para consistencia
-          // Esto asegura que todo el flujo se ejecute correctamente
-          await dispatch(
-            startLogin(formData.username.trim(), formData.password)
-          );
+          // ✅ GUARDAR EN LOCALSTORAGE SIN DEPENDER DEL TOKEN
+          localStorage.setItem("user", JSON.stringify(result.user));
+          localStorage.setItem("token", "offline-token"); // Token placeholder
+
+          // ✅ DISPATCH PARA ACTUALIZAR ESTADO
+          dispatch({
+            type: types.authLogin,
+            payload: result.user,
+          });
+
+          await Swal.fire({
+            icon: "success",
+            title: "Modo Offline",
+            text: `Bienvenido ${result.user.nombre}. Trabajando sin conexión.`,
+            timer: 3000,
+            showConfirmButton: false,
+          });
         } else {
           throw new Error(result.error || "Error en autenticación offline");
         }
@@ -93,7 +105,6 @@ const LoginForm = () => {
       }
     } catch (err) {
       console.error("❌ Error en handleSubmit:", err);
-      // El error se maneja en el estado de Redux
     } finally {
       setLocalLoading(false);
     }

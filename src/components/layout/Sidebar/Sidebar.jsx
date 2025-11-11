@@ -14,30 +14,37 @@ import {
   FiShield,
   FiUsers,
   FiLogOut,
-  FiLock,
-  FiAlertTriangle,
 } from "react-icons/fi";
 import styles from "./Sidebar.module.css";
 
 const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
   const dispatch = useDispatch();
   const [currentPath, setCurrentPath] = useState(`/${currentView || "sales"}`);
+  const [isMobile, setIsMobile] = useState(false);
 
   const menuItems = [
     { path: "/dashboard", label: "Dashboard", icon: FiHome },
     { path: "/sales", label: "Punto de Venta", icon: FiShoppingCart },
     { path: "/products", label: "Productos", icon: FiPackage },
-    {
-      path: "/inventory",
-      label: "Inventario",
-      icon: FiTrendingUp,
-      disabled: true, // ✅ SOLO INVENTORY DESHABILITADO
-      badge: "Próximamente",
-    },
+    { path: "/inventory", label: "Inventario", icon: FiTrendingUp },
     { path: "/caja", label: "Caja", icon: FiDollarSign },
     { path: "/reports", label: "Reportes", icon: FiBarChart2 },
-    { path: "/users", label: "Usuarios", icon: FiUsers }, // ✅ USERS HABILITADO
+    { path: "/users", label: "Usuarios", icon: FiUsers },
   ];
+
+  // ✅ DETECTAR SI ES MÓVIL
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => {
+      window.removeEventListener("resize", checkMobile);
+    };
+  }, []);
 
   useEffect(() => {
     setCurrentPath(`/${currentView || "sales"}`);
@@ -45,16 +52,14 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
 
   const isActive = (path) => currentPath === path;
 
-  const handleNavigation = (path, disabled = false) => {
-    // ✅ BLOQUEAR NAVEGACIÓN SOLO SI ESTÁ DESHABILITADO
-    if (disabled) {
-      console.warn("🚫 Navegación bloqueada - Módulo en desarrollo:", path);
-      return;
-    }
-
+  const handleNavigation = (path) => {
     setCurrentPath(path);
     if (onNavigation) {
       onNavigation(path);
+    }
+    // ✅ Cerrar sidebar en móvil después de navegar
+    if (isMobile) {
+      onToggle();
     }
   };
 
@@ -62,6 +67,14 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
     dispatch(startLogout());
   };
 
+  // ✅ MANEJAR CLICK EN OVERLAY (solo en móvil)
+  const handleOverlayClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onToggle();
+    }
+  };
+
+  // ✅ COMPORTAMIENTO DIFERENTE PARA MÓVIL VS DESKTOP
   if (!isOpen) {
     return (
       <div className={styles.sidebarClosed}>
@@ -73,83 +86,65 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
   }
 
   return (
-    <aside className={styles.sidebar}>
-      <div className={styles.sidebarHeader}>
-        <div className={styles.logo}>
-          <FiShield className={styles.logoIcon} />
-          <h2>KioskoFlow</h2>
-        </div>
-        <button className={styles.closeButton} onClick={onToggle}>
-          <FiX className={styles.closeIcon} />
-        </button>
-      </div>
-
-      <nav className={styles.sidebarNav}>
-        {menuItems.map((item) => {
-          const IconComponent = item.icon;
-          const isDisabled = item.disabled || false;
-
-          return (
-            <button
-              key={item.path}
-              className={`${styles.navItem} ${
-                isActive(item.path) ? styles.active : ""
-              } ${isDisabled ? styles.disabled : ""}`}
-              onClick={() => handleNavigation(item.path, isDisabled)}
-              disabled={isDisabled}
-              title={
-                isDisabled ? "Módulo en desarrollo - Próximamente" : item.label
-              }
-            >
-              <div className={styles.navIconWrapper}>
-                <IconComponent className={styles.navIcon} />
-                {isDisabled && <FiLock className={styles.lockIcon} />}
-              </div>
-              <span className={styles.navLabel}>{item.label}</span>
-
-              {/* ✅ BADGE SOLO PARA MÓDULOS EN DESARROLLO */}
-              {item.badge && (
-                <span className={styles.developmentBadge}>{item.badge}</span>
-              )}
-
-              {isActive(item.path) && !isDisabled && (
-                <div className={styles.activeIndicator} />
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* ✅ INFORMACIÓN DE MÓDULOS NO DISPONIBLES (solo si hay algún módulo deshabilitado) */}
-      {menuItems.some((item) => item.disabled) && (
-        <div className={styles.modulesInfo}>
-          <div className={styles.infoCard}>
-            <FiAlertTriangle className={styles.infoIcon} />
-            <div className={styles.infoContent}>
-              <strong>Módulos en Desarrollo</strong>
-              <p>Algunas funciones estarán disponibles próximamente</p>
-            </div>
-          </div>
-        </div>
+    <>
+      {/* ✅ OVERLAY SOLO EN MÓVIL */}
+      {isMobile && (
+        <div className={styles.overlay} onClick={handleOverlayClick} />
       )}
 
-      {/* ✅ BOTÓN DE SALIR EN EL SIDEBAR */}
-      <div className={styles.sidebarFooter}>
-        <button className={styles.logoutButton} onClick={handleLogout}>
-          <div className={styles.logoutIconWrapper}>
-            <FiLogOut className={styles.logoutIcon} />
+      <aside
+        className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""}`}
+      >
+        <div className={styles.sidebarHeader}>
+          <div className={styles.logo}>
+            <FiShield className={styles.logoIcon} />
+            <h2>KioskoFlow</h2>
           </div>
-          <span className={styles.logoutLabel}>Cerrar Sesión</span>
-        </button>
-
-        <div className={styles.systemInfo}>
-          <div className={styles.versionBadge}>
-            <span>v1.0</span>
-          </div>
-          <span className={styles.systemText}>Sistema POS</span>
+          <button className={styles.closeButton} onClick={onToggle}>
+            <FiX className={styles.closeIcon} />
+          </button>
         </div>
-      </div>
-    </aside>
+
+        <nav className={styles.sidebarNav}>
+          {menuItems.map((item) => {
+            const IconComponent = item.icon;
+
+            return (
+              <button
+                key={item.path}
+                className={`${styles.navItem} ${
+                  isActive(item.path) ? styles.active : ""
+                }`}
+                onClick={() => handleNavigation(item.path)}
+              >
+                <div className={styles.navIconWrapper}>
+                  <IconComponent className={styles.navIcon} />
+                </div>
+                <span className={styles.navLabel}>{item.label}</span>
+
+                {isActive(item.path) && (
+                  <div className={styles.activeIndicator} />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className={styles.sidebarFooter}>
+          <button className={styles.logoutButton} onClick={handleLogout}>
+            <FiLogOut className={styles.logoutIcon} />
+            <span className={styles.logoutLabel}>Cerrar Sesión</span>
+          </button>
+
+          <div className={styles.systemInfo}>
+            <div className={styles.versionBadge}>
+              <span>v1.0</span>
+            </div>
+            <span className={styles.systemText}>Sistema POS</span>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 };
 

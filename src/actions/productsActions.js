@@ -356,55 +356,58 @@ export const createProduct = (productData) => {
     }
   };
 };
-// En productsActions.js - SIMPLIFICAR updateProduct
+// actions/productsActions.js - VERSIÓN CORREGIDA
 export const updateProduct = (productId, productData) => {
-  return async (dispatch) => {
+  return async (dispatch, getState) => {
     try {
-      // ✅ VERIFICAR QUE productId SEA UN STRING VÁLIDO
-      if (!productId || typeof productId !== "string") {
-        console.error("❌ [PRODUCTS] ID de producto inválido:", productId);
-        throw new Error("ID de producto inválido");
-      }
-
       console.log(
         `🔄 [PRODUCTS] Actualizando producto: ${productId}`,
         productData
       );
 
       let resultado;
+      const isOnline = navigator.onLine;
+      const state = getState();
+      const { user } = state.auth;
 
-      if (navigator.onLine) {
+      // ✅ OBTENER PRODUCTO ACTUAL PRIMERO
+      const productoActual = await IndexedDBService.get("productos", productId);
+      if (!productoActual) {
+        throw new Error("Producto no encontrado en base de datos local");
+      }
+
+      // ✅ USAR SIEMPRE EL ID CORRECTO (evitar cambiar IDs)
+      const idToUse = productoActual.id || productoActual.id_local || productId;
+
+      // ✅ DETECTAR CAMBIO DE PRECIO
+      const precioAnterior = productoActual.precio;
+      const precioNuevo = productData.precio;
+      const hayCambioPrecio =
+        precioNuevo !== undefined && precioNuevo !== precioAnterior;
+
+      if (isOnline) {
         // Online: actualizar en servidor
         console.log(`🌐 [PRODUCTS] Actualizando en servidor...`);
 
-        // ✅ USAR fetchConToken PARA TODO - ya maneja FormData y JSON automáticamente
         const response = await fetchConToken(
-          `productos/${productId}`,
+          `productos/${idToUse}`,
           productData,
           "PUT"
         );
 
-        console.log("📥 [PRODUCTS] Respuesta del backend:", response);
-
         if (response && response.ok === true) {
-          // ✅ BUSCAR PRODUCTO EN DIFERENTES ESTRUCTURAS
-          if (response.producto) {
-            resultado = response.producto;
-          } else if (response.product) {
-            resultado = response.product;
-          } else {
-            console.warn("⚠️ Estructura de respuesta no reconocida:", response);
-            resultado = response;
-          }
+          resultado = response.producto || response.product || response;
 
-          console.log(
-            "✅ [PRODUCTS] Producto actualizado exitosamente en servidor"
-          );
+          // ✅ ACTUALIZAR EN INDEXEDDB MANTENIENDO EL ID ORIGINAL
+          const productoActualizado = {
+            ...resultado,
+            // MANTENER ID LOCAL SI EXISTE
+            id_local: productoActual.id_local,
+            last_sync: new Date().toISOString(),
+            sincronizado: true,
+          };
 
-          // Actualizar en IndexedDB
-          if (resultado) {
-            await IndexedDBService.put("productos", resultado);
-          }
+          await IndexedDBService.put("productos", productoActualizado);
 
           await Swal.fire({
             icon: "success",
@@ -421,74 +424,67 @@ export const updateProduct = (productId, productData) => {
           );
         }
       } else {
-        //   // Offline: actualizar localmente
-        //   console.log("📱 [PRODUCTS] Actualizando producto localmente...");
+        // ✅ OFFLINE: Actualizar localmente
+        console.log("📱 [PRODUCTS] Actualizando producto localmente...");
 
-        //   const productoExistente = await IndexedDBService.get(
-        //     "productos",
-        //     productId
-        //   );
-        //   if (!productoExistente) {
-        //     throw new Error("Producto no encontrado localmente");
-        //   }
+        // ✅ MANTENER ESTRUCTURA ORIGINAL DEL PRODUCTO
+        const productoActualizado = {
+          ...productoActual, // Mantener todos los campos originales
+          ...productData, // Aplicar solo los cambios
+          sincronizado: false,
+          fecha_actualizacion: new Date().toISOString(),
+          pending_sync: true,
+        };
 
-        //   // ✅ CONVERTIR FormData A OBJETO SI ES NECESARIO
-        //   let updateData = productData;
-        //   if (productData instanceof FormData) {
-        //     updateData = {};
-        //     for (let [key, value] of productData.entries()) {
-        //       // Saltar el campo 'imagen' en modo offline
-        //       if (key !== "imagen") {
-        //         updateData[key] = value;
-        //       }
-        //     }
-        //   }
+        // ✅ NO CAMBIAR EL ID BAJO NINGUNA CIRCUNSTANCIA
+        await IndexedDBService.put("productos", productoActualizado);
+        resultado = productoActualizado;
 
-        //   const productoActualizado = {
-        //     ...productoExistente,
-        //     ...updateData,
-        //     sincronizado: false,
-        //     fecha_actualizacion: new Date().toISOString(),
-        //   };
+        // ✅ REGISTRAR CAMBIO DE PRECIO SI ES NECESARIO
+        if (hayCambioPrecio) {
+          console.log(
+            `💰 Registrando cambio de precio: ${precioAnterior} → ${precioNuevo}`
+          );
 
-        //   await IndexedDBService.put("productos", productoActualizado);
-        //   resultado = productoActualizado;
+          try {
+            const PriceSyncController = await import(
+              "../controllers/offline/PriceSyncController/PriceSyncController"
+            ).then((module) => module.default);
 
-        //   console.log(
-        //     "✅ [PRODUCTS] Producto actualizado localmente:",
-        //     productId
-        //   );
+            if (PriceSyncController) {
+              const cambioPrecio = {
+                precio_anterior: precioAnterior,
+                precio_nuevo: precioNuevo,
+                tipo: "ajuste_manual",
+                usuario: user?.nombre || "Sistema",
+              };
 
-        //   await Swal.fire({
-        //     icon: "info",
-        //     title: "Modo Offline",
-        //     text: "Producto actualizado localmente. Se sincronizará cuando recuperes la conexión.",
-        //     confirmButtonText: "Entendido",
-        //   });
-        // }
-        // ✅ NUEVO: Usar controller offline
-        console.log(
-          "📱 [PRODUCTS] Actualizando producto localmente con controller..."
-        );
+              await PriceSyncController.registerPriceChange(
+                idToUse,
+                cambioPrecio
+              );
 
-        resultado = await ProductsOfflineController.updateProductPending(
-          productId,
-          productData
-        );
-
-        if (resultado.success) {
-          await Swal.fire({
-            icon: "info",
-            title: "Modo Offline",
-            text: "Producto actualizado localmente. Se sincronizará cuando recuperes la conexión.",
-            confirmButtonText: "Entendido",
-          });
-        } else {
-          throw new Error(resultado.error);
+              console.log(
+                `✅ Cambio de precio registrado para producto: ${idToUse}`
+              );
+            }
+          } catch (importError) {
+            console.error(
+              "❌ Error cargando PriceSyncController:",
+              importError
+            );
+          }
         }
+
+        await Swal.fire({
+          icon: "info",
+          title: "Modo Offline",
+          text: "Producto actualizado localmente. Se sincronizará cuando recuperes la conexión.",
+          confirmButtonText: "Entendido",
+        });
       }
 
-      // Actualizar estado global
+      // ✅ ACTUALIZAR ESTADO GLOBAL
       dispatch({
         type: types.productUpdated,
         payload: resultado,
@@ -512,85 +508,327 @@ export const updateProduct = (productId, productData) => {
     }
   };
 };
+// export const loadProducts = (forceRefresh = false) => {
+//   return async (dispatch, getState) => {
+//     dispatch({ type: types.productsStartLoading });
+
+//     try {
+//       let products = [];
+//       let source = "";
+
+//       if (navigator.onLine) {
+//         // Carga desde API
+//         console.log("🌐 [PRODUCTS] Cargando productos desde servidor...");
+//         const response = await fetchConToken("productos");
+
+//         if (response && response.ok === true && response.productos) {
+//           products = response.productos;
+//           source = "server";
+
+//           // ✅ CORREGIDO: Verificar que el método existe antes de llamarlo
+//           console.log("💾 [PRODUCTS] Guardando productos en IndexedDB...");
+//           if (typeof ProductsOfflineController.saveProducts === "function") {
+//             await ProductsOfflineController.saveProducts(products);
+//             console.log("✅ [PRODUCTS] Productos guardados en IndexedDB");
+//           } else {
+//             console.warn(
+//               "⚠️ [PRODUCTS] ProductsOfflineController.saveProducts no disponible"
+//             );
+//             // Fallback: guardar productos uno por uno
+//             for (const product of products) {
+//               await IndexedDBService.put("productos", {
+//                 ...product,
+//                 last_sync: new Date().toISOString(),
+//                 sincronizado: true,
+//               });
+//             }
+//           }
+//         } else {
+//           throw new Error(response?.error || "Error en respuesta de API");
+//         }
+//       } else {
+//         // Carga desde IndexedDB
+//         console.log("📱 [PRODUCTS] Cargando productos desde IndexedDB...");
+//         products = await IndexedDBService.getAll("productos");
+//         source = "offline";
+
+//         if (products.length === 0) {
+//           console.warn("⚠️ [PRODUCTS] No hay productos en IndexedDB");
+//         }
+//       }
+
+//       console.log(
+//         `✅ [PRODUCTS] ${products.length} productos cargados desde ${source}`
+//       );
+
+//       // ✅ SOLO UN DISPATCH
+//       dispatch({
+//         type: types.productsLoad,
+//         payload: products,
+//       });
+
+//       return {
+//         success: true,
+//         data: products,
+//         source: source,
+//       };
+//     } catch (error) {
+//       console.error("❌ [PRODUCTS] Error cargando productos:", error);
+
+//       // ✅ FALLBACK CONTROLADO - solo un dispatch
+//       try {
+//         console.log("🔄 [PRODUCTS] Intentando fallback desde IndexedDB...");
+//         const fallbackProducts = await IndexedDBService.getAll("productos");
+
+//         dispatch({
+//           type: types.productsLoad,
+//           payload: fallbackProducts || [],
+//         });
+
+//         console.log(
+//           `🔄 [PRODUCTS] ${
+//             fallbackProducts?.length || 0
+//           } productos cargados desde fallback`
+//         );
+
+//         return {
+//           success: true,
+//           data: fallbackProducts || [],
+//           source: "fallback",
+//         };
+//       } catch (fallbackError) {
+//         console.error("❌ [PRODUCTS] Fallback también falló:", fallbackError);
+
+//         dispatch({
+//           type: types.productsLoad,
+//           payload: [],
+//         });
+
+//         return {
+//           success: false,
+//           data: [],
+//           source: "error",
+//           error: error.message,
+//         };
+//       }
+//     } finally {
+//       dispatch({ type: types.productsFinishLoading });
+//     }
+//   };
+// };
+// actions/productsActions.js - VERSIÓN CORREGIDA
+
 export const loadProducts = (forceRefresh = false) => {
   return async (dispatch, getState) => {
-    const currentState = getState();
-
-    if (
-      !forceRefresh &&
-      currentState.products.products &&
-      currentState.products.products.length > 0 &&
-      !currentState.products.loading
-    ) {
-      console.log("✅ Productos ya cargados, omitiendo...");
-      return {
-        success: true,
-        fromCache: true,
-        data: currentState.products.products,
-      };
-    }
-
     dispatch({ type: types.productsStartLoading });
 
     try {
-      const cacheKey = "products_data";
       let products = [];
-      let fromCache = false;
       let source = "";
 
-      if (!forceRefresh) {
-        const cachedResult = await cacheManager.getWithCache(
-          cacheKey,
-          async () => {
-            return await fetchProductsFromSource();
-          },
-          forceRefresh
-        );
+      if (navigator.onLine) {
+        // ✅ CARGA DESDE SERVIDOR CON MANEJO DE ERRORES MEJORADO
+        console.log("🌐 [PRODUCTS] Cargando desde servidor...");
+        const response = await fetchConToken("productos");
 
-        products = cachedResult.data;
-        fromCache = cachedResult.fromCache;
-        source = fromCache ? "cache" : navigator.onLine ? "api" : "indexeddb";
+        if (response && response.ok) {
+          // ✅ EXTRAER PRODUCTOS DE FORMA SEGURA
+          if (Array.isArray(response.productos)) {
+            products = response.productos;
+          } else if (Array.isArray(response.data)) {
+            products = response.data;
+          } else if (Array.isArray(response)) {
+            products = response;
+          } else {
+            console.warn("⚠️ Estructura inesperada de respuesta:", response);
+            products = [];
+          }
 
-        console.log(`📦 Productos cargados desde: ${source}`, {
-          count: products.length,
-          fromCache,
-        });
-      } else {
-        products = await fetchProductsFromSource();
-        source = navigator.onLine ? "api" : "indexeddb";
-        console.log(`🔄 Recarga forzada desde: ${source}`, {
-          count: products.length,
-        });
+          if (products.length > 0) {
+            source = "server";
+            console.log(
+              `✅ ${products.length} productos cargados del servidor`
+            );
+
+            // ✅ GUARDAR EN INDEXEDDB ELIMINANDO DUPLICADOS
+            const existingProducts = await IndexedDBService.getAll("productos");
+            const existingIds = new Set(existingProducts.map((p) => p.id));
+
+            for (const product of products) {
+              try {
+                // ✅ SI EL PRODUCTO YA EXISTE, ACTUALIZAR; SI NO, CREAR
+                if (existingIds.has(product.id)) {
+                  await IndexedDBService.put("productos", {
+                    ...product,
+                    last_sync: new Date().toISOString(),
+                    sincronizado: true,
+                  });
+                } else {
+                  await IndexedDBService.add("productos", {
+                    ...product,
+                    last_sync: new Date().toISOString(),
+                    sincronizado: true,
+                  });
+                }
+              } catch (dbError) {
+                console.error(
+                  `❌ Error guardando producto ${product.id}:`,
+                  dbError
+                );
+              }
+            }
+          }
+        } else {
+          throw new Error(response?.msg || "Error en respuesta del servidor");
+        }
       }
 
-      // ✅ CORREGIDO: Enviar solo el array de productos
+      // ✅ SI ESTAMOS OFFLINE O FALLÓ LA CARGA ONLINE, USAR INDEXEDDB
+      if (!navigator.onLine || products.length === 0) {
+        console.log("📱 Cargando desde IndexedDB...");
+        try {
+          products = await IndexedDBService.getAll("productos");
+          source = "offline";
+          console.log(`✅ ${products.length} productos cargados de IndexedDB`);
+        } catch (offlineError) {
+          console.error("❌ Error cargando de IndexedDB:", offlineError);
+          products = [];
+        }
+      }
+
+      // ✅ ELIMINAR DUPLICADOS DE FORMA MÁS ROBUSTA
+      const uniqueProducts = removeDuplicateProducts(products);
+
       dispatch({
         type: types.productsLoad,
-        payload: products, // ← ENVIAR ARRAY DIRECTO, NO OBJETO
+        payload: uniqueProducts,
       });
 
       return {
         success: true,
-        fromCache,
-        data: products,
-        source,
+        data: uniqueProducts,
+        source: source,
       };
     } catch (error) {
-      console.error("❌ Error cargando productos:", error);
+      console.error("❌ Error crítico cargando productos:", error);
 
-      const fallbackResult = await handleProductsFallback(dispatch);
-      return {
-        success: false,
-        error: error.message,
-        fallbackUsed: true,
-        ...fallbackResult,
-      };
+      // ✅ FALLBACK MEJORADO
+      try {
+        const fallbackProducts = await IndexedDBService.getAll("productos");
+        const uniqueFallback = removeDuplicateProducts(fallbackProducts);
+
+        dispatch({
+          type: types.productsLoad,
+          payload: uniqueFallback || [],
+        });
+
+        return {
+          success: true,
+          data: uniqueFallback || [],
+          source: "fallback",
+        };
+      } catch (finalError) {
+        console.error("❌ Fallback final falló:", finalError);
+        dispatch({
+          type: types.productsLoad,
+          payload: [],
+        });
+        return {
+          success: false,
+          data: [],
+          source: "error",
+          error: error.message,
+        };
+      }
     } finally {
       dispatch({ type: types.productsFinishLoading });
     }
   };
 };
 
+// ✅ FUNCIÓN AUXILIAR PARA ELIMINAR DUPLICADOS
+const removeDuplicates = (products) => {
+  if (!Array.isArray(products)) return [];
+
+  const seen = new Set();
+  const uniqueProducts = [];
+
+  products.forEach((product) => {
+    if (!product || (!product.id && !product.id_local)) return;
+
+    // Preferir ID del servidor sobre ID local
+    const identifier = product.id || product.id_local;
+
+    if (!seen.has(identifier)) {
+      seen.add(identifier);
+      uniqueProducts.push(product);
+    } else {
+      console.warn(`⚠️ Producto duplicado eliminado: ${identifier}`);
+    }
+  });
+
+  return uniqueProducts;
+};
+// actions/productsActions.js - AGREGAR ESTA ACCIÓN
+export const emergencyLoadProducts = () => {
+  return async (dispatch) => {
+    try {
+      console.log("🚨 Carga de emergencia de productos...");
+
+      dispatch({ type: types.productsStartLoading });
+
+      // ✅ INTENTAR MÚLTIPLES FUENTES
+      let products = [];
+
+      // 1. Intentar IndexedDB primero
+      try {
+        products = await IndexedDBService.getAll("productos");
+        console.log(
+          `📦 ${products.length} productos de IndexedDB (emergencia)`
+        );
+      } catch (error) {
+        console.error("❌ IndexedDB falló:", error);
+      }
+
+      // 2. Si no hay productos, intentar API
+      if (products.length === 0 && navigator.onLine) {
+        try {
+          const response = await fetchConToken("productos");
+          if (response && response.ok) {
+            // Extraer productos de cualquier estructura
+            if (response.productos) products = response.productos;
+            else if (response.data) products = response.data;
+            console.log(`🌐 ${products.length} productos de API (emergencia)`);
+          }
+        } catch (apiError) {
+          console.error("❌ API falló:", apiError);
+        }
+      }
+
+      // 3. Si sigue vacío, crear array de ejemplo temporal
+      if (products.length === 0) {
+        console.warn("⚠️ No se pudieron cargar productos, usando array vacío");
+        products = [];
+      }
+
+      dispatch({
+        type: types.productsLoad,
+        payload: products,
+      });
+
+      return { success: true, data: products };
+    } catch (error) {
+      console.error("❌ Error en carga de emergencia:", error);
+      dispatch({
+        type: types.productsLoad,
+        payload: [],
+      });
+      return { success: false, error: error.message };
+    } finally {
+      dispatch({ type: types.productsFinishLoading });
+    }
+  };
+};
 // ✅ FUNCIÓN PRIVADA PARA OBTENER PRODUCTOS
 async function fetchProductsFromSource() {
   if (navigator.onLine) {
@@ -949,7 +1187,294 @@ export const getProductById = (productId) => {
     }
   };
 };
+// ✅ FUNCIÓN AUXILIAR MEJORADA PARA ELIMINAR DUPLICADOS
+// actions/productsActions.js - REEMPLAZAR LA FUNCIÓN ACTUAL
+// ✅ FUNCIÓN MEJORADA PARA ELIMINAR DUPLICADOS
+export const removeDuplicateProducts = (products) => {
+  if (!Array.isArray(products)) return [];
 
+  const seen = new Map();
+  const uniqueProducts = [];
+  let duplicatesRemoved = 0;
+
+  // Ordenar por timestamp para mantener el más reciente
+  const sortedProducts = products.sort((a, b) => {
+    const timeA = new Date(
+      a.last_sync || a.fecha_actualizacion || a.created_at || 0
+    );
+    const timeB = new Date(
+      b.last_sync || b.fecha_actualizacion || b.created_at || 0
+    );
+    return timeB - timeA;
+  });
+
+  sortedProducts.forEach((product, index) => {
+    if (!product) {
+      console.warn(`⚠️ Producto nulo en índice ${index}`);
+      return;
+    }
+
+    // ✅ ESTRATEGIA DE CLAVES MÚLTIPLES
+    const keysToCheck = [];
+
+    // 1. ID del servidor (máxima prioridad)
+    if (product.id && product.id.toString().length < 20) {
+      // IDs largos son probablemente locales
+      keysToCheck.push(`server_${product.id}`);
+    }
+
+    // 2. ID local
+    if (product.id_local) {
+      keysToCheck.push(`local_${product.id_local}`);
+    }
+
+    // 3. Combinación nombre + categoría (último recurso)
+    if (product.nombre && product.categoria_id) {
+      keysToCheck.push(`combo_${product.nombre}_${product.categoria_id}`);
+    }
+
+    let isDuplicate = false;
+    let duplicateKey = "";
+
+    // Verificar contra todas las claves posibles
+    for (const key of keysToCheck) {
+      if (seen.has(key)) {
+        isDuplicate = true;
+        duplicateKey = key;
+        break;
+      }
+    }
+
+    if (!isDuplicate) {
+      // Registrar todas las claves para este producto
+      keysToCheck.forEach((key) => seen.set(key, true));
+      uniqueProducts.push(product);
+    } else {
+      duplicatesRemoved++;
+      console.warn(`🗑️ Eliminando duplicado: ${product.nombre}`, {
+        clave: duplicateKey,
+        id: product.id,
+        id_local: product.id_local,
+        motivo: "Duplicado detectado",
+      });
+    }
+  });
+
+  if (duplicatesRemoved > 0) {
+    console.log(
+      `🔄 Eliminados ${duplicatesRemoved} duplicados. Únicos: ${uniqueProducts.length}`
+    );
+  }
+
+  return uniqueProducts;
+};
+export const cleanDuplicateProducts = () => {
+  return async (dispatch) => {
+    try {
+      console.log("🧹 INICIANDO LIMPIEZA PROFUNDA DE DUPLICADOS...");
+
+      const allProducts = await IndexedDBService.getAll("productos");
+      console.log(
+        `📊 Productos en BD antes de limpieza: ${allProducts.length}`
+      );
+
+      // ✅ DEBUG: Mostrar todos los productos con sus IDs
+      console.log("🔍 LISTA COMPLETA DE PRODUCTOS (ANTES):");
+      allProducts.forEach((product, index) => {
+        console.log(
+          `${index + 1}. ${product.nombre} - ID: ${product.id} - Local: ${
+            product.id_local
+          } - Temp: ${product.temp_id}`
+        );
+      });
+
+      const uniqueProducts = removeDuplicateProducts(allProducts);
+
+      console.log(
+        `📊 Productos únicos después de limpieza: ${uniqueProducts.length}`
+      );
+
+      if (uniqueProducts.length < allProducts.length) {
+        const duplicatesRemoved = allProducts.length - uniqueProducts.length;
+        console.log(`🗑️ Eliminando ${duplicatesRemoved} duplicados...`);
+
+        // ✅ LIMPIAR Y REINSERTAR
+        await IndexedDBService.clear("productos");
+
+        for (const product of uniqueProducts) {
+          await IndexedDBService.add("productos", product);
+        }
+
+        console.log("✅ Limpieza completada exitosamente");
+
+        // ✅ DEBUG: Verificar que se guardaron correctamente
+        const verifyProducts = await IndexedDBService.getAll("productos");
+        console.log(
+          `✅ Verificación: ${verifyProducts.length} productos en BD después de limpieza`
+        );
+
+        // Recargar en Redux
+        dispatch({
+          type: types.productsLoad,
+          payload: uniqueProducts,
+        });
+
+        return {
+          success: true,
+          removed: duplicatesRemoved,
+          remaining: uniqueProducts.length,
+        };
+      } else {
+        console.log("✅ No se encontraron duplicados según la función");
+
+        // ✅ PERO SI HAY ERROR EN REACT, BUSCAR MANUALMENTE
+        const duplicateKeys = findDuplicateKeys(allProducts);
+        if (duplicateKeys.length > 0) {
+          console.log(
+            "⚠️ Se encontraron claves duplicadas manualmente:",
+            duplicateKeys
+          );
+          return {
+            success: false,
+            error: `Se encontraron ${duplicateKeys.length} claves duplicadas manualmente`,
+            duplicateKeys,
+          };
+        }
+
+        return {
+          success: true,
+          removed: 0,
+          remaining: allProducts.length,
+        };
+      }
+    } catch (error) {
+      console.error("❌ Error en limpieza de duplicados:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+};
+
+// ✅ FUNCIÓN AUXILIAR PARA ENCONTRAR CLAVES DUPLICADAS MANUALMENTE
+const findDuplicateKeys = (products) => {
+  const keyCounts = {};
+  const duplicates = [];
+
+  products.forEach((product) => {
+    const key = product.id || product.id_local || product.temp_id;
+    if (key) {
+      keyCounts[key] = (keyCounts[key] || 0) + 1;
+    }
+  });
+
+  Object.entries(keyCounts).forEach(([key, count]) => {
+    if (count > 1) {
+      duplicates.push({ key, count });
+    }
+  });
+
+  return duplicates;
+};
+
+// actions/productsActions.js - AGREGAR ESTA ACCIÓN DE EMERGENCIA
+export const emergencyCleanDuplicates = (specificKey = null) => {
+  return async (dispatch) => {
+    try {
+      console.log("🚨 EJECUTANDO LIMPIEZA DE EMERGENCIA...");
+
+      const allProducts = await IndexedDBService.getAll("productos");
+      console.log(`📊 Productos antes: ${allProducts.length}`);
+
+      // ✅ ENCONTRAR DUPLICADOS ESPECÍFICOS
+      const keyCounts = {};
+      allProducts.forEach((product) => {
+        const key = product.id || product.id_local;
+        if (key) {
+          if (!keyCounts[key]) keyCounts[key] = [];
+          keyCounts[key].push(product);
+        }
+      });
+
+      // ✅ IDENTIFICAR CLAVES DUPLICADAS
+      const duplicateKeys = Object.keys(keyCounts).filter(
+        (key) => keyCounts[key].length > 1
+      );
+      console.log(
+        `🔍 Claves duplicadas encontradas: ${duplicateKeys.length}`,
+        duplicateKeys
+      );
+
+      if (duplicateKeys.length === 0) {
+        console.log("✅ No hay claves duplicadas identificadas");
+        return { success: true, removed: 0 };
+      }
+
+      // ✅ ELIMINAR DUPLICADOS - MANTENER EL MÁS RECIENTE
+      const productsToKeep = [];
+      let removedCount = 0;
+
+      duplicateKeys.forEach((key) => {
+        const duplicates = keyCounts[key];
+        // Ordenar por fecha de actualización (más reciente primero)
+        duplicates.sort((a, b) => {
+          const dateA = new Date(a.fecha_actualizacion || a.created_at || 0);
+          const dateB = new Date(b.fecha_actualizacion || b.created_at || 0);
+          return dateB - dateA;
+        });
+
+        // Mantener el primero (más reciente) y eliminar los demás
+        productsToKeep.push(duplicates[0]);
+        removedCount += duplicates.length - 1;
+
+        console.log(
+          `🗑️ Eliminando ${duplicates.length - 1} duplicados de clave: ${key}`
+        );
+        console.log(
+          `✅ Manteniendo: ${duplicates[0].nombre} (${duplicates[0].fecha_actualizacion})`
+        );
+      });
+
+      // ✅ AGREGAR PRODUCTOS NO DUPLICADOS
+      const nonDuplicateProducts = allProducts.filter((product) => {
+        const key = product.id || product.id_local;
+        return !duplicateKeys.includes(key);
+      });
+
+      const finalProducts = [...nonDuplicateProducts, ...productsToKeep];
+
+      console.log(`📊 Productos finales: ${finalProducts.length}`);
+      console.log(`🗑️ Total eliminados: ${removedCount}`);
+
+      // ✅ GUARDAR EN BD
+      await IndexedDBService.clear("productos");
+      for (const product of finalProducts) {
+        await IndexedDBService.add("productos", product);
+      }
+
+      // ✅ VERIFICAR
+      const verifyProducts = await IndexedDBService.getAll("productos");
+      console.log(`✅ Verificación final: ${verifyProducts.length} productos`);
+
+      // ✅ ACTUALIZAR REDUX
+      dispatch({
+        type: types.productsLoad,
+        payload: finalProducts,
+      });
+
+      return {
+        success: true,
+        removed: removedCount,
+        remaining: finalProducts.length,
+        duplicateKeys,
+      };
+    } catch (error) {
+      console.error("❌ Error en limpieza de emergencia:", error);
+      return { success: false, error: error.message };
+    }
+  };
+};
 // ✅ ACTUALIZAR STOCK CON SOPORTE OFFLINE
 export const updateProductStock = (productoId, stockData) => {
   return async (dispatch) => {
@@ -1240,7 +1765,238 @@ export const updateMultipleProductsStock = (stockUpdates) => ({
   type: types.productsUpdateMultipleStocks,
   payload: stockUpdates,
 });
-// actions/productsActions.js - AGREGAR ESTAS FUNCIONES
+
+export const actualizarStock = (productoId, stockData) => {
+  return async (dispatch, getState) => {
+    try {
+      console.log(
+        `🔄 [STOCK] Iniciando actualización de stock para producto ${productoId}:`,
+        stockData
+      );
+
+      const isOnline = navigator.onLine;
+      const state = getState();
+      const { user } = state.auth;
+
+      // ✅ OBTENER PRODUCTO ACTUAL
+      const productoExistente = await IndexedDBService.get(
+        "productos",
+        productoId
+      );
+      if (!productoExistente) {
+        throw new Error("Producto no encontrado en base de datos local");
+      }
+
+      const stock_anterior = productoExistente.stock || 0;
+      const stock_nuevo = parseInt(stockData.stock);
+
+      // ✅ VALIDAR STOCK
+      if (isNaN(stock_nuevo) || stock_nuevo < 0) {
+        throw new Error("El stock debe ser un número válido mayor o igual a 0");
+      }
+
+      console.log(`📊 Stock cambio: ${stock_anterior} → ${stock_nuevo}`);
+
+      // ✅ PREPARAR DATOS PARA REGISTRO DE CAMBIO
+      const cambioStock = {
+        stock_anterior: stock_anterior,
+        stock_nuevo: stock_nuevo,
+        tipo: "ajuste_manual",
+        motivo: stockData.motivo || "Ajuste manual",
+        usuario: user?.nombre || "Sistema",
+      };
+
+      if (isOnline) {
+        // ✅ MODO ONLINE - ENVIAR AL SERVIDOR INMEDIATAMENTE
+        console.log(`🌐 [STOCK ONLINE] Enviando al servidor...`);
+
+        const requestData = {
+          stock: stock_nuevo,
+          ...(stockData.adminPassword && {
+            adminPassword: stockData.adminPassword,
+          }),
+        };
+
+        const response = await fetchConToken(
+          `productos/${productoId}/stock`,
+          requestData,
+          "PUT"
+        );
+
+        console.log(`📥 Respuesta del servidor:`, response);
+
+        if (response && response.ok === true) {
+          // ✅ ACTUALIZAR INDEXEDDB CON DATOS DEL SERVIDOR
+          const productoActualizado = response.producto ||
+            response.data || {
+              ...productoExistente,
+              stock: stock_nuevo,
+            };
+
+          await IndexedDBService.put("productos", {
+            ...productoActualizado,
+            last_sync: new Date().toISOString(),
+            sincronizado: true,
+          });
+
+          // ✅ ACTUALIZAR REDUX
+          dispatch({
+            type: types.productUpdateStock,
+            payload: {
+              productoId: productoId,
+              stock_nuevo: stock_nuevo,
+              producto: productoActualizado,
+            },
+          });
+
+          console.log(
+            `✅ Stock actualizado en servidor: ${productoId} -> ${stock_nuevo}`
+          );
+
+          return {
+            success: true,
+            data: response,
+            online: true,
+            message: "Stock actualizado correctamente",
+          };
+        } else {
+          throw new Error(response?.msg || "Error del servidor");
+        }
+      } else {
+        // ✅ MODO OFFLINE - ACTUALIZAR LOCALMENTE Y REGISTRAR PARA SYNC
+        console.log(`📱 [STOCK OFFLINE] Actualizando localmente...`);
+
+        // ✅ 1. ACTUALIZAR STOCK EN INDEXEDDB LOCALMENTE (PRODUCTOS)
+        const productoActualizado = {
+          ...productoExistente,
+          stock: stock_nuevo,
+          updated_at: new Date().toISOString(),
+          sincronizado: false,
+          pending_sync: true,
+        };
+
+        await IndexedDBService.put("productos", productoActualizado);
+        console.log(
+          `✅ Stock actualizado localmente en productos: ${productoId}`
+        );
+
+        // ✅ 2. REGISTRAR CAMBIO PARA SINCRONIZACIÓN (CAMBIOS_STOCK_PENDIENTES)
+        console.log(`📝 Registrando cambio para sincronización...`);
+
+        // ✅ IMPORTAR DINÁMICAMENTE PARA EVITAR CIRCULAR DEPENDENCIES
+        const StockSyncController = await import(
+          "../controllers/offline/StockSyncController/StockSyncController"
+        ).then((module) => module.default);
+
+        if (!StockSyncController) {
+          console.error("❌ No se pudo cargar StockSyncController");
+          throw new Error("Error cargando controlador de sincronización");
+        }
+
+        const stockSyncResult = await StockSyncController.registerStockChange(
+          productoId,
+          cambioStock
+        );
+
+        console.log(`📊 Resultado registro sync:`, stockSyncResult);
+
+        if (!stockSyncResult.success) {
+          console.error(
+            `❌ No se pudo registrar cambio para sync:`,
+            stockSyncResult.error
+          );
+          // No throw, porque el stock ya se actualizó localmente
+        } else {
+          console.log(`✅ Cambio registrado para sync: ${stockSyncResult.id}`);
+
+          // ✅ VERIFICAR QUE REALMENTE SE GUARDÓ
+          setTimeout(async () => {
+            try {
+              const cambios = await StockSyncController.debugGetAllChanges();
+              console.log(
+                `🔍 [VERIFICACIÓN] Cambios en store después de guardar: ${cambios.length}`
+              );
+            } catch (error) {
+              console.error("❌ Error en verificación:", error);
+            }
+          }, 1000);
+        }
+
+        // ✅ 3. ACTUALIZAR REDUX INMEDIATAMENTE
+        dispatch({
+          type: types.productUpdateStock,
+          payload: {
+            productoId: productoId,
+            stock_nuevo: stock_nuevo,
+            producto: productoActualizado,
+          },
+        });
+
+        console.log(
+          `🎉 Stock actualizado completamente en modo offline: ${productoExistente.nombre} -> ${stock_nuevo}`
+        );
+
+        return {
+          success: true,
+          offline: true,
+          message:
+            "Stock actualizado localmente. Se sincronizará cuando recuperes la conexión.",
+          syncRegistered: stockSyncResult.success,
+        };
+      }
+    } catch (error) {
+      console.error(
+        `❌ [STOCK] Error actualizando stock ${productoId}:`,
+        error
+      );
+
+      // Mostrar error al usuario
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "No se pudo actualizar el stock",
+        confirmButtonText: "Entendido",
+      });
+
+      dispatch({
+        type: types.productsError,
+        payload: error.message,
+      });
+
+      return {
+        success: false,
+        error: error.message || "No se pudo actualizar el stock",
+      };
+    }
+  };
+};
+export const loadProductsFromIndexedDB = () => {
+  return async (dispatch) => {
+    try {
+      dispatch({ type: types.productsStartLoading });
+
+      console.log("📦 Cargando productos desde IndexedDB...");
+
+      const productos = await IndexedDBService.getAll("productos");
+
+      console.log(`✅ ${productos.length} productos cargados desde IndexedDB`);
+
+      dispatch({
+        type: types.productsLoad,
+        payload: productos,
+      });
+
+      return productos;
+    } catch (error) {
+      console.error("❌ Error cargando productos desde IndexedDB:", error);
+      dispatch({
+        type: types.productsError,
+        payload: "Error cargando productos",
+      });
+      return [];
+    }
+  };
+};
 // actions/productsActions.js - CORREGIR syncProductsFromServer
 export const syncProductsFromServer = () => {
   return async (dispatch) => {

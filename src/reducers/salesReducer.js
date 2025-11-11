@@ -1,4 +1,4 @@
-// reducers/salesReducer.js
+// reducers/salesReducer.js - VERSIÓN CORREGIDA
 import { types } from "../types/types";
 
 const initialState = {
@@ -7,6 +7,7 @@ const initialState = {
   loading: false,
   error: null,
   activeSale: null,
+  pendingSales: [], // ✅ PARA VENTAS OFFLINE PENDIENTES
 };
 
 export const salesReducer = (state = initialState, action) => {
@@ -18,6 +19,12 @@ export const salesReducer = (state = initialState, action) => {
         error: null,
       };
 
+    case types.salesFinishLoading:
+      return {
+        ...state,
+        loading: false,
+      };
+
     case types.salesLoad:
       return {
         ...state,
@@ -26,16 +33,36 @@ export const salesReducer = (state = initialState, action) => {
         error: null,
       };
 
-    case types.salesFinishLoading:
+    case types.saleAddNew:
+    case types.saleCreate: // ✅ MANEJAR AMBOS TYPES
+      const newSale = action.payload;
+      // EVITAR DUPLICADOS
+      const exists = state.sales.find(
+        (sale) => sale.id === newSale.id || sale.id_local === newSale.id_local
+      );
+
+      if (exists) {
+        return {
+          ...state,
+          sales: state.sales.map((sale) =>
+            sale.id === newSale.id || sale.id_local === newSale.id_local
+              ? newSale
+              : sale
+          ),
+        };
+      }
+
       return {
         ...state,
-        loading: false,
+        sales: [newSale, ...state.sales],
       };
 
-    case types.saleAddNew:
+    case types.saleAddNewOffline:
+      const offlineSale = action.payload;
       return {
         ...state,
-        sales: [action.payload, ...state.sales],
+        pendingSales: [offlineSale, ...state.pendingSales],
+        sales: [offlineSale, ...state.sales], // ✅ AGREGAR TAMBIÉN A SALES REGULARES
       };
 
     case types.salesLoadByDate:
@@ -51,6 +78,26 @@ export const salesReducer = (state = initialState, action) => {
       return {
         ...state,
         activeSale: action.payload,
+      };
+
+    case types.saleMarkSynced:
+      const syncedSale = action.payload;
+      return {
+        ...state,
+        sales: state.sales.map((sale) =>
+          sale.id_local === syncedSale.id_local
+            ? { ...sale, ...syncedSale, sincronizado: true }
+            : sale
+        ),
+        pendingSales: state.pendingSales.filter(
+          (sale) => sale.id_local !== syncedSale.id_local
+        ),
+      };
+
+    case types.salesLoadPending:
+      return {
+        ...state,
+        pendingSales: Array.isArray(action.payload) ? action.payload : [],
       };
 
     default:

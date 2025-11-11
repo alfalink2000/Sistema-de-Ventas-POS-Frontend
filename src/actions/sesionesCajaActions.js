@@ -4,7 +4,7 @@ import { fetchConToken } from "../helpers/fetch";
 import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
 import SessionsOfflineController from "../controllers/offline/SessionsOfflineController/SessionsOfflineController";
-import SyncController from "../controllers/offline//SyncController/SyncController";
+// import SyncController from "../controllers/offline//SyncController/SyncController";
 
 export const loadSesionesByVendedor = (vendedorId, limite = 30) => {
   return async (dispatch) => {
@@ -466,69 +466,69 @@ export const closeSesionCaja = (sesionId, closeData) => {
 };
 
 // ✅ CORREGIDO: Sincronizar sesiones pendientes mejorada
-export const syncPendingSessions = () => {
-  return async (dispatch) => {
-    try {
-      if (!navigator.onLine) {
-        await Swal.fire({
-          icon: "warning",
-          title: "Sin conexión",
-          text: "No hay conexión a internet para sincronizar",
-          confirmButtonText: "Entendido",
-        });
-        return false;
-      }
+// export const syncPendingSessions = () => {
+//   return async (dispatch) => {
+//     try {
+//       if (!navigator.onLine) {
+//         await Swal.fire({
+//           icon: "warning",
+//           title: "Sin conexión",
+//           text: "No hay conexión a internet para sincronizar",
+//           confirmButtonText: "Entendido",
+//         });
+//         return false;
+//       }
 
-      await Swal.fire({
-        title: "Sincronizando...",
-        text: "Sincronizando sesiones pendientes con el servidor",
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
+//       await Swal.fire({
+//         title: "Sincronizando...",
+//         text: "Sincronizando sesiones pendientes con el servidor",
+//         allowOutsideClick: false,
+//         didOpen: () => {
+//           Swal.showLoading();
+//         },
+//       });
 
-      // ✅ CORREGIDO: Usar SyncController en lugar de SyncService
-      const syncResult = await SyncController.fullSync();
+//       // ✅ CORREGIDO: Usar SyncController en lugar de SyncService
+//       const syncResult = await SyncController.fullSync();
 
-      // ✅ RECARGAR DATOS DESPUÉS DE SINCRONIZAR
-      const user = JSON.parse(localStorage.getItem("user"));
-      if (user?.id) {
-        await dispatch(loadOpenSesion(user.id));
-        await dispatch(loadSesionesByVendedor(user.id));
-      }
+//       // ✅ RECARGAR DATOS DESPUÉS DE SINCRONIZAR
+//       const user = JSON.parse(localStorage.getItem("user"));
+//       if (user?.id) {
+//         await dispatch(loadOpenSesion(user.id));
+//         await dispatch(loadSesionesByVendedor(user.id));
+//       }
 
-      Swal.close();
+//       Swal.close();
 
-      if (syncResult.success) {
-        await Swal.fire({
-          icon: "success",
-          title: "Sincronización completada",
-          text: "Todas las sesiones pendientes se han sincronizado",
-          timer: 2000,
-          showConfirmButton: false,
-        });
-      } else {
-        throw new Error(syncResult.error || "Error en sincronización");
-      }
+//       if (syncResult.success) {
+//         await Swal.fire({
+//           icon: "success",
+//           title: "Sincronización completada",
+//           text: "Todas las sesiones pendientes se han sincronizado",
+//           timer: 2000,
+//           showConfirmButton: false,
+//         });
+//       } else {
+//         throw new Error(syncResult.error || "Error en sincronización");
+//       }
 
-      return true;
-    } catch (error) {
-      console.error("❌ Error sincronizando sesiones:", error);
+//       return true;
+//     } catch (error) {
+//       console.error("❌ Error sincronizando sesiones:", error);
 
-      Swal.close();
+//       Swal.close();
 
-      await Swal.fire({
-        icon: "error",
-        title: "Error de sincronización",
-        text: "No se pudieron sincronizar las sesiones pendientes",
-        confirmButtonText: "Entendido",
-      });
+//       await Swal.fire({
+//         icon: "error",
+//         title: "Error de sincronización",
+//         text: "No se pudieron sincronizar las sesiones pendientes",
+//         confirmButtonText: "Entendido",
+//       });
 
-      return false;
-    }
-  };
-};
+//       return false;
+//     }
+//   };
+// };
 
 // ✅ NUEVA ACCIÓN: Limpiar sesiones locales corruptas
 export const cleanupLocalSessions = () => {

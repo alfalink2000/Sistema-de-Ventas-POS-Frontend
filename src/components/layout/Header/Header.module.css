@@ -70,6 +70,7 @@
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.025em;
+  margin-left: 1rem;
 }
 
 .welcomeText {
@@ -285,7 +286,6 @@
   line-height: 1;
 }
 
-/* ✅ INFORMACIÓN DEL USUARIO - ESTILOS CORREGIDOS */
 .userInfo {
   display: flex;
   align-items: center;
@@ -295,15 +295,17 @@
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   height: 44px;
-  min-width: 140px;
+  min-width: 160px;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .userInfo:hover {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .userAvatar {
@@ -319,6 +321,12 @@
   font-size: 0.875rem;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.userInfo:hover .userAvatar {
+  transform: scale(1.05);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
 .userInitial {
@@ -332,6 +340,7 @@
   gap: 0.1rem;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .userName {
@@ -342,7 +351,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100px;
+  max-width: 120px;
   letter-spacing: -0.025em;
 }
 
@@ -354,6 +363,48 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ✅ RESPONSIVE MEJORADO PARA USERINFO */
+@media (max-width: 768px) {
+  .userInfo {
+    min-width: auto;
+    padding: 0.4rem 0.6rem;
+    height: 40px;
+  }
+
+  .userAvatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+
+  .userName {
+    font-size: 0.8rem;
+    max-width: 80px;
+  }
+
+  .userRole {
+    font-size: 0.65rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .userInfo {
+    padding: 0.4rem;
+    min-width: auto;
+    gap: 0.5rem;
+  }
+
+  .userDetails {
+    display: none; /* Ocultar detalles en móviles muy pequeños */
+  }
+
+  .userAvatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
 }
 
 /* ✅ MODAL DE SINCRONIZACIÓN - ESTILOS CORREGIDOS */
@@ -847,5 +898,267 @@
   .userInfo {
     padding: 0.4rem;
     min-width: auto;
+  }
+}
+/* Header.module.css - ESTILOS AGREGADOS */
+
+.syncIndicator.hasPending {
+  background-color: #fef3cd;
+  border: 1px solid #f59e0b;
+}
+
+.syncIcon.pending {
+  color: #f59e0b;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.syncBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: #dc2626;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.warningIcon {
+  color: #f59e0b;
+}
+
+.successIcon {
+  color: #10b981;
+}
+
+.syncCount.warning {
+  color: #f59e0b;
+  font-weight: bold;
+}
+
+.syncCount.success {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.warningMessage,
+.infoMessage,
+.successMessage {
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.warningMessage {
+  background-color: #fef3cd;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.infoMessage {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #3b82f6;
+}
+
+.successMessage {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+/* components/layout/Header/Header.module.css - VERSIÓN COMPLETA */
+
+/* ... (todos tus estilos existentes se mantienen igual) ... */
+
+/* ✅ AGREGAR ESTOS ESTILOS AL FINAL DEL ARCHIVO */
+
+/* Estilos para la nueva sección de cierres en el modal */
+.syncDetails {
+  margin-bottom: 1.5rem;
+}
+
+.syncDetails h4 {
+  margin: 0 0 1rem 0;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.syncItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.syncIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.syncInfo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.syncLabel {
+  font-size: 0.9rem;
+  color: #bfdbfe;
+  font-weight: 500;
+}
+
+.syncCount {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.syncCount.warning {
+  color: #fbbf24;
+}
+
+.syncCount.success {
+  color: #10b981;
+}
+
+.warningIcon {
+  color: #f59e0b;
+}
+
+.successIcon {
+  color: #10b981;
+}
+
+.lastSync {
+  text-align: center;
+  margin-top: 1rem;
+  color: #93c5fd;
+  font-size: 0.8rem;
+}
+
+.syncActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.syncButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.syncButton:hover:not(.disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  transform: translateY(-1px);
+}
+
+.syncButton.disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.warningMessage,
+.infoMessage,
+.successMessage {
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  justify-content: center;
+}
+
+.warningMessage {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fef3c7;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.infoMessage {
+  background: rgba(59, 130, 246, 0.1);
+  color: #dbeafe;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.successMessage {
+  background: rgba(16, 185, 129, 0.1);
+  color: #d1fae5;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .syncItem {
+    padding: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .syncIcon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .syncLabel {
+    font-size: 0.8rem;
+  }
+
+  .syncCount {
+    font-size: 0.75rem;
   }
 }

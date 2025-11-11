@@ -76,11 +76,6 @@ const ProductCardSales = ({ product }) => {
         <div className={styles.productFooter}>
           <div className={styles.priceSection}>
             <span className={styles.price}>${product.precio?.toFixed(2)}</span>
-            {product.precio_compra && (
-              <span className={styles.costPrice}>
-                Costo: ${product.precio_compra.toFixed(2)}
-              </span>
-            )}
           </div>
         </div>
       </div>

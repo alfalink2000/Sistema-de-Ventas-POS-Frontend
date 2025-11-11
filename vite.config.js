@@ -1,4 +1,3 @@
-// // vite.config.js - CONFIGURACIÓN ACTUALIZADA PARA i.ibb.co
 // import { defineConfig } from "vite";
 // import react from "@vitejs/plugin-react";
 // import { VitePWA } from "vite-plugin-pwa";
@@ -11,7 +10,7 @@
 //       registerType: "autoUpdate",
 //       injectRegister: "auto",
 
-//       // Manifest de PWA
+//       // ✅ MANIFEST
 //       manifest: {
 //         name: "Kiosko POS - Sistema de Ventas",
 //         short_name: "KioskoPOS",
@@ -69,47 +68,82 @@
 //         ],
 //       },
 
-//       // Workbox configuration - ACTUALIZADA PARA i.ibb.co
+//       // ✅ WORKBOX CONFIGURACIÓN MEJORADA - ENFOQUE EN IMÁGENES
 //       workbox: {
-//         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+//         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2,json}"],
+//         globIgnores: ["**/sw*.js", "**/dev-sw.js"],
 //         cleanupOutdatedCaches: true,
 //         skipWaiting: true,
 //         clientsClaim: true,
+
+//         // ✅ PRECACHING AGRESIVO PARA IMÁGENES
+//         navigateFallback: "/index.html",
+//         navigateFallbackAllowlist: [/^(?!\/__).*/],
+
+//         // ✅ ESTRATEGIAS MEJORADAS - CACHE FIRST PARA TODO
 //         runtimeCaching: [
-//           // ✅ NUEVO: CACHE ESPECÍFICO PARA IMÁGENES DE i.ibb.co
+//           // 1. IMÁGENES EXTERNAS DE IMGBB - CACHE AGRESIVO MEJORADO
 //           {
-//             urlPattern:
-//               /^https:\/\/i\.ibb\.co\/.*\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+//             urlPattern: /^https:\/\/i\.ibb\.co\/.*/i,
 //             handler: "CacheFirst",
 //             options: {
-//               cacheName: "ibbco-images-cache",
+//               cacheName: "imgbb-images-v2",
 //               expiration: {
-//                 maxEntries: 300, // Hasta 300 imágenes
-//                 maxAgeSeconds: 60 * 24 * 60 * 60, // 60 días
+//                 maxEntries: 2000, // ✅ AUMENTADO
+//                 maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
 //               },
 //               cacheableResponse: {
-//                 statuses: [0, 200],
+//                 statuses: [0, 200, 404],
 //               },
 //             },
 //           },
+
+//           // 2. IMÁGENES LOCALES - CACHE AGRESIVO
 //           {
-//             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+//             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
 //             handler: "CacheFirst",
 //             options: {
-//               cacheName: "google-fonts-cache",
+//               cacheName: "static-images-v2",
 //               expiration: {
-//                 maxEntries: 10,
+//                 maxEntries: 1000,
 //                 maxAgeSeconds: 60 * 60 * 24 * 365,
 //               },
+//             },
+//           },
+
+//           // 3. API - NETWORK FIRST CON FALLBACK
+//           {
+//             urlPattern: /\/api\/.*/i,
+//             handler: "NetworkFirst",
+//             options: {
+//               cacheName: "api-cache-v2",
+//               networkTimeoutSeconds: 3,
+//               expiration: {
+//                 maxEntries: 100,
+//                 maxAgeSeconds: 60 * 60 * 24,
+//               },
 //               cacheableResponse: {
-//                 statuses: [0, 200],
+//                 statuses: [0, 200, 404],
+//               },
+//             },
+//           },
+
+//           // 4. ESTÁTICOS - CACHE FIRST
+//           {
+//             urlPattern: /\.(?:js|css|html|json)$/,
+//             handler: "StaleWhileRevalidate",
+//             options: {
+//               cacheName: "static-assets-v2",
+//               expiration: {
+//                 maxEntries: 200,
+//                 maxAgeSeconds: 60 * 60 * 24 * 365,
 //               },
 //             },
 //           },
 //         ],
 //       },
 
-//       // Desarrollo
+//       // ✅ CONFIGURACIÓN DESARROLLO
 //       devOptions: {
 //         enabled: true,
 //         type: "module",
@@ -134,7 +168,7 @@ export default defineConfig({
       registerType: "autoUpdate",
       injectRegister: "auto",
 
-      // Manifest de PWA
+      // ✅ MANIFEST
       manifest: {
         name: "Kiosko POS - Sistema de Ventas",
         short_name: "KioskoPOS",
@@ -192,122 +226,134 @@ export default defineConfig({
         ],
       },
 
-      // Workbox configuration - CONFIGURACIÓN MEJORADA
+      // ✅ WORKBOX CONFIGURACIÓN MEJORADA - SINCRONIZADA CON ImageCacheService
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2,json}"],
-        globIgnores: ["**/sw*.js"],
+        globIgnores: ["**/sw*.js", "**/dev-sw.js"],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
 
-        // ✅ NUEVO: Precaching mejorado para offline
+        // ✅ PRECACHING AGRESIVO PARA IMÁGENES
         navigateFallback: "/index.html",
         navigateFallbackAllowlist: [/^(?!\/__).*/],
 
-        // ✅ ESTRATEGIAS DE CACHE MEJORADAS
+        // ✅ ESTRATEGIAS MEJORADAS - CACHE COHERENTE CON ImageCacheService
         runtimeCaching: [
-          // 1. Recursos estáticos de la app - Cache First
+          // 1. IMÁGENES EXTERNAS DE IMGBB - Mismo nombre que ImageCacheService
           {
-            urlPattern: /\.(?:js|css|html|json)$/,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "static-resources",
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
-              },
-            },
-          },
-
-          // 2. Imágenes de la app - Cache First
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
+            urlPattern: /^https:\/\/i\.ibb\.co\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "image-cache",
+              cacheName: "imgbb-images-v2", // ✅ Mismo nombre que ImageCacheService
               expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 60, // 60 días
-              },
-            },
-          },
-
-          // 3. Imágenes externas de i.ibb.co - Cache First
-          {
-            urlPattern:
-              /^https:\/\/i\.ibb\.co\/.*\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "ibbco-images-cache",
-              expiration: {
-                maxEntries: 300,
-                maxAgeSeconds: 60 * 24 * 60 * 60, // 60 días
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-
-          // 4. Fuentes de Google - Cache First
-          {
-            urlPattern: /^https:\/\/fonts\.(?:gstatic|googleapis)\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts-cache",
-              expiration: {
-                maxEntries: 20,
+                maxEntries: 2000,
                 maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
               },
               cacheableResponse: {
                 statuses: [0, 200],
               },
+              // ✅ CONFIGURACIÓN ADICIONAL PARA MEJOR COMPATIBILIDAD
+              fetchOptions: {
+                mode: "cors",
+                credentials: "omit",
+              },
             },
           },
 
-          // 5. ✅ NUEVO: API routes - Network First para datos frescos
+          // 2. IMÁGENES LOCALES - Cache agresivo
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "static-images-v2",
+              expiration: {
+                maxEntries: 1000,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+            },
+          },
+
+          // 3. API - Network first con fallback
           {
             urlPattern: /\/api\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "api-cache",
+              cacheName: "api-cache-v2",
               networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24, // 24 horas
+                maxAgeSeconds: 60 * 60 * 24,
               },
               cacheableResponse: {
-                statuses: [0, 200],
+                statuses: [0, 200, 404],
               },
             },
           },
 
-          // 6. ✅ NUEVO: Rutas de autenticación - Network Only
+          // 4. ESTÁTICOS - Stale while revalidate
           {
-            urlPattern: /\/auth\/.*/i,
-            handler: "NetworkFirst",
+            urlPattern: /\.(?:js|css|html|json)$/,
+            handler: "StaleWhileRevalidate",
             options: {
-              cacheName: "auth-cache",
-              networkTimeoutSeconds: 3,
+              cacheName: "static-assets-v2",
               expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60, // 1 hora
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+            },
+          },
+
+          // ✅ NUEVO: CACHE PARA RECURSOS DE LA APLICACIÓN
+          {
+            urlPattern: /\/src\/.*\.(js|css)$/,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "app-code-v1",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 1 semana
               },
             },
           },
         ],
+
+        // ✅ CONFIGURACIÓN ADICIONAL PARA MEJORAR EL CACHE
+        additionalManifestEntries: [
+          {
+            url: "/",
+            revision: Date.now().toString(),
+          },
+        ],
       },
 
-      // Desarrollo
+      // ✅ CONFIGURACIÓN DESARROLLO MEJORADA
       devOptions: {
         enabled: true,
         type: "module",
         navigateFallback: "index.html",
+        suppressWarnings: false, // Ver warnings para debugging
       },
+
+      // ✅ QUITAR injectManifest si no tienes sw.js personalizado
+      // strategies: 'injectManifest' // ← REMOVER ESTA LÍNEA
     }),
   ],
   server: {
     port: 5173,
     host: true,
+  },
+
+  // ✅ CONFIGURACIÓN ADICIONAL PARA PWA
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom"],
+          pwa: ["workbox-window", "workbox-core"],
+        },
+      },
+    },
   },
 });

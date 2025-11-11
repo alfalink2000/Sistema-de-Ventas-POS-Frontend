@@ -29,7 +29,22 @@ export const closuresReducer = (state = initialState, action) => {
         loading: true,
         error: null,
       };
+    // ✅ ELIMINAR CIERRE LOCAL
+    case types.closureDeleteLocal:
+      return {
+        ...state,
+        closures: state.closures.filter(
+          (closure) =>
+            closure.id !== action.payload && closure.id_local !== action.payload
+        ),
+      };
 
+    // ✅ LIMPIAR TODOS LOS CIERRES LOCALES
+    case types.closuresClearAllLocal:
+      return {
+        ...state,
+        closures: [],
+      };
     case types.closuresFinishLoading:
       return {
         ...state,

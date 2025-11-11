@@ -10,8 +10,6 @@ class SalesOfflineController extends BaseOfflineController {
     this.detailsStore = "detalles_venta_pendientes";
   }
 
-  // ✅ ELIMINAR VENTA PENDIENTE
-  // En SalesOfflineController.js - CORREGIR deletePendingSale
   async deletePendingSale(localId) {
     try {
       console.log(`🗑️ Eliminando venta pendiente: ${localId}`);

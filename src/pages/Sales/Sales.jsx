@@ -1,4 +1,4 @@
-// pages/Sales/Sales.jsx - VERSIÓN CORREGIDA
+// pages/Sales/Sales.jsx - VERSIÓN CON IMÁGENES MÁS ALTAS
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ProductGridSales from "../../components/features/sales/ProductGridSales/ProductGridSales";
@@ -14,10 +14,11 @@ import {
   FiPackage,
   FiWifi,
   FiWifiOff,
+  FiAlertTriangle,
+  FiShoppingCart,
 } from "react-icons/fi";
 import styles from "./Sales.module.css";
 import IndexedDBService from "../../services/IndexedDBService";
-import SyncController from "../../controllers/offline/SyncController/SyncController";
 
 const Sales = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -39,38 +40,28 @@ const Sales = () => {
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
   const { user } = useSelector((state) => state.auth);
 
-  // Cargar estado de sincronización y detectar conexión
+  // ✅ MONITOREO DE CONEXIÓN
   useEffect(() => {
-    const loadSyncStatus = async () => {
-      try {
-        const status = await SyncController.getSyncStatus();
-        setSyncStatus({
-          pendingSales: status.pendingSales,
-          pendingSessions: status.pendingSessions,
-          pendingClosures: status.pendingClosures,
-        });
-      } catch (error) {
-        console.error("Error cargando estado de sincronización:", error);
-      }
-    };
-
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-
-    loadSyncStatus();
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Actualizar estado cada 30 segundos
-    const interval = setInterval(loadSyncStatus, 30000);
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      clearInterval(interval);
     };
   }, []);
+
+  // ✅ FUNCIÓN handleCheckout
+  const handleCheckout = () => {
+    if (!sesionAbierta) {
+      setShowSesionModal(true);
+      return;
+    }
+    setShowPaymentModal(true);
+  };
 
   // Cargar productos (online u offline)
   useEffect(() => {
@@ -82,15 +73,14 @@ const Sales = () => {
         // Offline: cargar desde IndexedDB
         try {
           const offlineProducts = await IndexedDBService.getAll("productos");
-          // Dispatch manual para actualizar estado
           dispatch({
-            type: "PRODUCTS_LOAD_OFFLINE",
+            type: "productsLoad",
             payload: offlineProducts || [],
           });
         } catch (error) {
           console.error("Error cargando productos offline:", error);
           dispatch({
-            type: "PRODUCTS_LOAD_OFFLINE",
+            type: "productsLoad",
             payload: [],
           });
         }
@@ -123,7 +113,8 @@ const Sales = () => {
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
+      product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.codigo_barras?.includes(searchTerm);
     const matchesCategory =
       selectedCategory === "all" ||
       product.categoria_nombre === selectedCategory;
@@ -131,33 +122,9 @@ const Sales = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleCheckout = () => {
-    if (!sesionAbierta) {
-      setShowSesionModal(true);
-      return;
-    }
-    setShowPaymentModal(true);
-  };
-
   const handleSaleSuccess = (saleData) => {
     console.log("Venta exitosa:", saleData);
     dispatch(clearCart());
-
-    // Actualizar estado de sincronización
-    SyncController.getSyncStatus().then((status) => {
-      setSyncStatus({
-        pendingSales: status.pendingSales,
-        pendingSessions: status.pendingSessions,
-        pendingClosures: status.pendingClosures,
-      });
-    });
-
-    // Mostrar mensaje según el modo
-    if (!isOnline) {
-      alert(
-        `✅ Venta guardada localmente (#${saleData.id_local}). Se sincronizará cuando haya conexión.`
-      );
-    }
   };
 
   const clearFilters = () => {
@@ -165,28 +132,39 @@ const Sales = () => {
     setSelectedCategory("all");
   };
 
+  // ✅ CALCULAR ESTADÍSTICAS
+  const totalItemsInCart = items.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
+  const totalCartValue = items.reduce(
+    (total, item) => total + item.precio * item.quantity,
+    0
+  );
+
   return (
     <div className={styles.salesPage}>
       <div className={styles.pageHeader}>
         <div className={styles.headerContent}>
-          <h1>Punto de Venta</h1>
+          <h1>
+            <FiShoppingCart className={styles.headerIcon} />
+            Punto de Venta
+          </h1>
           <p>
-            {isOnline
-              ? "Conectado al servidor"
-              : "Modo offline - Las ventas se guardarán localmente"}
+            {isOnline ? (
+              <>
+                <FiWifi className={styles.onlineIcon} />
+                Conectado al servidor
+              </>
+            ) : (
+              <>
+                <FiWifiOff className={styles.offlineIcon} />
+                Modo offline - Las ventas se guardarán localmente
+              </>
+            )}
             {syncStatus.pendingSales > 0 &&
               ` (${syncStatus.pendingSales} pendientes)`}
           </p>
-        </div>
-
-        {/* Indicador de conexión */}
-        <div
-          className={`${styles.connectionStatus} ${
-            isOnline ? styles.online : styles.offline
-          }`}
-        >
-          {/* {isOnline ? <FiWifi /> : <FiWifiOff />}
-          <span>{isOnline ? "En línea" : "Offline"}</span> */}
         </div>
 
         <div className={styles.headerStats}>
@@ -195,11 +173,12 @@ const Sales = () => {
             <span className={styles.statLabel}>Productos</span>
           </div>
           <div className={styles.stat}>
-            <span className={styles.statNumber}>{items.length}</span>
+            <span className={styles.statNumber}>{totalItemsInCart}</span>
             <span className={styles.statLabel}>En carrito</span>
           </div>
+
           {!isOnline && (
-            <div className={styles.stat}>
+            <div className={`${styles.stat} ${styles.offlineStat}`}>
               <span className={styles.statNumber}>
                 {syncStatus.pendingSales}
               </span>
@@ -212,10 +191,16 @@ const Sales = () => {
       {/* ✅ Alerta si no hay sesión */}
       {!sesionAbierta && (
         <div className={styles.alertWarning}>
-          <div className={styles.alertIcon}>⚠️</div>
+          <FiAlertTriangle className={styles.alertIcon} />
           <div className={styles.alertContent}>
             <h3>No hay sesión de caja activa</h3>
             <p>Debes abrir una sesión de caja para realizar ventas</p>
+            <button
+              className={styles.alertButton}
+              onClick={() => setShowSesionModal(true)}
+            >
+              Abrir Sesión de Caja
+            </button>
           </div>
         </div>
       )}
@@ -223,7 +208,7 @@ const Sales = () => {
       {/* ✅ Alerta de modo offline */}
       {!isOnline && (
         <div className={styles.offlineAlert}>
-          <div className={styles.alertIcon}>📱</div>
+          <FiWifiOff className={styles.alertIcon} />
           <div className={styles.alertContent}>
             <h3>Modo Offline Activado</h3>
             <p>
@@ -242,7 +227,7 @@ const Sales = () => {
               <FiSearch className={styles.searchIcon} />
               <input
                 type="text"
-                placeholder="Buscar productos..."
+                placeholder="Buscar productos por nombre, descripción o código..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className={styles.searchInput}
@@ -304,12 +289,13 @@ const Sales = () => {
             </div>
           </div>
 
-          {/* ✅ GRILLA DE PRODUCTOS ESPECIAL PARA VENTAS */}
+          {/* ✅ GRILLA DE PRODUCTOS ESPECIAL PARA VENTAS CON IMÁGENES MÁS ALTAS */}
           <ProductGridSales
             products={filteredProducts}
             loading={loading}
             error={error}
-            compact={true}
+            compact={false} // ✅ Cambiado a false para imágenes más grandes
+            imageSize="large" // ✅ Nueva prop para controlar tamaño de imagen
           />
         </div>
 
