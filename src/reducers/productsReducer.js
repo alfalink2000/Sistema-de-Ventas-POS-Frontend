@@ -1,6 +1,6 @@
 // reducers/productsReducer.js - VERSIÓN MEJORADA
 import { types } from "../types/types";
-
+import removeDuplicateProducts from "../actions/productsActions";
 const initialState = {
   products: [], // ✅ PRODUCTOS CON CAMPOS: stock, stock_minimo, etc.
   loading: false,
