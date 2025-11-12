@@ -365,3 +365,126 @@
   color: #059669;
   font-weight: 600;
 }
+/* components/features/caja/CierreCajaModal/CierreCajaModal.module.css */
+
+/* ... (estilos existentes) */
+
+/* ✅ NUEVOS ESTILOS PARA SECCIÓN DE PRODUCTOS */
+.productosSection {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.productosSection h4 {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  color: #2c5530;
+  font-size: 16px;
+}
+
+.productCount {
+  margin-left: auto;
+  background: #2c5530;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.productosGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.productoCard {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.productoHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.productoNombre {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 14px;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.productoCantidad {
+  background: #2c5530;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.productoDetalles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detalleRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #666;
+}
+
+.detalleRow:last-child {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed #ddd;
+}
+
+.gananciaRow {
+  font-weight: 600;
+}
+
+.gananciaValue {
+  color: #2e7d32;
+  font-weight: bold;
+}
+
+.productosToggle {
+  margin: 15px 0;
+}
+
+/* Estilos para el scroll */
+.productosGrid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.productosGrid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.productosGrid::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.productosGrid::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

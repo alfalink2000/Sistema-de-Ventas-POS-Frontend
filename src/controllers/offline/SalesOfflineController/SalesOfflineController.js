@@ -513,6 +513,115 @@ class SalesOfflineController extends BaseOfflineController {
       };
     }
   }
+
+  // ✅ NUEVO MÉTODO PARA OBTENER PRODUCTOS AGRUPADOS POR SESIÓN
+  async getGroupedProductsBySession(sesionId) {
+    try {
+      console.log(`📊 Agrupando productos para sesión: ${sesionId}`);
+
+      // Obtener ventas de la sesión
+      const ventas = await this.getSalesBySession(sesionId);
+      console.log(`🛒 ${ventas.length} ventas encontradas para agrupar`);
+
+      const productosAgrupados = {};
+
+      for (const venta of ventas) {
+        // Obtener detalles de cada venta
+        const detalles = await this.getSaleDetails(venta.id_local);
+
+        for (const detalle of detalles) {
+          const productoId = detalle.producto_id;
+
+          if (!productosAgrupados[productoId]) {
+            // Obtener información completa del producto
+            const productoInfo = await IndexedDBService.get(
+              "productos",
+              productoId
+            );
+
+            productosAgrupados[productoId] = {
+              producto_id: productoId,
+              nombre:
+                detalle.producto_nombre ||
+                productoInfo?.nombre ||
+                `Producto ${productoId}`,
+              cantidad_total: 0,
+              precio_venta_unitario: detalle.precio_unitario,
+              precio_compra_unitario:
+                detalle.precio_compra || productoInfo?.precio_compra || 0,
+              subtotal_total: 0,
+              ganancia_total: 0,
+              // Información adicional del producto
+              producto_info: productoInfo,
+            };
+          }
+
+          // Acumular cantidades y totales
+          productosAgrupados[productoId].cantidad_total += detalle.cantidad;
+          productosAgrupados[productoId].subtotal_total += detalle.subtotal;
+          productosAgrupados[productoId].ganancia_total +=
+            detalle.ganancia ||
+            (detalle.precio_unitario - (detalle.precio_compra || 0)) *
+              detalle.cantidad;
+        }
+      }
+
+      const resultado = Object.values(productosAgrupados);
+      console.log(
+        `📦 ${resultado.length} productos únicos vendidos en la sesión`
+      );
+
+      return resultado;
+    } catch (error) {
+      console.error("❌ Error agrupando productos por sesión:", error);
+      return [];
+    }
+  }
+
+  // ✅ MÉTODO PARA OBTENER RESUMEN COMPLETO DE VENTAS
+  async getSalesSummaryBySession(sesionId) {
+    try {
+      const [ventas, productosAgrupados] = await Promise.all([
+        this.getSalesBySession(sesionId),
+        this.getGroupedProductsBySession(sesionId),
+      ]);
+
+      // Calcular totales generales
+      const totales = {
+        total_ventas: ventas.reduce(
+          (sum, venta) => sum + (venta.total || 0),
+          0
+        ),
+        total_efectivo: ventas
+          .filter((v) => v.metodo_pago === "efectivo")
+          .reduce((sum, venta) => sum + (venta.total || 0), 0),
+        total_tarjeta: ventas
+          .filter((v) => v.metodo_pago === "tarjeta")
+          .reduce((sum, venta) => sum + (venta.total || 0), 0),
+        total_transferencia: ventas
+          .filter((v) => v.metodo_pago === "transferencia")
+          .reduce((sum, venta) => sum + (venta.total || 0), 0),
+        cantidad_ventas: ventas.length,
+        ganancia_bruta: productosAgrupados.reduce(
+          (sum, producto) => sum + producto.ganancia_total,
+          0
+        ),
+        productos_vendidos: productosAgrupados.reduce(
+          (sum, producto) => sum + producto.cantidad_total,
+          0
+        ),
+      };
+
+      return {
+        ventas,
+        productosAgrupados,
+        totales,
+      };
+    } catch (error) {
+      console.error("❌ Error obteniendo resumen de ventas:", error);
+      throw error;
+    }
+  }
 }
 
 export default new SalesOfflineController();

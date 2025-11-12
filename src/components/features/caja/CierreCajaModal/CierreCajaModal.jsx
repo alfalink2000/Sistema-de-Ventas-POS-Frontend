@@ -39,6 +39,9 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const [detalleVentas, setDetalleVentas] = useState([]);
   const [productosVendidos, setProductosVendidos] = useState([]);
 
+  const [productosAgrupados, setProductosAgrupados] = useState([]);
+  const [mostrarDetalleProductos, setMostrarDetalleProductos] = useState(false);
+
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
@@ -117,8 +120,9 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   useEffect(() => {
     if (isOpen && sesion) {
       calcularTotalesCompletos();
+      obtenerProductosAgrupados();
     }
-  }, [isOpen, sesion, calcularTotalesCompletos]);
+  }, [isOpen, sesion, calcularTotalesCompletos, obtenerProductosAgrupados]);
 
   useEffect(() => {
     if (totales && saldoFinalReal) {
@@ -137,127 +141,174 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     const sesionId = sesion.id || sesion.id_local;
 
     try {
-      console.log(`🔍 Iniciando diagnóstico para sesión: ${sesionId}`);
-
-      // 1. Obtener ventas de la sesión
-      const ventas = await SalesOfflineController.getSalesBySession(sesionId);
-      console.log(`📊 Ventas encontradas: ${ventas.length}`, ventas);
-
-      // 2. Obtener detalles de todas las ventas
-      let todosLosDetalles = [];
-      let todosLosProductos = [];
-
-      for (const venta of ventas) {
-        const detalles = await SalesOfflineController.getSaleDetails(
-          venta.id_local
-        );
-        console.log(`📦 Detalles para venta ${venta.id_local}:`, detalles);
-
-        todosLosDetalles = [...todosLosDetalles, ...detalles];
-
-        // Procesar productos vendidos
-        detalles.forEach((detalle) => {
-          const productoExistente = todosLosProductos.find(
-            (p) => p.producto_id === detalle.producto_id
-          );
-          if (productoExistente) {
-            productoExistente.cantidad_total += detalle.cantidad;
-            productoExistente.subtotal_total += detalle.subtotal;
-          } else {
-            todosLosProductos.push({
-              producto_id: detalle.producto_id,
-              nombre:
-                detalle.producto_nombre || `Producto ${detalle.producto_id}`,
-              cantidad_total: detalle.cantidad,
-              subtotal_total: detalle.subtotal,
-              precio_unitario: detalle.precio_unitario,
-            });
-          }
-        });
-      }
-
-      setDetalleVentas(ventas);
-      setProductosVendidos(todosLosProductos);
-
-      // 3. Mostrar diagnóstico detallado
-      const totalProductosVendidos = todosLosDetalles.reduce(
-        (sum, detalle) => sum + detalle.cantidad,
-        0
+      console.log(
+        `🔍 Iniciando diagnóstico con productos agrupados para sesión: ${sesionId}`
       );
-      const totalVentasCalculado = ventas.reduce(
-        (sum, venta) => sum + (venta.total || 0),
-        0
+
+      const resumen = await SalesOfflineController.getSalesSummaryBySession(
+        sesionId
       );
-      const totalEfectivoCalculado = ventas
-        .filter((v) => v.metodo_pago === "efectivo")
-        .reduce((sum, venta) => sum + (venta.total || 0), 0);
+
+      // Formatear los productos para mostrar
+      const productosFormateados = resumen.productosAgrupados
+        .map(
+          (producto) =>
+            `• ${producto.nombre}: x${
+              producto.cantidad_total
+            } | Venta: $${producto.precio_venta_unitario.toFixed(
+              2
+            )} | Costo: $${producto.precio_compra_unitario.toFixed(
+              2
+            )} | Ganancia: $${producto.ganancia_total.toFixed(2)}`
+        )
+        .join("\n");
 
       await Swal.fire({
-        title: "Diagnóstico de Ventas",
+        title: "📊 Diagnóstico Detallado de Ventas",
         html: `
-          <div style="text-align: left; font-size: 14px; max-height: 400px; overflow-y: auto;">
+          <div style="text-align: left; font-size: 14px; max-height: 60vh; overflow-y: auto;">
             <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
-              <h4 style="margin: 0 0 10px 0; color: #333;">📊 Resumen General</h4>
-              <p><strong>Total de Ventas:</strong> ${ventas.length}</p>
-              <p><strong>Total Productos Vendidos:</strong> ${totalProductosVendidos}</p>
-              <p><strong>Monto Total Ventas:</strong> $${totalVentasCalculado.toFixed(
+              <h4 style="margin: 0 0 10px 0; color: #333;">📈 Resumen General</h4>
+              <p><strong>Total Ventas:</strong> ${
+                resumen.totales.cantidad_ventas
+              }</p>
+              <p><strong>Productos Vendidos:</strong> ${
+                resumen.totales.productos_vendidos
+              } unidades</p>
+              <p><strong>Ventas Totales:</strong> $${resumen.totales.total_ventas.toFixed(
                 2
               )}</p>
-              <p><strong>Total Efectivo:</strong> $${totalEfectivoCalculado.toFixed(
+              <p><strong>Ganancia Bruta:</strong> $${resumen.totales.ganancia_bruta.toFixed(
                 2
               )}</p>
             </div>
 
             <div style="margin-bottom: 15px;">
-              <h4 style="margin: 0 0 10px 0; color: #333;">🛍️ Ventas Realizadas</h4>
-              ${ventas
-                .map(
-                  (venta) => `
-                <div style="padding: 8px; margin: 5px 0; background: #e9ecef; border-radius: 4px;">
-                  <strong>Venta ${venta.id_local}</strong> - $${
-                    venta.total?.toFixed(2) || "0.00"
-                  } 
-                  (${venta.metodo_pago || "efectivo"})<br/>
-                  <small>Fecha: ${new Date(
-                    venta.fecha_venta
-                  ).toLocaleString()}</small>
-                </div>
-              `
-                )
-                .join("")}
+              <h4 style="margin: 0 0 10px 0; color: #333;">💵 Por Método de Pago</h4>
+              <p><strong>Efectivo:</strong> $${resumen.totales.total_efectivo.toFixed(
+                2
+              )}</p>
+              <p><strong>Tarjeta:</strong> $${resumen.totales.total_tarjeta.toFixed(
+                2
+              )}</p>
+              <p><strong>Transferencia:</strong> $${resumen.totales.total_transferencia.toFixed(
+                2
+              )}</p>
             </div>
 
             <div>
-              <h4 style="margin: 0 0 10px 0; color: #333;">📦 Productos Vendidos</h4>
-              ${todosLosProductos
-                .map(
-                  (producto) => `
-                <div style="padding: 6px; margin: 3px 0; background: #d1ecf1; border-radius: 3px;">
-                  <strong>${producto.nombre}</strong><br/>
-                  <small>Cantidad: ${
-                    producto.cantidad_total
-                  } | Total: $${producto.subtotal_total.toFixed(2)}</small>
-                </div>
-              `
-                )
-                .join("")}
+              <h4 style="margin: 0 0 10px 0; color: #333;">🛍️ Productos Vendidos</h4>
+              <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                ${resumen.productosAgrupados
+                  .map(
+                    (producto) => `
+                  <div style="padding: 5px; margin: 3px 0; background: #e8f5e8; border-radius: 3px; border-left: 4px solid #4caf50;">
+                    <strong>${producto.nombre}</strong><br/>
+                    <small>
+                      Cantidad: ${producto.cantidad_total} | 
+                      Precio: $${producto.precio_venta_unitario.toFixed(2)} | 
+                      Costo: $${producto.precio_compra_unitario.toFixed(2)} |
+                      <strong> Ganancia: $${producto.ganancia_total.toFixed(
+                        2
+                      )}</strong>
+                    </small>
+                  </div>
+                `
+                  )
+                  .join("")}
+              </div>
             </div>
           </div>
         `,
-        width: 600,
+        width: 700,
         confirmButtonText: "Entendido",
       });
+
+      // Actualizar el estado local con los productos agrupados
+      setProductosAgrupados(resumen.productosAgrupados);
     } catch (error) {
       console.error("❌ Error en diagnóstico:", error);
       await Swal.fire({
         icon: "error",
         title: "Error en diagnóstico",
-        text: "No se pudieron obtener los datos de ventas",
+        text: "No se pudieron obtener los datos de ventas agrupados",
         confirmButtonText: "Entendido",
       });
     }
   };
 
+  // ✅ NUEVA FUNCIÓN PARA MOSTRAR DETALLE DE PRODUCTOS EN EL MODAL
+  const renderDetalleProductos = () => {
+    if (!mostrarDetalleProductos || productosAgrupados.length === 0)
+      return null;
+
+    return (
+      <div className={styles.productosSection}>
+        <h4>
+          <FiPackage className={styles.sectionIcon} />
+          Detalle de Productos Vendidos
+          <span className={styles.productCount}>
+            {productosAgrupados.length} productos
+          </span>
+        </h4>
+
+        <div className={styles.productosGrid}>
+          {productosAgrupados.map((producto, index) => (
+            <div key={producto.producto_id} className={styles.productoCard}>
+              <div className={styles.productoHeader}>
+                <span className={styles.productoNombre}>{producto.nombre}</span>
+                <span className={styles.productoCantidad}>
+                  x{producto.cantidad_total}
+                </span>
+              </div>
+
+              <div className={styles.productoDetalles}>
+                <div className={styles.detalleRow}>
+                  <span>Precio Venta:</span>
+                  <span>${producto.precio_venta_unitario.toFixed(2)}</span>
+                </div>
+                <div className={styles.detalleRow}>
+                  <span>Costo Unitario:</span>
+                  <span>${producto.precio_compra_unitario.toFixed(2)}</span>
+                </div>
+                <div className={styles.detalleRow}>
+                  <span>Subtotal:</span>
+                  <span>${producto.subtotal_total.toFixed(2)}</span>
+                </div>
+                <div className={`${styles.detalleRow} ${styles.gananciaRow}`}>
+                  <span>Ganancia:</span>
+                  <span className={styles.gananciaValue}>
+                    +${producto.ganancia_total.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  // ✅ NUEVA FUNCIÓN PARA OBTENER PRODUCTOS AGRUPADOS
+  const obtenerProductosAgrupados = useCallback(async () => {
+    if (!sesion) return;
+
+    try {
+      const sesionId = sesion.id || sesion.id_local;
+      console.log(`📊 Obteniendo productos agrupados para sesión: ${sesionId}`);
+
+      const resumen = await SalesOfflineController.getSalesSummaryBySession(
+        sesionId
+      );
+      setProductosAgrupados(resumen.productosAgrupados || []);
+
+      console.log(
+        `✅ ${resumen.productosAgrupados.length} productos agrupados obtenidos`
+      );
+    } catch (error) {
+      console.error("❌ Error obteniendo productos agrupados:", error);
+      setProductosAgrupados([]);
+    }
+  }, [sesion]);
   // ✅ MANEJAR CIERRE CON NUEVOS CONTROLADORES
   const handleCerrarSesion = async () => {
     const saldoFinalNumero = parseFloat(saldoFinalReal);
@@ -646,16 +697,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           />
         </div>
 
-        {!isOnline && (
-          <div className={styles.offlineWarning}>
-            <strong>⚠️ Modo Offline</strong>
-            <p>
-              El cierre se guardará localmente y se sincronizará automáticamente
-              cuando recuperes la conexión a internet.
-            </p>
-          </div>
-        )}
-
         {/* Acciones */}
         <div className={styles.actions}>
           <Button
@@ -673,6 +714,32 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             Diagnosticar Ventas
           </Button>
 
+          {/* ✅ NUEVA SECCIÓN: BOTÓN PARA MOSTRAR/OCULTAR DETALLE DE PRODUCTOS */}
+          {productosAgrupados.length > 0 && (
+            <div className={styles.productosToggle}>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setMostrarDetalleProductos(!mostrarDetalleProductos)
+                }
+                style={{
+                  width: "100%",
+                  marginBottom: "10px",
+                }}
+              >
+                <FiPackage style={{ marginRight: "8px" }} />
+                {mostrarDetalleProductos ? "Ocultar" : "Mostrar"} Detalle de
+                Productos ({productosAgrupados.length} productos,{" "}
+                {productosAgrupados.reduce(
+                  (sum, p) => sum + p.cantidad_total,
+                  0
+                )}{" "}
+                unidades)
+              </Button>
+            </div>
+          )}
+          {/* ✅ SECCIÓN DE DETALLE DE PRODUCTOS */}
+          {renderDetalleProductos()}
           <Button
             variant="secondary"
             onClick={handleCloseModal}
