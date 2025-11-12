@@ -4,9 +4,30 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
+/* NUEVOS ESTILOS AGREGADOS PARA 4 PRODUCTOS POR FILA */
+@media (min-width: 1200px) {
+  .productGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1400px) {
+  .productGrid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+}
+
 .productGrid.compact {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
+}
+
+/* Para la versión compacta en pantallas grandes */
+@media (min-width: 1200px) {
+  .productGrid.compact {
+    grid-template-columns: repeat(5, 1fr); /* Más productos en compacto */
+  }
 }
 
 .loadingContainer,
@@ -60,7 +81,7 @@
   }
 }
 
-/* Responsive */
+/* Responsive - MANTENIENDO TUS ESTILOS ORIGINALES */
 @media (max-width: 768px) {
   .productGrid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));

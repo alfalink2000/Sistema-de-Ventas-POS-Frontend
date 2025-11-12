@@ -130,30 +130,6 @@ const SesionInfo = ({ sesionAbierta, onAbrirSesion, onCerrarSesion }) => {
               </div>
             </div>
           </div>
-
-          {/* RESUMEN DE OPERACIONES */}
-          <div className={styles.sessionSummary}>
-            <div className={styles.summaryGrid}>
-              <div className={styles.summaryItem}>
-                <span className={styles.summaryLabel}>Ventas Realizadas</span>
-                <span className={styles.summaryValue}>
-                  {sesionAbierta.total_ventas || 0}
-                </span>
-              </div>
-              <div className={styles.summaryItem}>
-                <span className={styles.summaryLabel}>Total Ventas</span>
-                <span className={styles.summaryValue}>
-                  ${sesionAbierta.monto_total_ventas?.toFixed(2) || "0.00"}
-                </span>
-              </div>
-              <div className={styles.summaryItem}>
-                <span className={styles.summaryLabel}>Efectivo en Caja</span>
-                <span className={styles.summaryValue}>
-                  ${sesionAbierta.efectivo_actual?.toFixed(2) || "0.00"}
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* ACCIONES */}

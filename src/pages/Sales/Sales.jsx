@@ -195,26 +195,6 @@ const Sales = () => {
           <div className={styles.alertContent}>
             <h3>No hay sesión de caja activa</h3>
             <p>Debes abrir una sesión de caja para realizar ventas</p>
-            <button
-              className={styles.alertButton}
-              onClick={() => setShowSesionModal(true)}
-            >
-              Abrir Sesión de Caja
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Alerta de modo offline */}
-      {!isOnline && (
-        <div className={styles.offlineAlert}>
-          <FiWifiOff className={styles.alertIcon} />
-          <div className={styles.alertContent}>
-            <h3>Modo Offline Activado</h3>
-            <p>
-              Las ventas se guardarán localmente y se sincronizarán
-              automáticamente cuando recuperes la conexión
-            </p>
           </div>
         </div>
       )}
