@@ -274,8 +274,8 @@ const Sales = () => {
             products={filteredProducts}
             loading={loading}
             error={error}
-            compact={false} // ✅ Cambiado a false para imágenes más grandes
-            imageSize="large" // ✅ Nueva prop para controlar tamaño de imagen
+            compact={true} // ✅ CAMBIAR A true para tarjetas más pequeñas
+            imageSize="medium" // ✅ Cambiar a "medium" o "small"
           />
         </div>
 
