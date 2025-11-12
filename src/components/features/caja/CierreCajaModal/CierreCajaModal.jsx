@@ -1,17 +1,7 @@
-// components/features/caja/CierreCajaModal/CierreCajaModal.jsx - CORREGIDO
+// components/features/caja/CierreCajaModal/CierreCajaModal.jsx
 import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  closeSesionCaja,
-  loadOpenSesion,
-} from "../../../../actions/sesionesCajaActions";
-import {
-  createClosure,
-  calculateClosureTotals,
-} from "../../../../actions/closuresActions";
-import ClosuresOfflineController from "../../../../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
-import SessionsOfflineController from "../../../../controllers/offline/SessionsOfflineController/SessionsOfflineController";
-import SalesOfflineController from "../../../../controllers/offline/SalesOfflineController/SalesOfflineController";
+import { useOfflineControllers } from "../../../../hooks/useOfflineControllers";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
 import Swal from "sweetalert2";
@@ -25,8 +15,19 @@ import {
   FiBarChart2,
   FiPackage,
   FiList,
+  FiAlertTriangle,
 } from "react-icons/fi";
 import styles from "./CierreCajaModal.module.css";
+
+// ✅ IMPORTAR ACTIONS DIRECTAMENTE
+import {
+  closeSesionCaja,
+  loadOpenSesion,
+} from "../../../../actions/sesionesCajaActions";
+import {
+  createClosure,
+  calculateClosureTotals,
+} from "../../../../actions/closuresActions";
 
 const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const [saldoFinalReal, setSaldoFinalReal] = useState("");
@@ -36,9 +37,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const [totales, setTotales] = useState(null);
   const [diferencia, setDiferencia] = useState(0);
   const [errorCalculo, setErrorCalculo] = useState(null);
-  const [detalleVentas, setDetalleVentas] = useState([]);
-  const [productosVendidos, setProductosVendidos] = useState([]);
-
   const [productosAgrupados, setProductosAgrupados] = useState([]);
   const [mostrarDetalleProductos, setMostrarDetalleProductos] = useState(false);
 
@@ -46,9 +44,17 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
 
-  // ✅ CALCULAR TOTALES CON NUEVOS CONTROLADORES
+  // ✅ USAR HOOK PARA CONTROLADORES
+  const {
+    ClosuresOfflineController,
+    SessionsOfflineController,
+    SalesOfflineController,
+    loaded: controllersLoaded,
+  } = useOfflineControllers();
+
+  // ✅ CALCULAR TOTALES CON CONTROLADORES DINÁMICOS
   const calcularTotalesCompletos = useCallback(async () => {
-    if (!sesion) return;
+    if (!sesion || !controllersLoaded) return;
 
     setCalculating(true);
     setErrorCalculo(null);
@@ -62,6 +68,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       if (isOnline && sesion.id) {
         try {
           // Intentar cálculo online primero
+          console.log("🌐 Intentando cálculo online...");
           totals = await dispatch(calculateClosureTotals(sesion.id));
         } catch (onlineError) {
           console.warn(
@@ -69,15 +76,25 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             onlineError
           );
           // Fallback a cálculo offline
-          totals = await ClosuresOfflineController.calculateSessionTotals(
-            sesionId
-          );
+          if (ClosuresOfflineController) {
+            console.log("📱 Usando cálculo offline...");
+            totals = await ClosuresOfflineController.calculateSessionTotals(
+              sesionId
+            );
+          } else {
+            throw new Error("Controlador offline no disponible");
+          }
         }
       } else {
         // Cálculo offline directo
-        totals = await ClosuresOfflineController.calculateSessionTotals(
-          sesionId
-        );
+        console.log("📱 Cálculo offline directo...");
+        if (ClosuresOfflineController) {
+          totals = await ClosuresOfflineController.calculateSessionTotals(
+            sesionId
+          );
+        } else {
+          throw new Error("Controlador offline no disponible");
+        }
       }
 
       const saldoInicial = sesion.saldo_inicial || 0;
@@ -95,10 +112,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       if (!saldoFinalReal) {
         setSaldoFinalReal(saldoFinalTeorico.toFixed(2));
       }
+
+      console.log("✅ Totales calculados exitosamente:", totalesCompletos);
     } catch (error) {
       console.error("❌ Error calculando totales:", error);
       setErrorCalculo(
-        "No se pudieron calcular los totales. Verifica las ventas."
+        error.message ||
+          "No se pudieron calcular los totales. Verifica las ventas."
       );
 
       // Datos por defecto en caso de error
@@ -115,15 +135,53 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     } finally {
       setCalculating(false);
     }
-  }, [sesion, dispatch, saldoFinalReal, isOnline]);
+  }, [
+    sesion,
+    dispatch,
+    saldoFinalReal,
+    isOnline,
+    controllersLoaded,
+    ClosuresOfflineController,
+  ]);
 
+  // ✅ OBTENER PRODUCTOS AGRUPADOS
+  const obtenerProductosAgrupados = useCallback(async () => {
+    if (!sesion || !SalesOfflineController) return;
+
+    try {
+      const sesionId = sesion.id || sesion.id_local;
+      console.log(`📊 Obteniendo productos agrupados para sesión: ${sesionId}`);
+
+      const resumen = await SalesOfflineController.getSalesSummaryBySession(
+        sesionId
+      );
+      setProductosAgrupados(resumen.productosAgrupados || []);
+
+      console.log(
+        `✅ ${resumen.productosAgrupados.length} productos agrupados obtenidos`
+      );
+    } catch (error) {
+      console.error("❌ Error obteniendo productos agrupados:", error);
+      setProductosAgrupados([]);
+    }
+  }, [sesion, SalesOfflineController]);
+
+  // ✅ EFFECT PRINCIPAL
   useEffect(() => {
-    if (isOpen && sesion) {
+    if (isOpen && sesion && controllersLoaded) {
+      console.log("🔄 Inicializando modal de cierre...");
       calcularTotalesCompletos();
       obtenerProductosAgrupados();
     }
-  }, [isOpen, sesion, calcularTotalesCompletos, obtenerProductosAgrupados]);
+  }, [
+    isOpen,
+    sesion,
+    calcularTotalesCompletos,
+    obtenerProductosAgrupados,
+    controllersLoaded,
+  ]);
 
+  // ✅ EFFECT PARA DIFERENCIA
   useEffect(() => {
     if (totales && saldoFinalReal) {
       const saldoRealNum = parseFloat(saldoFinalReal) || 0;
@@ -134,34 +192,61 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     }
   }, [saldoFinalReal, totales]);
 
-  // ✅ FUNCIÓN DE DIAGNÓSTICO MEJORADA - ENFOCADA EN VENTAS Y PRODUCTOS
+  // ✅ FUNCIÓN DE DIAGNÓSTICO PRINCIPAL
   const handleDiagnosticar = async () => {
-    if (!sesion) return;
+    if (!sesion || !SalesOfflineController) {
+      await Swal.fire({
+        icon: "error",
+        title: "Controlador no disponible",
+        text: "El controlador de ventas offline no está disponible",
+        confirmButtonText: "Entendido",
+      });
+      return;
+    }
 
     const sesionId = sesion.id || sesion.id_local;
 
     try {
-      console.log(
-        `🔍 Iniciando diagnóstico con productos agrupados para sesión: ${sesionId}`
-      );
+      console.log(`🔍 Iniciando diagnóstico para sesión: ${sesionId}`);
 
       const resumen = await SalesOfflineController.getSalesSummaryBySession(
         sesionId
       );
 
-      // Formatear los productos para mostrar
-      const productosFormateados = resumen.productosAgrupados
-        .map(
-          (producto) =>
-            `• ${producto.nombre}: x${
-              producto.cantidad_total
-            } | Venta: $${producto.precio_venta_unitario.toFixed(
-              2
-            )} | Costo: $${producto.precio_compra_unitario.toFixed(
-              2
-            )} | Ganancia: $${producto.ganancia_total.toFixed(2)}`
-        )
-        .join("\n");
+      // ✅ VERIFICAR SI HAY PRODUCTOS
+      if (
+        !resumen.productosAgrupados ||
+        resumen.productosAgrupados.length === 0
+      ) {
+        await Swal.fire({
+          title: "📊 Diagnóstico de Ventas",
+          html: `
+            <div style="text-align: left; font-size: 14px;">
+              <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+                <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Sin Productos Vendidos</h4>
+                <p>No se encontraron productos vendidos en esta sesión.</p>
+                <p><strong>Ventas encontradas:</strong> ${
+                  resumen.ventas?.length || 0
+                }</p>
+                <p><strong>Detalles de venta:</strong> ${
+                  resumen.totales?.productos_vendidos || 0
+                }</p>
+              </div>
+              <div style="color: #666; font-size: 12px;">
+                <p><em>Posibles causas:</em></p>
+                <ul>
+                  <li>Las ventas no tienen detalles asociados</li>
+                  <li>Los detalles de venta no se guardaron correctamente</li>
+                  <li>Problema de sincronización con la base de datos local</li>
+                </ul>
+              </div>
+            </div>
+          `,
+          width: 600,
+          confirmButtonText: "Entendido",
+        });
+        return;
+      }
 
       await Swal.fire({
         title: "📊 Diagnóstico Detallado de Ventas",
@@ -205,7 +290,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
                   <div style="padding: 5px; margin: 3px 0; background: #e8f5e8; border-radius: 3px; border-left: 4px solid #4caf50;">
                     <strong>${producto.nombre}</strong><br/>
                     <small>
-                      Cantidad: ${producto.cantidad_total} | 
+                      <strong>x${producto.cantidad_total}</strong> unidades | 
                       Precio: $${producto.precio_venta_unitario.toFixed(2)} | 
                       Costo: $${producto.precio_compra_unitario.toFixed(2)} |
                       <strong> Ganancia: $${producto.ganancia_total.toFixed(
@@ -231,13 +316,160 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       await Swal.fire({
         icon: "error",
         title: "Error en diagnóstico",
-        text: "No se pudieron obtener los datos de ventas agrupados",
+        text: error.message || "No se pudieron obtener los datos de ventas",
         confirmButtonText: "Entendido",
       });
     }
   };
 
-  // ✅ NUEVA FUNCIÓN PARA MOSTRAR DETALLE DE PRODUCTOS EN EL MODAL
+  // ✅ FUNCIÓN DE DIAGNÓSTICO DETALLADO (DEBUG)
+  const handleDiagnosticarDetallado = async () => {
+    if (!sesion || !SalesOfflineController) return;
+
+    const sesionId = sesion.id || sesion.id_local;
+
+    try {
+      console.log(
+        `🔍 Iniciando diagnóstico DETALLADO para sesión: ${sesionId}`
+      );
+
+      // 1. Obtener ventas de la sesión
+      const ventas = await SalesOfflineController.getSalesBySession(sesionId);
+      console.log(`📊 ${ventas.length} ventas encontradas:`, ventas);
+
+      // 2. Obtener detalles de cada venta
+      let todosLosDetalles = [];
+      for (const venta of ventas) {
+        const detalles = await SalesOfflineController.getSaleDetails(
+          venta.id_local
+        );
+        console.log(
+          `📦 Venta ${venta.id_local} tiene ${detalles.length} detalles:`,
+          detalles
+        );
+        todosLosDetalles = [...todosLosDetalles, ...detalles];
+      }
+
+      // 3. Agrupar productos manualmente para diagnóstico
+      const productosAgrupadosManual = {};
+      todosLosDetalles.forEach((detalle) => {
+        const key = detalle.producto_id;
+        if (!productosAgrupadosManual[key]) {
+          productosAgrupadosManual[key] = {
+            producto_id: detalle.producto_id,
+            nombre:
+              detalle.producto_nombre || `Producto ${detalle.producto_id}`,
+            cantidad_total: 0,
+            precio_venta_unitario: detalle.precio_unitario,
+            subtotal_total: 0,
+          };
+        }
+        productosAgrupadosManual[key].cantidad_total += detalle.cantidad;
+        productosAgrupadosManual[key].subtotal_total += detalle.subtotal;
+      });
+
+      const productosAgrupadosArray = Object.values(productosAgrupadosManual);
+
+      // 4. Mostrar diagnóstico detallado
+      await Swal.fire({
+        title: "🔍 Diagnóstico Detallado de Datos",
+        html: `
+          <div style="text-align: left; font-size: 14px; max-height: 70vh; overflow-y: auto;">
+            <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
+              <h4 style="margin: 0 0 10px 0; color: #856404;">📊 Resumen de Datos Encontrados</h4>
+              <p><strong>Ventas en la sesión:</strong> ${ventas.length}</p>
+              <p><strong>Total detalles de venta:</strong> ${
+                todosLosDetalles.length
+              }</p>
+              <p><strong>Productos únicos vendidos:</strong> ${
+                productosAgrupadosArray.length
+              }</p>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <h4 style="margin: 0 0 10px 0; color: #333;">🛒 Ventas Encontradas</h4>
+              ${ventas
+                .map(
+                  (venta) => `
+                <div style="padding: 8px; margin: 5px 0; background: #e9ecef; border-radius: 4px;">
+                  <strong>${venta.id_local}</strong> - $${
+                    venta.total?.toFixed(2) || "0.00"
+                  } 
+                  (${venta.metodo_pago || "efectivo"})<br/>
+                  <small>ID: ${venta.id_local} | Sesión: ${
+                    venta.sesion_caja_id
+                  }</small>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <h4 style="margin: 0 0 10px 0; color: #333;">📦 Detalles de Ventas</h4>
+              ${
+                todosLosDetalles.length > 0
+                  ? todosLosDetalles
+                      .map(
+                        (detalle) => `
+                <div style="padding: 6px; margin: 3px 0; background: #d1ecf1; border-radius: 3px; font-size: 12px;">
+                  <strong>${
+                    detalle.producto_nombre || `Producto ${detalle.producto_id}`
+                  }</strong><br/>
+                  <small>
+                    Venta: ${detalle.venta_id_local} | 
+                    Cantidad: ${detalle.cantidad} | 
+                    Precio: $${detalle.precio_unitario?.toFixed(2)} | 
+                    Subtotal: $${detalle.subtotal?.toFixed(2)}
+                  </small>
+                </div>
+              `
+                      )
+                      .join("")
+                  : '<p style="color: #dc3545; font-style: italic;">No se encontraron detalles de venta</p>'
+              }
+            </div>
+
+            <div>
+              <h4 style="margin: 0 0 10px 0; color: #333;">📋 Productos Agrupados</h4>
+              ${
+                productosAgrupadosArray.length > 0
+                  ? productosAgrupadosArray
+                      .map(
+                        (producto) => `
+                <div style="padding: 8px; margin: 5px 0; background: #d4edda; border-radius: 4px; border-left: 4px solid #28a745;">
+                  <strong>${producto.nombre}</strong><br/>
+                  <small>
+                    <strong>x${producto.cantidad_total}</strong> unidades | 
+                    Total: $${producto.subtotal_total.toFixed(2)} | 
+                    Precio unitario: $${producto.precio_venta_unitario.toFixed(
+                      2
+                    )}
+                  </small>
+                </div>
+              `
+                      )
+                      .join("")
+                  : '<p style="color: #dc3545; font-style: italic;">No se pudieron agrupar productos</p>'
+              }
+            </div>
+          </div>
+        `,
+        width: 800,
+        confirmButtonText: "Entendido",
+      });
+    } catch (error) {
+      console.error("❌ Error en diagnóstico detallado:", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Error en diagnóstico",
+        text: error.message,
+        confirmButtonText: "Entendido",
+      });
+    }
+  };
+
+  // ✅ RENDER DETALLE DE PRODUCTOS
   const renderDetalleProductos = () => {
     if (!mostrarDetalleProductos || productosAgrupados.length === 0)
       return null;
@@ -253,7 +485,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         </h4>
 
         <div className={styles.productosGrid}>
-          {productosAgrupados.map((producto, index) => (
+          {productosAgrupados.map((producto) => (
             <div key={producto.producto_id} className={styles.productoCard}>
               <div className={styles.productoHeader}>
                 <span className={styles.productoNombre}>{producto.nombre}</span>
@@ -288,28 +520,8 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       </div>
     );
   };
-  // ✅ NUEVA FUNCIÓN PARA OBTENER PRODUCTOS AGRUPADOS
-  const obtenerProductosAgrupados = useCallback(async () => {
-    if (!sesion) return;
 
-    try {
-      const sesionId = sesion.id || sesion.id_local;
-      console.log(`📊 Obteniendo productos agrupados para sesión: ${sesionId}`);
-
-      const resumen = await SalesOfflineController.getSalesSummaryBySession(
-        sesionId
-      );
-      setProductosAgrupados(resumen.productosAgrupados || []);
-
-      console.log(
-        `✅ ${resumen.productosAgrupados.length} productos agrupados obtenidos`
-      );
-    } catch (error) {
-      console.error("❌ Error obteniendo productos agrupados:", error);
-      setProductosAgrupados([]);
-    }
-  }, [sesion]);
-  // ✅ MANEJAR CIERRE CON NUEVOS CONTROLADORES
+  // ✅ MANEJAR CIERRE DE SESIÓN
   const handleCerrarSesion = async () => {
     const saldoFinalNumero = parseFloat(saldoFinalReal);
 
@@ -384,6 +596,10 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         // ✅ MODO OFFLINE - Usar controladores offline
         console.log("📱 Creando cierre offline...");
 
+        if (!ClosuresOfflineController || !SessionsOfflineController) {
+          throw new Error("Controladores offline no disponibles");
+        }
+
         // 1. Crear cierre offline
         const closureResult = await ClosuresOfflineController.createClosure(
           closureData
@@ -413,13 +629,12 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             "Cierre guardado localmente. Se sincronizará cuando haya conexión.",
         };
 
-        // ✅ DISPATCH PARA ACTUALIZAR ESTADO LOCAL - SESIÓN
+        // ✅ DISPATCH PARA ACTUALIZAR ESTADO LOCAL
         dispatch({
           type: types.sesionCajaClosedOffline,
           payload: closeSessionResult.sesion,
         });
 
-        // ✅ DISPATCH PARA ACTUALIZAR ESTADO LOCAL - CIERRE (NUEVO)
         dispatch({
           type: types.closureAddNewOffline,
           payload: closureResult.cierre,
@@ -467,14 +682,31 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     setTotales(null);
     setDiferencia(0);
     setErrorCalculo(null);
-    setDetalleVentas([]);
-    setProductosVendidos([]);
+    setProductosAgrupados([]);
+    setMostrarDetalleProductos(false);
     onClose();
   };
 
   const handleRetryCalculation = () => {
     calcularTotalesCompletos();
   };
+
+  // ✅ LOADING MIENTRAS CARGAN CONTROLADORES
+  if (!controllersLoaded) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={handleCloseModal}
+        title="Cerrar Sesión de Caja"
+      >
+        <div className={styles.loadingState}>
+          <div className={styles.spinner}></div>
+          <p>Cargando controladores offline...</p>
+          <small>Esperando que los módulos se carguen completamente</small>
+        </div>
+      </Modal>
+    );
+  }
 
   if (!sesion) {
     return (
@@ -569,18 +801,17 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             </div>
           ) : errorCalculo ? (
             <div className={styles.calculationError}>
+              <FiAlertTriangle className={styles.errorIcon} />
               <p>{errorCalculo}</p>
-              <Button variant="secondary" onClick={handleRetryCalculation}>
-                Reintentar Cálculo
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleDiagnosticar}
-                style={{ marginLeft: "8px" }}
-              >
-                <FiList style={{ marginRight: "4px" }} />
-                Diagnosticar Ventas
-              </Button>
+              <div className={styles.errorActions}>
+                <Button variant="secondary" onClick={handleRetryCalculation}>
+                  Reintentar Cálculo
+                </Button>
+                <Button variant="outline" onClick={handleDiagnosticarDetallado}>
+                  <FiList style={{ marginRight: "4px" }} />
+                  Diagnóstico Avanzado
+                </Button>
+              </div>
             </div>
           ) : (
             totales && (
@@ -697,70 +928,93 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           />
         </div>
 
+        {!isOnline && (
+          <div className={styles.offlineWarning}>
+            <strong>⚠️ Modo Offline</strong>
+            <p>
+              El cierre se guardará localmente y se sincronizará automáticamente
+              cuando recuperes la conexión a internet.
+            </p>
+          </div>
+        )}
+
+        {/* ✅ SECCIÓN: BOTÓN PARA MOSTRAR/OCULTAR DETALLE DE PRODUCTOS */}
+        {productosAgrupados.length > 0 && (
+          <div className={styles.productosToggle}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setMostrarDetalleProductos(!mostrarDetalleProductos)
+              }
+              style={{ width: "100%", marginBottom: "10px" }}
+            >
+              <FiPackage style={{ marginRight: "8px" }} />
+              {mostrarDetalleProductos ? "Ocultar" : "Mostrar"} Detalle de
+              Productos ({productosAgrupados.length} productos,{" "}
+              {productosAgrupados.reduce((sum, p) => sum + p.cantidad_total, 0)}{" "}
+              unidades)
+            </Button>
+          </div>
+        )}
+
+        {/* ✅ SECCIÓN DE DETALLE DE PRODUCTOS */}
+        {renderDetalleProductos()}
+
         {/* Acciones */}
         <div className={styles.actions}>
-          <Button
-            variant="outline"
-            onClick={handleDiagnosticar}
-            disabled={processing}
-            style={{
-              marginRight: "auto",
-              backgroundColor: "#f0f9ff",
-              borderColor: "#0ea5e9",
-              color: "#0369a1",
-            }}
-          >
-            <FiList style={{ marginRight: "4px" }} />
-            Diagnosticar Ventas
-          </Button>
+          <div className={styles.diagnosticButtons}>
+            <Button
+              variant="outline"
+              onClick={handleDiagnosticar}
+              disabled={processing}
+              style={{
+                backgroundColor: "#f0f9ff",
+                borderColor: "#0ea5e9",
+                color: "#0369a1",
+              }}
+            >
+              <FiList style={{ marginRight: "4px" }} />
+              Diagnosticar Ventas
+            </Button>
 
-          {/* ✅ NUEVA SECCIÓN: BOTÓN PARA MOSTRAR/OCULTAR DETALLE DE PRODUCTOS */}
-          {productosAgrupados.length > 0 && (
-            <div className={styles.productosToggle}>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setMostrarDetalleProductos(!mostrarDetalleProductos)
-                }
-                style={{
-                  width: "100%",
-                  marginBottom: "10px",
-                }}
-              >
-                <FiPackage style={{ marginRight: "8px" }} />
-                {mostrarDetalleProductos ? "Ocultar" : "Mostrar"} Detalle de
-                Productos ({productosAgrupados.length} productos,{" "}
-                {productosAgrupados.reduce(
-                  (sum, p) => sum + p.cantidad_total,
-                  0
-                )}{" "}
-                unidades)
-              </Button>
-            </div>
-          )}
-          {/* ✅ SECCIÓN DE DETALLE DE PRODUCTOS */}
-          {renderDetalleProductos()}
-          <Button
-            variant="secondary"
-            onClick={handleCloseModal}
-            disabled={processing}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleCerrarSesion}
-            disabled={
-              !saldoFinalReal || processing || calculating || !!errorCalculo
-            }
-            loading={processing}
-          >
-            {processing
-              ? "Procesando..."
-              : isOnline
-              ? "Confirmar Cierre"
-              : "Guardar Cierre (Offline)"}
-          </Button>
+            <Button
+              variant="outline"
+              onClick={handleDiagnosticarDetallado}
+              disabled={processing}
+              style={{
+                backgroundColor: "#fff3cd",
+                borderColor: "#ffc107",
+                color: "#856404",
+              }}
+            >
+              <FiAlertTriangle style={{ marginRight: "4px" }} />
+              Diagnóstico Avanzado
+            </Button>
+          </div>
+
+          <div className={styles.mainActions}>
+            <Button
+              variant="secondary"
+              onClick={handleCloseModal}
+              disabled={processing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCerrarSesion}
+              disabled={
+                !saldoFinalReal || processing || calculating || !!errorCalculo
+              }
+              loading={processing}
+            >
+              {processing
+                ? "Procesando..."
+                : isOnline
+                ? "Confirmar Cierre"
+                : "Guardar Cierre (Offline)"}
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>

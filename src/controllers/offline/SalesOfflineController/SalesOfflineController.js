@@ -1,5 +1,4 @@
-// src/controllers/offline/SalesOfflineController/SalesOfflineController.js - VERSIÓN COMPLETA
-
+// src/controllers/offline/SalesOfflineController/SalesOfflineController.js
 import BaseOfflineController from "../BaseOfflineController/BaseOfflineController";
 import IndexedDBService from "../../../services/IndexedDBService";
 
@@ -74,7 +73,7 @@ class SalesOfflineController extends BaseOfflineController {
         fecha_venta: new Date().toISOString(),
         sincronizado: false,
         es_local: true,
-        es_sesion_local: esSesionLocal, // ← **NUEVO: Marcar si la sesión es local**
+        es_sesion_local: esSesionLocal,
         estado: "completada",
         fecha_creacion: new Date().toISOString(),
         sesion_caja_id: sesionIdParaVenta.toString(),
@@ -117,26 +116,48 @@ class SalesOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ MÉTODO ALIAS para compatibilidad (usa createSaleOffline internamente)
+  // ✅ MÉTODO ALIAS para compatibilidad
   async createSale(saleData) {
     return await this.createSaleOffline(saleData);
   }
 
-  // En SalesOfflineController.js - ACTUALIZAR createSaleDetails
+  // ✅ CREAR DETALLES DE VENTA MEJORADO
   async createSaleDetails(ventaIdLocal, productos) {
     try {
-      console.log(`📦 Creando detalles para venta ${ventaIdLocal}...`);
+      console.log(
+        `📦 Creando detalles para venta ${ventaIdLocal}...`,
+        productos
+      );
 
       for (const [index, producto] of productos.entries()) {
         const detalleId = await this.generateLocalId("detalle");
 
-        // ✅ OBTENER PRECIO DE COMPRA REAL DEL PRODUCTO
-        const productInfo = await IndexedDBService.get(
-          "productos",
-          producto.producto_id
-        );
+        // ✅ OBTENER INFORMACIÓN COMPLETA DEL PRODUCTO
+        let productInfo;
+        try {
+          productInfo = await IndexedDBService.get(
+            "productos",
+            producto.producto_id
+          );
+          console.log(
+            `🔍 Información del producto ${producto.producto_id}:`,
+            productInfo
+          );
+        } catch (error) {
+          console.warn(
+            `⚠️ No se pudo obtener información del producto ${producto.producto_id}:`,
+            error
+          );
+          productInfo = null;
+        }
+
+        // ✅ USAR LOS DATOS CORRECTOS - FIX CRÍTICO
         const precioCompraReal =
           productInfo?.precio_compra || producto.precio_compra || 0;
+        const nombreProducto =
+          producto.nombre ||
+          productInfo?.nombre ||
+          `Producto ${producto.producto_id}`;
 
         const detalle = {
           id_local: detalleId,
@@ -144,21 +165,31 @@ class SalesOfflineController extends BaseOfflineController {
           producto_id: producto.producto_id.toString(),
           cantidad: parseInt(producto.cantidad),
           precio_unitario: parseFloat(producto.precio_unitario),
-          precio_compra: parseFloat(precioCompraReal), // ✅ PRECIO COMPRA REAL
+          precio_compra: parseFloat(precioCompraReal),
           subtotal: parseFloat(producto.subtotal),
-          ganancia:
+          ganancia: parseFloat(
             (parseFloat(producto.precio_unitario) -
               parseFloat(precioCompraReal)) *
-            parseInt(producto.cantidad),
+              parseInt(producto.cantidad)
+          ),
           sincronizado: false,
           fecha_creacion: new Date().toISOString(),
-          producto_nombre: producto.nombre || `Producto ${index + 1}`,
+          producto_nombre: nombreProducto,
+          // ✅ AGREGAR MÁS INFORMACIÓN PARA DIAGNÓSTICO
+          producto_data: {
+            id: producto.producto_id,
+            nombre: nombreProducto,
+            precio_venta: producto.precio_unitario,
+            precio_compra: precioCompraReal,
+          },
         };
 
-        console.log(
-          `💾 Guardando detalle ${detalleId} con precio compra:`,
-          precioCompraReal
-        );
+        console.log(`💾 Guardando detalle ${detalleId}:`, {
+          producto: detalle.producto_nombre,
+          cantidad: detalle.cantidad,
+          precio: detalle.precio_unitario,
+          venta_id_local: detalle.venta_id_local,
+        });
 
         const detalleGuardado = await IndexedDBService.add(
           this.detailsStore,
@@ -170,6 +201,8 @@ class SalesOfflineController extends BaseOfflineController {
           throw new Error(
             `Error guardando detalle del producto ${producto.producto_id}`
           );
+        } else {
+          console.log(`✅ Detalle ${detalleId} guardado exitosamente`);
         }
       }
 
@@ -196,8 +229,7 @@ class SalesOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ OBTENER VENTAS POR SESIÓN
-  // En SalesOfflineController.js - CORREGIR el método getSalesBySession
+  // ✅ OBTENER VENTAS POR SESIÓN - CORREGIDO
   async getSalesBySession(sesionId) {
     try {
       console.log(
@@ -253,7 +285,8 @@ class SalesOfflineController extends BaseOfflineController {
       return [];
     }
   }
-  // En SalesOfflineController.js - AGREGAR MÉTODO FALTANTE
+
+  // ✅ OBTENER DETALLES DE VENTA
   async getSaleDetails(ventaIdLocal) {
     try {
       console.log(`🔍 Obteniendo detalles para venta: ${ventaIdLocal}`);
@@ -275,7 +308,147 @@ class SalesOfflineController extends BaseOfflineController {
       return [];
     }
   }
-  // ✅ SINCRONIZAR VENTAS PENDIENTES - VERSIÓN CORREGIDA
+
+  // ✅ NUEVO MÉTODO PARA OBTENER PRODUCTOS AGRUPADOS POR SESIÓN
+  async getGroupedProductsBySession(sesionId) {
+    try {
+      console.log(`📊 Agrupando productos para sesión: ${sesionId}`);
+
+      // Obtener ventas de la sesión
+      const ventas = await this.getSalesBySession(sesionId);
+      console.log(`🛒 ${ventas.length} ventas encontradas para agrupar`);
+
+      const productosAgrupados = {};
+      let totalDetalles = 0;
+
+      for (const venta of ventas) {
+        console.log(`🔍 Procesando venta: ${venta.id_local}`);
+
+        // Obtener detalles de cada venta
+        const detalles = await this.getSaleDetails(venta.id_local);
+        console.log(
+          `📦 Venta ${venta.id_local} tiene ${detalles.length} detalles`
+        );
+
+        totalDetalles += detalles.length;
+
+        for (const detalle of detalles) {
+          const productoId = detalle.producto_id;
+
+          console.log(`🔍 Procesando detalle:`, {
+            producto_id: productoId,
+            nombre: detalle.producto_nombre,
+            cantidad: detalle.cantidad,
+            precio: detalle.precio_unitario,
+          });
+
+          if (!productosAgrupados[productoId]) {
+            // Obtener información completa del producto
+            let productoInfo;
+            try {
+              productoInfo = await IndexedDBService.get(
+                "productos",
+                productoId
+              );
+            } catch (error) {
+              console.warn(
+                `⚠️ No se pudo obtener producto ${productoId}:`,
+                error
+              );
+              productoInfo = null;
+            }
+
+            productosAgrupados[productoId] = {
+              producto_id: productoId,
+              nombre:
+                detalle.producto_nombre ||
+                productoInfo?.nombre ||
+                `Producto ${productoId}`,
+              cantidad_total: 0,
+              precio_venta_unitario: detalle.precio_unitario,
+              precio_compra_unitario:
+                detalle.precio_compra || productoInfo?.precio_compra || 0,
+              subtotal_total: 0,
+              ganancia_total: 0,
+              producto_info: productoInfo,
+            };
+          }
+
+          // Acumular cantidades y totales
+          productosAgrupados[productoId].cantidad_total += detalle.cantidad;
+          productosAgrupados[productoId].subtotal_total += detalle.subtotal;
+          productosAgrupados[productoId].ganancia_total +=
+            detalle.ganancia ||
+            (detalle.precio_unitario - (detalle.precio_compra || 0)) *
+              detalle.cantidad;
+        }
+      }
+
+      const resultado = Object.values(productosAgrupados);
+      console.log(
+        `📦 ${resultado.length} productos únicos vendidos en la sesión (de ${totalDetalles} detalles totales)`
+      );
+
+      // DEBUG: Mostrar los productos encontrados
+      resultado.forEach((producto, index) => {
+        console.log(
+          `   ${index + 1}. ${producto.nombre}: x${producto.cantidad_total}`
+        );
+      });
+
+      return resultado;
+    } catch (error) {
+      console.error("❌ Error agrupando productos por sesión:", error);
+      return [];
+    }
+  }
+
+  // ✅ MÉTODO PARA OBTENER RESUMEN COMPLETO DE VENTAS
+  async getSalesSummaryBySession(sesionId) {
+    try {
+      const [ventas, productosAgrupados] = await Promise.all([
+        this.getSalesBySession(sesionId),
+        this.getGroupedProductsBySession(sesionId),
+      ]);
+
+      // Calcular totales generales
+      const totales = {
+        total_ventas: ventas.reduce(
+          (sum, venta) => sum + (venta.total || 0),
+          0
+        ),
+        total_efectivo: ventas
+          .filter((v) => v.metodo_pago === "efectivo")
+          .reduce((sum, venta) => sum + (venta.total || 0), 0),
+        total_tarjeta: ventas
+          .filter((v) => v.metodo_pago === "tarjeta")
+          .reduce((sum, venta) => sum + (venta.total || 0), 0),
+        total_transferencia: ventas
+          .filter((v) => v.metodo_pago === "transferencia")
+          .reduce((sum, venta) => sum + (venta.total || 0), 0),
+        cantidad_ventas: ventas.length,
+        ganancia_bruta: productosAgrupados.reduce(
+          (sum, producto) => sum + producto.ganancia_total,
+          0
+        ),
+        productos_vendidos: productosAgrupados.reduce(
+          (sum, producto) => sum + producto.cantidad_total,
+          0
+        ),
+      };
+
+      return {
+        ventas,
+        productosAgrupados,
+        totales,
+      };
+    } catch (error) {
+      console.error("❌ Error obteniendo resumen de ventas:", error);
+      throw error;
+    }
+  }
+
+  // ✅ SINCRONIZAR VENTAS PENDIENTES
   async syncPendingSales() {
     if (!this.isOnline) {
       return {
@@ -311,7 +484,6 @@ class SalesOfflineController extends BaseOfflineController {
 
       for (const venta of pendingSales) {
         try {
-          // ✅ CORREGIR: Usar URL directa en lugar de process.env
           const apiUrl = window.API_URL || "http://localhost:3000/api";
 
           // Preparar datos para el servidor
@@ -462,7 +634,7 @@ class SalesOfflineController extends BaseOfflineController {
         await IndexedDBService.put(this.salesStore, {
           ...ventaActual,
           sincronizado: true,
-          id_servidor: serverData.id, // Guardar ID del servidor
+          id_servidor: serverData.id,
           fecha_sincronizacion: new Date().toISOString(),
         });
       }
@@ -473,7 +645,7 @@ class SalesOfflineController extends BaseOfflineController {
         await IndexedDBService.put(this.detailsStore, {
           ...detalle,
           sincronizado: true,
-          venta_id: serverData.id, // ID del servidor
+          venta_id: serverData.id,
           fecha_sincronizacion: new Date().toISOString(),
         });
       }
@@ -488,7 +660,7 @@ class SalesOfflineController extends BaseOfflineController {
     }
   }
 
-  // ✅ SINCRONIZACIÓN COMPLETA (para usar desde actions)
+  // ✅ SINCRONIZACIÓN COMPLETA
   async fullSync() {
     return await this.syncPendingSales();
   }
@@ -511,115 +683,6 @@ class SalesOfflineController extends BaseOfflineController {
         pendientes: 0,
         sincronizadas: 0,
       };
-    }
-  }
-
-  // ✅ NUEVO MÉTODO PARA OBTENER PRODUCTOS AGRUPADOS POR SESIÓN
-  async getGroupedProductsBySession(sesionId) {
-    try {
-      console.log(`📊 Agrupando productos para sesión: ${sesionId}`);
-
-      // Obtener ventas de la sesión
-      const ventas = await this.getSalesBySession(sesionId);
-      console.log(`🛒 ${ventas.length} ventas encontradas para agrupar`);
-
-      const productosAgrupados = {};
-
-      for (const venta of ventas) {
-        // Obtener detalles de cada venta
-        const detalles = await this.getSaleDetails(venta.id_local);
-
-        for (const detalle of detalles) {
-          const productoId = detalle.producto_id;
-
-          if (!productosAgrupados[productoId]) {
-            // Obtener información completa del producto
-            const productoInfo = await IndexedDBService.get(
-              "productos",
-              productoId
-            );
-
-            productosAgrupados[productoId] = {
-              producto_id: productoId,
-              nombre:
-                detalle.producto_nombre ||
-                productoInfo?.nombre ||
-                `Producto ${productoId}`,
-              cantidad_total: 0,
-              precio_venta_unitario: detalle.precio_unitario,
-              precio_compra_unitario:
-                detalle.precio_compra || productoInfo?.precio_compra || 0,
-              subtotal_total: 0,
-              ganancia_total: 0,
-              // Información adicional del producto
-              producto_info: productoInfo,
-            };
-          }
-
-          // Acumular cantidades y totales
-          productosAgrupados[productoId].cantidad_total += detalle.cantidad;
-          productosAgrupados[productoId].subtotal_total += detalle.subtotal;
-          productosAgrupados[productoId].ganancia_total +=
-            detalle.ganancia ||
-            (detalle.precio_unitario - (detalle.precio_compra || 0)) *
-              detalle.cantidad;
-        }
-      }
-
-      const resultado = Object.values(productosAgrupados);
-      console.log(
-        `📦 ${resultado.length} productos únicos vendidos en la sesión`
-      );
-
-      return resultado;
-    } catch (error) {
-      console.error("❌ Error agrupando productos por sesión:", error);
-      return [];
-    }
-  }
-
-  // ✅ MÉTODO PARA OBTENER RESUMEN COMPLETO DE VENTAS
-  async getSalesSummaryBySession(sesionId) {
-    try {
-      const [ventas, productosAgrupados] = await Promise.all([
-        this.getSalesBySession(sesionId),
-        this.getGroupedProductsBySession(sesionId),
-      ]);
-
-      // Calcular totales generales
-      const totales = {
-        total_ventas: ventas.reduce(
-          (sum, venta) => sum + (venta.total || 0),
-          0
-        ),
-        total_efectivo: ventas
-          .filter((v) => v.metodo_pago === "efectivo")
-          .reduce((sum, venta) => sum + (venta.total || 0), 0),
-        total_tarjeta: ventas
-          .filter((v) => v.metodo_pago === "tarjeta")
-          .reduce((sum, venta) => sum + (venta.total || 0), 0),
-        total_transferencia: ventas
-          .filter((v) => v.metodo_pago === "transferencia")
-          .reduce((sum, venta) => sum + (venta.total || 0), 0),
-        cantidad_ventas: ventas.length,
-        ganancia_bruta: productosAgrupados.reduce(
-          (sum, producto) => sum + producto.ganancia_total,
-          0
-        ),
-        productos_vendidos: productosAgrupados.reduce(
-          (sum, producto) => sum + producto.cantidad_total,
-          0
-        ),
-      };
-
-      return {
-        ventas,
-        productosAgrupados,
-        totales,
-      };
-    } catch (error) {
-      console.error("❌ Error obteniendo resumen de ventas:", error);
-      throw error;
     }
   }
 }
