@@ -691,15 +691,15 @@ export const startChecking = () => {
     const token = localStorage.getItem("token");
     const user = localStorage.getItem("user");
 
-    console.log("🔍 Verificando autenticación...", {
+    console.log("🔍 Verificación silenciosa de autenticación...", {
       hasToken: !!token,
       hasUser: !!user,
       isOnline: navigator.onLine,
     });
 
-    // ✅ CASO 1: NO HAY CREDENCIALES - LIMPIAR Y TERMINAR
+    // ✅ CASO 1: NO HAY CREDENCIALES - LIMPIAR SILENCIOSAMENTE
     if (!token || !user) {
-      console.log("❌ No hay credenciales guardadas");
+      console.log("❌ No hay credenciales - Limpiando silenciosamente");
       dispatch({ type: types.authLogout });
       dispatch(checkingFinish());
       return;
@@ -714,7 +714,9 @@ export const startChecking = () => {
       );
 
       if (!offlineUser) {
-        console.warn("❌ Usuario no encontrado en cache offline - Limpiando");
+        console.log(
+          "❌ Usuario no encontrado en cache - Limpiando silenciosamente"
+        );
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         dispatch({ type: types.authLogout });
@@ -724,9 +726,9 @@ export const startChecking = () => {
 
       console.log("✅ Usuario encontrado en cache offline");
 
-      // ✅ MODO OFFLINE: AUTENTICAR SIN VERIFICAR TOKEN
+      // ✅ MODO OFFLINE: AUTENTICAR SILENCIOSAMENTE
       if (!navigator.onLine) {
-        console.log("📱 Modo offline - Autenticando sin verificación");
+        console.log("📱 Modo offline - Autenticando silenciosamente");
         dispatch({
           type: types.authLogin,
           payload: userData,
@@ -735,70 +737,35 @@ export const startChecking = () => {
         return;
       }
 
-      // ✅ MODO ONLINE: VERIFICAR TOKEN CON SERVIDOR
-      console.log("🌐 Modo online - Verificando token...");
-
-      // ✅ VERIFICAR SI YA SE MOSTRÓ LA ALERTA EN ESTA SESIÓN
-      const alertAlreadyShown = sessionStorage.getItem("token_invalid_shown");
+      // ✅ MODO ONLINE: VERIFICAR TOKEN SILENCIOSAMENTE
+      console.log("🌐 Modo online - Verificando token silenciosamente...");
 
       try {
         const response = await fetchConToken("auth/verify-token");
 
         if (response.ok === true) {
-          console.log("✅ Token válido - Autenticando");
+          console.log("✅ Token válido - Autenticando silenciosamente");
           dispatch({
             type: types.authLogin,
             payload: userData,
           });
-          // ✅ LIMPIAR EL FLAG SI EL TOKEN ES VÁLIDO
-          sessionStorage.removeItem("token_invalid_shown");
         } else {
-          // ❌ TOKEN INVÁLIDO ONLINE - LIMPIAR CREDENCIALES
-          console.warn("⚠️ Token inválido online - Limpiando credenciales");
+          // ❌ TOKEN INVÁLIDO - LIMPIAR SILENCIOSAMENTE
+          console.log("❌ Token inválido - Limpiando silenciosamente");
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           dispatch({ type: types.authLogout });
-
-          // ✅ SOLO MOSTRAR ALERTA SI NO SE HA MOSTRADO EN ESTA SESIÓN
-          if (!alertAlreadyShown) {
-            sessionStorage.setItem("token_invalid_shown", "true");
-
-            console.log("🔄 Mostrando alerta de sesión expirada...");
-            Swal.fire({
-              icon: "warning",
-              title: "Sesión expirada",
-              text: "Tu sesión ha caducado. Por favor, inicia sesión nuevamente.",
-              confirmButtonText: "Entendido",
-              background: "#fef2f2",
-              color: "#7f1d1d",
-              timer: 5000,
-              showConfirmButton: true,
-              allowOutsideClick: true,
-            });
-          } else {
-            console.log("ℹ️ Alerta ya mostrada en esta sesión - omitiendo");
-          }
         }
       } catch (onlineError) {
-        console.warn("⚠️ Error en verificación online:", onlineError);
-
-        // ✅ EN CASO DE ERROR DE RED: PERMITIR OFFLINE
-        if (isNetworkError(onlineError)) {
-          console.log("🌐 Error de red - Autenticando offline");
-          dispatch({
-            type: types.authLogin,
-            payload: userData,
-          });
-        } else {
-          // ❌ OTROS ERRORES: LIMPIAR CREDENCIALES SILENCIOSAMENTE
-          console.warn("❌ Error crítico - Limpiando credenciales");
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          dispatch({ type: types.authLogout });
-        }
+        console.log("🌐 Error de red - Autenticando offline silenciosamente");
+        // ✅ EN CASO DE ERROR DE RED: PERMITIR OFFLINE SILENCIOSAMENTE
+        dispatch({
+          type: types.authLogin,
+          payload: userData,
+        });
       }
     } catch (error) {
-      console.error("❌ Error en verificación:", error);
+      console.log("❌ Error en verificación - Limpiando silenciosamente");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       dispatch({ type: types.authLogout });
@@ -807,7 +774,6 @@ export const startChecking = () => {
     }
   };
 };
-
 // ✅ LOGIN PRINCIPAL - VERSIÓN COMPLETA
 // ✅ LOGIN PRINCIPAL - VERSIÓN CORREGIDA
 export const startLogin = (username, password) => {
@@ -845,19 +811,14 @@ export const startLogin = (username, password) => {
             localStorage.setItem("token", token);
             localStorage.setItem("user", JSON.stringify(usuario));
 
-            console.log(
-              "✅ Login online exitoso - Token guardado:",
-              token ? "✅" : "❌"
-            );
+            console.log("✅ Login online exitoso");
 
             // ✅ GUARDAR USUARIO EN INDEXEDDB PARA USO OFFLINO FUTURO
-            console.log("💾 Guardando usuario en IndexedDB para offline...");
             try {
               await AuthOfflineController.saveUser(usuario, token);
-              console.log("✅ Usuario guardado exitosamente para uso offline");
+              console.log("✅ Usuario guardado para uso offline");
             } catch (saveError) {
               console.error("❌ Error guardando usuario offline:", saveError);
-              // NO IMPEDIR EL LOGIN POR ERROR AL GUARDAR OFFLINE
             }
 
             // ✅ DISPATCH INMEDIATO
@@ -874,14 +835,6 @@ export const startLogin = (username, password) => {
               console.error("Error cargando datos:", loadError);
             }
 
-            await Swal.fire({
-              icon: "success",
-              title: "¡Bienvenido!",
-              text: `Hola ${usuario.nombre}`,
-              timer: 2000,
-              showConfirmButton: false,
-            });
-
             return { success: true, user: usuario };
           } else {
             throw new Error(response.error || "Credenciales incorrectas");
@@ -897,14 +850,12 @@ export const startLogin = (username, password) => {
             console.log("🌐 Error de red - continuando con login offline...");
             // Continuará al bloque offline más abajo
           } else {
-            // ❌ SI NO HAY USUARIOS OFFLINE O ES OTRO ERROR, PROPAGAR EL ERROR
             throw onlineError;
           }
         }
       }
 
       // 3. MODO OFFLINE O FALLBACK OFFLINE
-      // Solo intentar offline si hay usuarios disponibles offline
       if (hasOfflineUsers) {
         console.log("📴 Intentando login OFFLINE...");
         const offlineResult = await AuthOfflineController.verifyCredentials(
@@ -923,42 +874,23 @@ export const startLogin = (username, password) => {
             payload: user,
           });
 
-          await Swal.fire({
-            icon: "warning",
-            title: "Modo Offline",
-            text: `Hola ${user.nombre}. Trabajando sin conexión.`,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-
           return { success: true, user: user, isOffline: true };
         } else {
-          // ❌ FALLÓ LOGIN OFFLINE
           throw new Error(
             offlineResult.error || "Credenciales incorrectas en modo offline"
           );
         }
       } else {
-        // ❌ NO HAY USUARIOS OFFLINE DISPONIBLES
         throw new Error(
           "No hay usuarios disponibles offline. Conecta a internet para primer acceso."
         );
       }
     } catch (error) {
       console.error("❌ Error final en login:", error);
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error de acceso",
-        text: error.message,
-        confirmButtonText: "Entendido",
-      });
-
       dispatch({
         type: types.authError,
         payload: error.message,
       });
-
       return { success: false, error: error.message };
     } finally {
       dispatch({ type: types.authFinishLoading });
