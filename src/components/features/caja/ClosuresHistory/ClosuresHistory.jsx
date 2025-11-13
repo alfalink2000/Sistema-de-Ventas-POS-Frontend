@@ -16,9 +16,10 @@ import {
   FiEye,
   FiEyeOff,
   FiRefreshCw,
+  FiPackage,
 } from "react-icons/fi";
 import { loadClosures } from "../../../../actions/closuresActions";
-import ClosuresOfflineController from "../../../../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
+import IndexedDBService from "../../../../services/IndexedDBService";
 import styles from "./ClosuresHistory.module.css";
 import {
   deleteLocalClosure,
@@ -89,6 +90,7 @@ const ClosuresHistory = () => {
       console.error("❌ Error eliminando todos los cierres:", error);
     }
   };
+
   // ✅ REFRESCAR DATOS OFFLINE
   const handleRetry = async () => {
     setLocalLoading(true);
@@ -102,13 +104,87 @@ const ClosuresHistory = () => {
     }
   };
 
-  const exportClosureToCSV = (closure) => {
+  // ✅ OBTENER INVENTARIO ACTUAL DESDE INDEXEDDB
+  const getCurrentInventory = async () => {
     try {
-      console.log("📊 Exportando cierre individual a CSV:", closure);
+      const productos = await IndexedDBService.getAll("productos");
 
-      // Preparar datos del cierre con formato mejorado
+      const inventario = productos
+        .filter(
+          (producto) => producto.activo !== false && producto.eliminado !== true
+        )
+        .map((producto) => ({
+          codigo_barras: producto.codigo_barras || "SIN CODIGO",
+          nombre: producto.nombre || "Sin nombre",
+          categoria:
+            producto.categoria_nombre ||
+            producto.categoria?.nombre ||
+            "Sin categoría",
+          stock_actual: producto.stock || 0,
+          stock_minimo: producto.stock_minimo || 0,
+          precio_compra: producto.precio_compra || 0,
+          precio_venta: producto.precio || producto.precio_venta || 0,
+          valor_inventario:
+            (producto.stock || 0) * (producto.precio_compra || 0),
+          estado:
+            producto.stock <= 0
+              ? "AGOTADO"
+              : producto.stock <= (producto.stock_minimo || 5)
+              ? "BAJO STOCK"
+              : "NORMAL",
+        }));
+
+      // Calcular totales del inventario
+      const totalesInventario = {
+        total_productos: inventario.length,
+        total_valor_inventario: inventario.reduce(
+          (sum, item) => sum + item.valor_inventario,
+          0
+        ),
+        productos_bajo_stock: inventario.filter(
+          (item) => item.estado === "BAJO STOCK"
+        ).length,
+        productos_agotados: inventario.filter(
+          (item) => item.estado === "AGOTADO"
+        ).length,
+        productos_normal: inventario.filter((item) => item.estado === "NORMAL")
+          .length,
+      };
+
+      console.log(
+        `📊 [INVENTORY] Inventario obtenido: ${inventario.length} productos`
+      );
+
+      return {
+        inventario,
+        totales: totalesInventario,
+      };
+    } catch (error) {
+      console.error("❌ [INVENTORY] Error obteniendo inventario:", error);
+      return {
+        inventario: [],
+        totales: {
+          total_productos: 0,
+          total_valor_inventario: 0,
+          productos_bajo_stock: 0,
+          productos_agotados: 0,
+          productos_normal: 0,
+        },
+      };
+    }
+  };
+
+  // ✅ EXPORTAR CIERRE INDIVIDUAL CON IPV INCLUIDO
+  const exportClosureToCSV = async (closure) => {
+    try {
+      console.log("📊 Exportando cierre individual a CSV con IPV:", closure);
+
+      // Obtener inventario actual
+      const inventoryData = await getCurrentInventory();
+
+      // Preparar datos del cierre con formato mejorado INCLUYENDO IPV
       const closureData = [
-        ["REPORTE DETALLADO DE CIERRE DE CAJA"],
+        ["REPORTE DETALLADO DE CIERRE DE CAJA CON INVENTARIO"],
         ["Sistema de Punto de Venta - Modo Offline"],
         [""],
         ["INFORMACIÓN BÁSICA DEL CIERRE"],
@@ -160,6 +236,54 @@ const ClosuresHistory = () => {
             : "📉 FALTANTE",
         ],
         [""],
+
+        // ✅ NUEVA SECCIÓN: INVENTARIO FÍSICO VALORADO (IPV)
+        ["INVENTARIO FÍSICO VALORADO (IPV) AL CIERRE"],
+        ["Fecha de captura de inventario:", new Date().toLocaleString("es-MX")],
+        [
+          "Total de productos en inventario:",
+          inventoryData.totales.total_productos,
+        ],
+        [
+          "Valor total del inventario:",
+          formatCurrency(inventoryData.totales.total_valor_inventario),
+        ],
+        ["Productos agotados:", inventoryData.totales.productos_agotados],
+        [
+          "Productos con bajo stock:",
+          inventoryData.totales.productos_bajo_stock,
+        ],
+        ["Productos con stock normal:", inventoryData.totales.productos_normal],
+        [""],
+
+        // ✅ DETALLE COMPLETO DEL INVENTARIO
+        ["DETALLE COMPLETO DEL INVENTARIO"],
+        [
+          "Código Barras",
+          "Producto",
+          "Categoría",
+          "Stock Actual",
+          "Stock Mínimo",
+          "Estado",
+          "Precio Compra",
+          "Precio Venta",
+          "Valor Inventario",
+        ],
+
+        // ✅ DATOS DE CADA PRODUCTO
+        ...inventoryData.inventario.map((item) => [
+          item.codigo_barras,
+          `"${item.nombre}"`,
+          `"${item.categoria}"`,
+          item.stock_actual,
+          item.stock_minimo,
+          item.estado,
+          formatCurrency(item.precio_compra),
+          formatCurrency(item.precio_venta),
+          formatCurrency(item.valor_inventario),
+        ]),
+
+        [""],
         ["INFORMACIÓN ADICIONAL"],
         [
           "Observaciones:",
@@ -180,12 +304,20 @@ const ClosuresHistory = () => {
           "• Este reporte fue generado automáticamente desde el sistema offline",
         ],
         ["• Los datos reflejan el estado al momento del cierre de caja"],
+        [
+          "• El inventario físico valorado (IPV) muestra el stock actual de todos los productos",
+        ],
         ["• Para consultas contactar al administrador del sistema"],
       ];
 
       // Convertir a CSV
       const csvContent = closureData
-        .map((row) => row.map((field) => `"${field}"`).join(","))
+        .map((row) => {
+          if (Array.isArray(row)) {
+            return row.map((field) => `"${field}"`).join(",");
+          }
+          return `"${row}"`;
+        })
         .join("\n");
 
       // Crear y descargar archivo
@@ -194,10 +326,11 @@ const ClosuresHistory = () => {
       const link = document.createElement("a");
       link.setAttribute("href", url);
 
-      // Nombre del archivo más descriptivo
-      const fileName = `cierre_caja_${closure.id || closure.id_local}_${
+      // Nombre del archivo más descriptivo CON IPV
+      const fileName = `cierre_caja_con_ipv_${closure.id || closure.id_local}_${
         closure.vendedor_nombre || "vendedor"
       }_${new Date(closure.fecha_cierre).toISOString().split("T")[0]}.csv`;
+
       link.setAttribute("download", fileName);
       link.style.visibility = "hidden";
 
@@ -205,17 +338,24 @@ const ClosuresHistory = () => {
       link.click();
       document.body.removeChild(link);
 
-      console.log("✅ CSV exportado exitosamente:", fileName);
+      console.log("✅ CSV con IPV exportado exitosamente:", {
+        fileName,
+        totalProductos: inventoryData.inventario.length,
+        valorTotalInventario: inventoryData.totales.total_valor_inventario,
+      });
     } catch (error) {
-      console.error("❌ Error exportando CSV individual:", error);
-      alert("Error al exportar el cierre: " + error.message);
+      console.error("❌ Error exportando CSV con IPV:", error);
+      alert("Error al exportar el cierre con inventario: " + error.message);
     }
   };
 
-  // ✅ EXPORTAR TODOS LOS CIERRES - MEJORADO
-  const exportAllToCSV = () => {
+  // ✅ EXPORTAR TODOS LOS CIERRES CON IPV INCLUIDO
+  const exportAllToCSV = async () => {
     try {
-      console.log("📊 Exportando TODOS los cierres offline a CSV");
+      console.log("📊 Exportando TODOS los cierres offline a CSV con IPV");
+
+      // Obtener inventario actual
+      const inventoryData = await getCurrentInventory();
 
       // Encabezados mejorados
       const headers = [
@@ -227,7 +367,6 @@ const ClosuresHistory = () => {
         "EFECTIVO",
         "TARJETA",
         "TRANSFERENCIA",
-        // ✅ SOLO INCLUIR GANANCIA BRUTA SI ES ADMIN
         ...(isAdmin ? ["GANANCIA BRUTA"] : []),
         "SALDO FINAL TEÓRICO",
         "SALDO FINAL REAL",
@@ -271,9 +410,38 @@ const ClosuresHistory = () => {
         return baseData.join(",");
       });
 
+      // ✅ SECCIÓN DE INVENTARIO PARA EL REPORTE GENERAL
+      const inventorySection = [
+        "",
+        "INVENTARIO FÍSICO VALORADO (IPV) - ACTUAL",
+        `Fecha de captura: ${new Date().toLocaleString("es-MX")}`,
+        `Total productos: ${inventoryData.totales.total_productos}`,
+        `Valor total inventario: ${formatCurrency(
+          inventoryData.totales.total_valor_inventario
+        )}`,
+        `Productos agotados: ${inventoryData.totales.productos_agotados}`,
+        `Productos bajo stock: ${inventoryData.totales.productos_bajo_stock}`,
+        `Productos normal: ${inventoryData.totales.productos_normal}`,
+        "",
+        "Código Barras,Producto,Categoría,Stock Actual,Stock Mínimo,Estado,Precio Compra,Precio Venta,Valor Inventario",
+        ...inventoryData.inventario.map((item) =>
+          [
+            item.codigo_barras,
+            `"${item.nombre}"`,
+            `"${item.categoria}"`,
+            item.stock_actual,
+            item.stock_minimo,
+            item.estado,
+            formatCurrency(item.precio_compra),
+            formatCurrency(item.precio_venta),
+            formatCurrency(item.valor_inventario),
+          ].join(",")
+        ),
+      ].join("\n");
+
       // Crear contenido completo con encabezado informativo
       const fullCSVContent = [
-        "REPORTE GENERAL DE CIERRES DE CAJA",
+        "REPORTE GENERAL DE CIERRES DE CAJA CON INVENTARIO",
         `Fecha de generación: ${new Date().toLocaleString("es-MX")}`,
         `Total de cierres: ${filteredClosures.length}`,
         `Generado por: ${
@@ -284,9 +452,12 @@ const ClosuresHistory = () => {
         headers,
         ...csvData,
         "",
+        inventorySection,
+        "",
         "NOTAS:",
         "• Este reporte contiene todos los cierres de caja almacenados localmente",
         "• Los datos están filtrados según los criterios aplicados en pantalla",
+        "• El inventario físico valorado (IPV) muestra el stock actual de todos los productos",
         ...(isAdmin
           ? []
           : [
@@ -301,16 +472,20 @@ const ClosuresHistory = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `reporte_general_cierres_${
+      a.download = `reporte_general_cierres_con_ipv_${
         new Date().toISOString().split("T")[0]
       }.csv`;
       a.click();
       URL.revokeObjectURL(url);
 
-      console.log("✅ Todos los cierres offline exportados exitosamente");
+      console.log(
+        "✅ Todos los cierres offline con IPV exportados exitosamente"
+      );
     } catch (error) {
-      console.error("❌ Error exportando todos los cierres:", error);
-      alert("Error al exportar todos los cierres: " + error.message);
+      console.error("❌ Error exportando todos los cierres con IPV:", error);
+      alert(
+        "Error al exportar todos los cierres con inventario: " + error.message
+      );
     }
   };
 
@@ -575,17 +750,18 @@ const ClosuresHistory = () => {
             </button>
           </div>
 
-          {/* ✅ BOTÓN EXPORTAR TODOS - SIEMPRE ACTIVO */}
+          {/* ✅ BOTÓN EXPORTAR TODOS - AHORA CON IPV */}
           {filteredClosures.length > 0 && (
             <button
               className={styles.exportButton}
               onClick={exportAllToCSV}
-              title="Exportar todos los cierres a CSV"
+              title="Exportar todos los cierres a CSV con inventario"
             >
               <FiDownload className={styles.exportIcon} />
-              Exportar Todos
+              Exportar Todos con IPV
             </button>
           )}
+
           {/* ✅ BOTÓN PARA LIMPIAR TODOS LOS CIERRES LOCALES */}
           {filteredClosures.length > 0 && (
             <button
@@ -709,19 +885,20 @@ const ClosuresHistory = () => {
                         </span>
                       </td>
                       <td className={styles.actionsCell}>
-                        {/* ✅ BOTÓN DE EXPORTACIÓN INDIVIDUAL - SIEMPRE ACTIVO */}
+                        {/* ✅ BOTÓN DE EXPORTACIÓN INDIVIDUAL - AHORA CON IPV */}
                         <button
                           className={styles.individualExportButton}
-                          onClick={(e) => {
-                            e.stopPropagation(); // Evitar que se expanda la fila
-                            exportClosureToCSV(closure);
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await exportClosureToCSV(closure);
                           }}
-                          title="Exportar este cierre a CSV"
+                          title="Exportar este cierre a CSV con inventario completo"
                         >
-                          <FiDownload />
-                          CSV
+                          <FiPackage />
+                          CSV con IPV
                         </button>
-                        {/* ✅ NUEVO BOTÓN PARA ELIMINAR CIERRE */}
+
+                        {/* ✅ BOTÓN PARA ELIMINAR CIERRE */}
                         <button
                           className={styles.deleteButton}
                           onClick={(e) => {

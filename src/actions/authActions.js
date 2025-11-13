@@ -700,10 +700,6 @@ export const startChecking = () => {
     // ✅ CASO 1: NO HAY CREDENCIALES - LIMPIAR Y TERMINAR
     if (!token || !user) {
       console.log("❌ No hay credenciales guardadas");
-
-      // ✅ LIMPIAR CUALQUIER ESTADO RESIDUAL
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
       dispatch({ type: types.authLogout });
       dispatch(checkingFinish());
       return;
@@ -741,6 +737,10 @@ export const startChecking = () => {
 
       // ✅ MODO ONLINE: VERIFICAR TOKEN CON SERVIDOR
       console.log("🌐 Modo online - Verificando token...");
+
+      // ✅ VERIFICAR SI YA SE MOSTRÓ LA ALERTA EN ESTA SESIÓN
+      const alertAlreadyShown = sessionStorage.getItem("token_invalid_shown");
+
       try {
         const response = await fetchConToken("auth/verify-token");
 
@@ -750,18 +750,20 @@ export const startChecking = () => {
             type: types.authLogin,
             payload: userData,
           });
+          // ✅ LIMPIAR EL FLAG SI EL TOKEN ES VÁLIDO
+          sessionStorage.removeItem("token_invalid_shown");
         } else {
-          // ❌ TOKEN INVÁLIDO ONLINE - LIMPIAR SILENCIOSAMENTE
+          // ❌ TOKEN INVÁLIDO ONLINE - LIMPIAR CREDENCIALES
           console.warn("⚠️ Token inválido online - Limpiando credenciales");
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           dispatch({ type: types.authLogout });
 
-          // ✅ SOLO MOSTRAR ALERTA UNA VEZ AL INICIAR LA APLICACIÓN
-          if (!sessionStorage.getItem("token_invalid_shown")) {
+          // ✅ SOLO MOSTRAR ALERTA SI NO SE HA MOSTRADO EN ESTA SESIÓN
+          if (!alertAlreadyShown) {
             sessionStorage.setItem("token_invalid_shown", "true");
 
-            // ✅ MOSTRAR ALERTA PERO NO BLOQUEAR
+            console.log("🔄 Mostrando alerta de sesión expirada...");
             Swal.fire({
               icon: "warning",
               title: "Sesión expirada",
@@ -769,14 +771,12 @@ export const startChecking = () => {
               confirmButtonText: "Entendido",
               background: "#fef2f2",
               color: "#7f1d1d",
-              timer: 4000,
+              timer: 5000,
               showConfirmButton: true,
-            }).then(() => {
-              // Limpiar el flag para permitir mostrar nuevamente en el futuro
-              setTimeout(() => {
-                sessionStorage.removeItem("token_invalid_shown");
-              }, 1000);
+              allowOutsideClick: true,
             });
+          } else {
+            console.log("ℹ️ Alerta ya mostrada en esta sesión - omitiendo");
           }
         }
       } catch (onlineError) {
