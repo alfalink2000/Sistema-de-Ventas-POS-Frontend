@@ -675,31 +675,6 @@ export const clearError = () => ({
 });
 
 // ✅ FUNCIÓN AUXILIAR PARA MANEJAR TOKEN INVÁLIDO
-const handleInvalidToken = async (dispatch) => {
-  console.warn("⚠️ Token inválido o expirado - Limpiando credenciales");
-
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  dispatch({ type: types.authLogout });
-
-  // ✅ PREVENIR BUCLE: Verificar si ya se mostró la alerta en esta sesión
-  if (!sessionStorage.getItem("token_expired_shown")) {
-    sessionStorage.setItem("token_expired_shown", "true");
-
-    await Swal.fire({
-      icon: "warning",
-      title: "Sesión expirada",
-      text: "Tu sesión ha caducado. Por favor, inicia sesión nuevamente.",
-      confirmButtonText: "Ir al login",
-      background: "#fef2f2",
-      color: "#7f1d1d",
-      allowOutsideClick: false,
-    }).then(() => {
-      // Limpiar el flag después de que el usuario confirme
-      sessionStorage.removeItem("token_expired_shown");
-    });
-  }
-};
 
 // ✅ DETECTAR ERRORES DE RED
 const isNetworkError = (error) => {
@@ -722,15 +697,15 @@ export const startChecking = () => {
       isOnline: navigator.onLine,
     });
 
-    // ✅ CASO 1: NO HAY CREDENCIALES - REDIRIGIR INMEDIATAMENTE
+    // ✅ CASO 1: NO HAY CREDENCIALES - LIMPIAR Y TERMINAR
     if (!token || !user) {
-      console.log("❌ No hay credenciales guardadas - Redirigiendo al login");
+      console.log("❌ No hay credenciales guardadas");
 
       // ✅ LIMPIAR CUALQUIER ESTADO RESIDUAL
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       dispatch({ type: types.authLogout });
       dispatch(checkingFinish());
-
-      // ✅ NO MOSTRAR ALERTAS EN ESTE CASO - ES NORMAL AL INICIAR
       return;
     }
 
@@ -776,8 +751,33 @@ export const startChecking = () => {
             payload: userData,
           });
         } else {
-          // ❌ TOKEN INVÁLIDO - LIMPIAR Y MOSTRAR ALERTA UNA SOLA VEZ
-          await handleInvalidToken(dispatch);
+          // ❌ TOKEN INVÁLIDO ONLINE - LIMPIAR SILENCIOSAMENTE
+          console.warn("⚠️ Token inválido online - Limpiando credenciales");
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          dispatch({ type: types.authLogout });
+
+          // ✅ SOLO MOSTRAR ALERTA UNA VEZ AL INICIAR LA APLICACIÓN
+          if (!sessionStorage.getItem("token_invalid_shown")) {
+            sessionStorage.setItem("token_invalid_shown", "true");
+
+            // ✅ MOSTRAR ALERTA PERO NO BLOQUEAR
+            Swal.fire({
+              icon: "warning",
+              title: "Sesión expirada",
+              text: "Tu sesión ha caducado. Por favor, inicia sesión nuevamente.",
+              confirmButtonText: "Entendido",
+              background: "#fef2f2",
+              color: "#7f1d1d",
+              timer: 4000,
+              showConfirmButton: true,
+            }).then(() => {
+              // Limpiar el flag para permitir mostrar nuevamente en el futuro
+              setTimeout(() => {
+                sessionStorage.removeItem("token_invalid_shown");
+              }, 1000);
+            });
+          }
         }
       } catch (onlineError) {
         console.warn("⚠️ Error en verificación online:", onlineError);
@@ -790,13 +790,18 @@ export const startChecking = () => {
             payload: userData,
           });
         } else {
-          // ❌ OTROS ERRORES: LIMPIAR CREDENCIALES
-          await handleInvalidToken(dispatch);
+          // ❌ OTROS ERRORES: LIMPIAR CREDENCIALES SILENCIOSAMENTE
+          console.warn("❌ Error crítico - Limpiando credenciales");
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          dispatch({ type: types.authLogout });
         }
       }
     } catch (error) {
       console.error("❌ Error en verificación:", error);
-      await handleInvalidToken(dispatch);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      dispatch({ type: types.authLogout });
     } finally {
       dispatch(checkingFinish());
     }
@@ -804,6 +809,7 @@ export const startChecking = () => {
 };
 
 // ✅ LOGIN PRINCIPAL - VERSIÓN COMPLETA
+// ✅ LOGIN PRINCIPAL - VERSIÓN CORREGIDA
 export const startLogin = (username, password) => {
   return async (dispatch) => {
     dispatch({ type: types.authStartLoading });
@@ -992,16 +998,20 @@ export const startOfflineChecking = () => {
 
         dispatch(checkingFinish());
 
-        // Mostrar alerta de modo offline
-        setTimeout(() => {
-          Swal.fire({
-            icon: "info",
-            title: "Modo Offline",
-            text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-        }, 1000);
+        // Mostrar alerta de modo offline solo si no se mostró recientemente
+        if (!sessionStorage.getItem("offline_mode_shown")) {
+          sessionStorage.setItem("offline_mode_shown", "true");
+
+          setTimeout(() => {
+            Swal.fire({
+              icon: "info",
+              title: "Modo Offline",
+              text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
+              timer: 3000,
+              showConfirmButton: false,
+            });
+          }, 1000);
+        }
       } else {
         console.warn("❌ Usuario no encontrado en datos offline");
         localStorage.removeItem("token");
