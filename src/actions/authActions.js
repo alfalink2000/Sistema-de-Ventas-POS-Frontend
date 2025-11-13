@@ -899,61 +899,48 @@ export const startLogin = (username, password) => {
 };
 
 // ✅ OFFLINE CHECKING - VERSIÓN COMPLETA
+// ✅ OFFLINE CHECKING - VERSIÓN SILENCIOSA
 export const startOfflineChecking = () => {
   return async (dispatch) => {
-    console.log("🔍 Iniciando verificación offline...");
+    console.log("🔍 Verificación offline silenciosa...");
 
     const token = localStorage.getItem("token");
     const user = localStorage.getItem("user");
 
     if (!token || !user) {
-      console.log("❌ No hay credenciales guardadas para offline");
+      console.log("❌ No hay credenciales para offline");
       dispatch(checkingFinish());
       return;
     }
 
     try {
       const userData = JSON.parse(user);
-
-      // Verificar si el usuario existe en IndexedDB
       const offlineUser = await AuthOfflineController.getUserByUsername(
         userData.username
       );
 
       if (offlineUser) {
-        console.log("✅ Credenciales offline válidas - Autenticando");
-
+        console.log(
+          "✅ Credenciales offline válidas - Autenticando silenciosamente"
+        );
         dispatch({
           type: types.authLogin,
           payload: userData,
         });
-
-        dispatch(checkingFinish());
-
-        // Mostrar alerta de modo offline solo si no se mostró recientemente
-        if (!sessionStorage.getItem("offline_mode_shown")) {
-          sessionStorage.setItem("offline_mode_shown", "true");
-
-          setTimeout(() => {
-            Swal.fire({
-              icon: "info",
-              title: "Modo Offline",
-              text: `Bienvenido ${userData.nombre}. Trabajando sin conexión.`,
-              timer: 3000,
-              showConfirmButton: false,
-            });
-          }, 1000);
-        }
       } else {
-        console.warn("❌ Usuario no encontrado en datos offline");
+        console.log("❌ Usuario no encontrado en datos offline");
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        dispatch(checkingFinish());
+        dispatch({ type: types.authLogout });
       }
     } catch (error) {
-      console.error("❌ Error en verificación offline:", error);
+      console.log(
+        "❌ Error en verificación offline - Limpiando silenciosamente"
+      );
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      dispatch({ type: types.authLogout });
+    } finally {
       dispatch(checkingFinish());
     }
   };
