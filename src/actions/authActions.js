@@ -24,6 +24,7 @@ export const clearError = () => ({
   type: types.authClearError,
 });
 
+// ✅ VERIFICACIÓN DE AUTENTICACIÓN - VERSIÓN FINAL
 export const startChecking = () => {
   return async (dispatch) => {
     const token = localStorage.getItem("token");
@@ -59,9 +60,9 @@ export const startChecking = () => {
 
       console.log("✅ Usuario encontrado en cache offline - Procesando...");
 
-      // ✅ MODO OFFLINE: Autenticar inmediatamente sin verificar token
+      // ✅ MODO OFFLINE: Autenticar inmediatamente SIN verificar token
       if (!navigator.onLine) {
-        console.log("📱 Modo offline - Autenticando sin verificar token");
+        console.log("📱 Modo offline - Autenticando SIN verificación de token");
         dispatch({
           type: types.authLogin,
           payload: userData,
@@ -71,7 +72,7 @@ export const startChecking = () => {
       }
 
       // ✅ MODO ONLINE: Verificar token con servidor
-      console.log("🌐 Verificando token con servidor...");
+      console.log("🌐 Modo online - Verificando token...");
       try {
         const response = await fetchConToken("auth/verify-token");
 
@@ -82,13 +83,15 @@ export const startChecking = () => {
             payload: userData,
           });
         } else {
-          // ❌ Token inválido online - Limpiar y redirigir al login
+          // ❌ Token inválido online - Limpiar y mostrar alerta UNA SOLA VEZ
           console.warn("⚠️ Token inválido online - Limpiando credenciales");
           localStorage.removeItem("token");
           localStorage.removeItem("user");
 
-          // Mostrar alerta solo una vez
-          if (!window.sessionStorage.getItem("token_expired_shown")) {
+          // ✅ PREVENIR BUCLE: Usar sessionStorage para mostrar alerta solo una vez
+          if (!sessionStorage.getItem("token_expired_shown")) {
+            sessionStorage.setItem("token_expired_shown", "true");
+
             await Swal.fire({
               icon: "warning",
               title: "Sesión expirada",
@@ -96,19 +99,25 @@ export const startChecking = () => {
               confirmButtonText: "Entendido",
               background: "#fef2f2",
               color: "#7f1d1d",
+            }).then(() => {
+              // Limpiar el flag después de que el usuario cierre el alert
+              setTimeout(() => {
+                sessionStorage.removeItem("token_expired_shown");
+              }, 1000);
             });
-            window.sessionStorage.setItem("token_expired_shown", "true");
           }
         }
       } catch (onlineError) {
         console.warn("⚠️ Error verificación online:", onlineError);
 
-        // ✅ EN CASO DE ERROR DE CONEXIÓN: Permitir offline
+        // ✅ EN CASO DE ERROR DE CONEXIÓN DURANTE VERIFICACIÓN: Permitir offline
         if (
           onlineError.message.includes("Failed to fetch") ||
           onlineError.message.includes("Network")
         ) {
-          console.log("🌐 Error de red - Autenticando en modo offline");
+          console.log(
+            "🌐 Error de red durante verificación - Autenticando en modo offline"
+          );
           dispatch({
             type: types.authLogin,
             payload: userData,
@@ -126,10 +135,6 @@ export const startChecking = () => {
       localStorage.removeItem("user");
     } finally {
       dispatch(checkingFinish());
-      // Limpiar flag después de un tiempo
-      setTimeout(() => {
-        window.sessionStorage.removeItem("token_expired_shown");
-      }, 5000);
     }
   };
 };
@@ -359,16 +364,7 @@ export const startOfflineChecking = () => {
 // ✅ SINCRONIZAR USUARIOS - VERSIÓN MEJORADA
 export const syncOfflineUsers = () => {
   return async (dispatch) => {
-    // ✅ EVITAR MÚLTIPLES SINCRONIZACIONES SIMULTÁNEAS
-    if (window.syncInProgress) {
-      console.log("⏳ Sincronización ya en progreso, omitiendo...");
-      return {
-        success: false,
-        error: "Sync already in progress",
-        silent: true,
-      };
-    }
-
+    // ✅ VERIFICAR CONEXIÓN
     if (!navigator.onLine) {
       console.log("📴 Sin conexión - No se puede sincronizar usuarios");
       return {
@@ -378,20 +374,7 @@ export const syncOfflineUsers = () => {
       };
     }
 
-    // ✅ VERIFICAR TOKEN ANTES DE SINCRONIZAR
-    const token = localStorage.getItem("token");
-    if (!token) {
-      console.log("❌ No hay token - No se puede sincronizar");
-      return {
-        success: false,
-        error: "No hay token disponible",
-        silent: true,
-      };
-    }
-
     try {
-      window.syncInProgress = true;
-
       Swal.fire({
         title: "Sincronizando...",
         text: "Actualizando datos de usuarios offline",
@@ -430,7 +413,7 @@ export const syncOfflineUsers = () => {
 
         return { success: true, count: result.count, stats };
       } else {
-        // ✅ ERRORES SILENCIOSOS PARA NO INTERRUMPIR AL USUARIO
+        // ✅ ERRORES SILENCIOSOS - No mostrar alertas que puedan causar bucles
         console.warn("Sincronización falló silenciosamente:", result.error);
         return {
           success: false,
@@ -442,14 +425,12 @@ export const syncOfflineUsers = () => {
       console.error("Error en sincronización de usuarios:", error);
       Swal.close();
 
-      // ✅ MANEJO SILENCIOSO DE ERRORES
+      // ✅ MANEJO SILENCIOSO DE ERRORES - Evitar bucles
       return {
         success: false,
         error: error.message,
-        silent: true,
+        silent: true, // ✅ NO PROPAGAR EL ERROR
       };
-    } finally {
-      window.syncInProgress = false;
     }
   };
 };

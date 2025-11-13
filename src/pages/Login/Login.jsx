@@ -1,6 +1,6 @@
-// pages/Login/Login.jsx - VERSIÓN CORREGIDA
+// pages/Login/Login.jsx - VERSIÓN MEJORADA
 import { useState, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import LoginForm from "../../components/features/auth/LoginForm/LoginForm";
 import OfflineDataStatus from "../../components/offline/OfflineDataStatus/OfflineDataStatus";
 import { syncOfflineUsers } from "../../actions/authActions";
@@ -8,64 +8,40 @@ import styles from "./Login.module.css";
 
 const Login = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [hasSyncedOnThisOnline, setHasSyncedOnThisOnline] = useState(false);
   const dispatch = useDispatch();
 
   useEffect(() => {
     const handleOnline = () => {
-      console.log("🌐 Conexión restaurada");
+      console.log("🌐 Conexión restaurada - Login page");
       setIsOnline(true);
 
-      // ✅ SOLO SINCRONIZAR UNA VEZ POR SESIÓN ONLINE
-      if (!hasSyncedOnThisOnline && !isSyncing) {
-        setIsSyncing(true);
-        console.log("🔄 Iniciando sincronización única...");
-
-        setTimeout(() => {
-          dispatch(syncOfflineUsers())
-            .then((result) => {
-              if (result.success) {
-                setHasSyncedOnThisOnline(true);
-              }
-            })
-            .finally(() => {
-              setIsSyncing(false);
-            });
-        }, 3000); // Retraso para estabilizar conexión
-      }
+      // ✅ SINCRONIZAR SOLO SI HAY USUARIOS OFFLINE EXISTENTES
+      setTimeout(async () => {
+        try {
+          const users = await AuthOfflineController.getAllOfflineUsers();
+          if (users.length > 0) {
+            console.log("🔄 Sincronizando usuarios existentes...");
+            dispatch(syncOfflineUsers());
+          }
+        } catch (error) {
+          console.log("ℹ️ No hay usuarios para sincronizar");
+        }
+      }, 2000);
     };
 
     const handleOffline = () => {
       console.log("📴 Conexión perdida - Modo offline");
       setIsOnline(false);
-      setIsSyncing(false);
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // ✅ SINCRONIZACIÓN INICIAL SI YA HAY CONEXIÓN
-    if (navigator.onLine && !hasSyncedOnThisOnline && !isSyncing) {
-      setIsSyncing(true);
-      setTimeout(() => {
-        dispatch(syncOfflineUsers())
-          .then((result) => {
-            if (result.success) {
-              setHasSyncedOnThisOnline(true);
-            }
-          })
-          .finally(() => {
-            setIsSyncing(false);
-          });
-      }, 2000);
-    }
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [dispatch, isSyncing, hasSyncedOnThisOnline]);
+  }, [dispatch]);
 
   return (
     <div className={styles.loginContainer}>
