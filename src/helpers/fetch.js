@@ -207,6 +207,9 @@ const baseURL =
   import.meta.env.VITE_API_URL ||
   "https://sistema-de-ventas-pos-backend.onrender.com/api";
 
+// ✅ VARIABLE DE CONTROL PARA EVITAR BUCLE
+let sessionExpiredShown = false;
+
 // ✅ HEADERS MEJORADOS
 const getCommonHeaders = (isFormData = false) => {
   const headers = {
@@ -220,10 +223,26 @@ const getCommonHeaders = (isFormData = false) => {
   return headers;
 };
 
-// ✅ FUNCIÓN PARA MOSTRAR ERROR DE SESIÓN EXPIRADA (SOLO ONLINE)
+// ✅ FUNCIÓN MEJORADA PARA MOSTRAR ERROR DE SESIÓN EXPIRADA (SIN BUCLE)
 async function mostrarErrorSesionExpirada() {
+  // Evitar mostrar múltiples veces
+  if (sessionExpiredShown) return;
+
   // Solo mostrar si estamos online
   if (!navigator.onLine) return;
+
+  const token = localStorage.getItem("token");
+  const user = localStorage.getItem("user");
+
+  // ✅ NO MOSTRAR SI NO HAY CREDENCIALES PREVIAS (inicio de app)
+  if (!token && !user) {
+    console.log("🔒 Inicio de app sin credenciales - No mostrar error");
+    return;
+  }
+
+  sessionExpiredShown = true;
+
+  console.log("🔐 Mostrando error de sesión expirada...");
 
   Swal.close();
   const result = await Swal.fire({
@@ -239,7 +258,10 @@ async function mostrarErrorSesionExpirada() {
   if (result.isConfirmed) {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    sessionExpiredShown = false; // Resetear para futuras sesiones
     window.location.href = "/login";
+  } else {
+    sessionExpiredShown = false;
   }
 }
 
@@ -352,6 +374,44 @@ const handleOfflineOperation = async (endpoint, method, data) => {
   }
 };
 
+// ✅ MANEJO UNIFICADO DE RESPUESTAS
+async function handleResponse(response, context) {
+  const contentType = response.headers.get("content-type");
+
+  // ✅ Manejar error 401 antes de procesar la respuesta
+  if (response.status === 401 && navigator.onLine) {
+    console.error(`❌ ${context} - Error 401: No autorizado`);
+    throw new Error("401 - Token no válido o expirado");
+  }
+
+  // Verificar si la respuesta es JSON
+  if (contentType && contentType.includes("application/json")) {
+    const result = await response.json();
+
+    if (!response.ok) {
+      const errorMsg =
+        result.error ||
+        result.msg ||
+        `Error ${response.status}: ${response.statusText}`;
+      console.error(`❌ ${context} - Error:`, errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    console.log(`✅ ${context} - Éxito`);
+    return result;
+  } else {
+    // Si no es JSON, devolver texto
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error(`❌ ${context} - Error texto:`, text);
+      throw new Error(`Error ${response.status}: ${text}`);
+    }
+
+    return text;
+  }
+}
+
 // ✅ FETCH SIN TOKEN - CON MANEJO OFFLINE INTELIGENTE
 export const fetchSinToken = async (endpoint, data, method = "GET") => {
   const url = `${baseURL}/${endpoint}`;
@@ -420,11 +480,15 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
   console.log(`🌐 fetchConToken: ${method} ${url}`);
   console.log(`🔑 Token:`, token ? "PRESENTE" : "AUSENTE");
 
-  // ✅ SOLO VERIFICAR TOKEN EN MODO ONLINE
+  // ✅ SOLO VERIFICAR TOKEN EN MODO ONLINE Y PARA ENDPOINTS CRÍTICOS
   if (!token && navigator.onLine) {
-    console.error("❌ No hay token disponible");
-    await mostrarErrorSesionExpirada();
-    throw new Error("Token no disponible");
+    const criticalEndpoints = ["auth/verify-token", "users/profile"];
+
+    if (criticalEndpoints.includes(endpoint)) {
+      console.error("❌ No hay token disponible para endpoint crítico");
+      // NO llamar a mostrarErrorSesionExpirada aquí - dejar que el action maneje silenciosamente
+      throw new Error("Token no disponible");
+    }
   }
 
   const isFormData = data instanceof FormData;
@@ -447,9 +511,10 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
   try {
     console.log(`🔗 Ejecutando petición con token...`);
 
-    // ✅ TIMEOUT PARA RENDER
+    // ✅ TIMEOUT REDUCIDO PARA VERIFICACIÓN
+    const timeout = endpoint === "auth/verify-token" ? 8000 : 15000;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     config.signal = controller.signal;
 
     const response = await fetch(url, config);
@@ -465,7 +530,7 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
       return await handleOfflineOperation(endpoint, method, data);
     }
 
-    // ✅ MANEJAR ERRORES DE AUTENTICACIÓN SOLO EN MODO ONLINE
+    // ✅ SOLO MOSTRAR ERROR DE SESIÓN PARA ENDPOINTS CRÍTICOS EN ONLINE
     if (
       navigator.onLine &&
       (error.message.includes("401") ||
@@ -473,50 +538,20 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
         error.message.includes("jwt expired") ||
         error.message.includes("No autorizado"))
     ) {
-      await mostrarErrorSesionExpirada();
+      const criticalEndpoints = [
+        "auth/verify-token",
+        "users/profile",
+        "productos",
+      ];
+
+      if (criticalEndpoints.includes(endpoint)) {
+        await mostrarErrorSesionExpirada();
+      }
     }
 
     throw error;
   }
 };
-
-// ✅ MANEJO UNIFICADO DE RESPUESTAS
-async function handleResponse(response, context) {
-  const contentType = response.headers.get("content-type");
-
-  // ✅ Manejar error 401 antes de procesar la respuesta
-  if (response.status === 401 && navigator.onLine) {
-    console.error(`❌ ${context} - Error 401: No autorizado`);
-    throw new Error("401 - Token no válido o expirado");
-  }
-
-  // Verificar si la respuesta es JSON
-  if (contentType && contentType.includes("application/json")) {
-    const result = await response.json();
-
-    if (!response.ok) {
-      const errorMsg =
-        result.error ||
-        result.msg ||
-        `Error ${response.status}: ${response.statusText}`;
-      console.error(`❌ ${context} - Error:`, errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    console.log(`✅ ${context} - Éxito`);
-    return result;
-  } else {
-    // Si no es JSON, devolver texto
-    const text = await response.text();
-
-    if (!response.ok) {
-      console.error(`❌ ${context} - Error texto:`, text);
-      throw new Error(`Error ${response.status}: ${text}`);
-    }
-
-    return text;
-  }
-}
 
 // ✅ FUNCIONES AUXILIARES PARA OFFLINE
 
