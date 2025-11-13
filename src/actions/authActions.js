@@ -44,53 +44,92 @@ export const startChecking = () => {
     try {
       const userData = JSON.parse(user);
 
-      // ✅ SIEMPRE: Buscar usuario en cache offline
+      // ✅ SIEMPRE: Buscar usuario en cache offline primero
       const offlineUser = await AuthOfflineController.getUserByUsername(
         userData.username
       );
 
-      if (offlineUser) {
-        console.log("✅ Usuario encontrado en cache offline - Autenticando");
-
-        // ✅ EN MODO OFFLINE: IGNORAR EXPIRACIÓN DEL TOKEN
-        if (!navigator.onLine) {
-          console.log("📱 Modo offline - Ignorando expiración de token");
-          dispatch({ type: types.authLogin, payload: userData });
-          dispatch(checkingFinish());
-          return;
-        }
-
-        // ✅ EN MODO ONLINE: Verificar token solo si hay conexión
-        try {
-          console.log("🌐 Verificando token con servidor...");
-          const response = await fetchConToken("auth/verify-token");
-
-          if (response.ok === true) {
-            console.log("✅ Token válido en servidor");
-            dispatch({ type: types.authLogin, payload: userData });
-          } else {
-            // ❌ Token inválido online, pero permitimos offline
-            console.warn(
-              "⚠️ Token inválido online, pero usuario existe offline"
-            );
-            dispatch({ type: types.authLogin, payload: userData });
-          }
-        } catch (onlineError) {
-          console.warn(
-            "⚠️ Error verificación online, usando modo offline:",
-            onlineError
-          );
-          dispatch({ type: types.authLogin, payload: userData });
-        }
-      } else {
+      if (!offlineUser) {
         console.warn("❌ Usuario no encontrado en datos offline");
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+        dispatch(checkingFinish());
+        return;
+      }
+
+      console.log("✅ Usuario encontrado en cache offline - Procesando...");
+
+      // ✅ MODO OFFLINE: Autenticar inmediatamente sin verificar token
+      if (!navigator.onLine) {
+        console.log("📱 Modo offline - Autenticando sin verificar token");
+        dispatch({
+          type: types.authLogin,
+          payload: userData,
+        });
+        dispatch(checkingFinish());
+        return;
+      }
+
+      // ✅ MODO ONLINE: Verificar token con servidor
+      console.log("🌐 Verificando token con servidor...");
+      try {
+        const response = await fetchConToken("auth/verify-token");
+
+        if (response.ok === true) {
+          console.log("✅ Token válido en servidor - Autenticando");
+          dispatch({
+            type: types.authLogin,
+            payload: userData,
+          });
+        } else {
+          // ❌ Token inválido online - Limpiar y redirigir al login
+          console.warn("⚠️ Token inválido online - Limpiando credenciales");
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+
+          // Mostrar alerta solo una vez
+          if (!window.sessionStorage.getItem("token_expired_shown")) {
+            await Swal.fire({
+              icon: "warning",
+              title: "Sesión expirada",
+              text: "Tu sesión ha caducado. Por favor, inicia sesión nuevamente.",
+              confirmButtonText: "Entendido",
+              background: "#fef2f2",
+              color: "#7f1d1d",
+            });
+            window.sessionStorage.setItem("token_expired_shown", "true");
+          }
+        }
+      } catch (onlineError) {
+        console.warn("⚠️ Error verificación online:", onlineError);
+
+        // ✅ EN CASO DE ERROR DE CONEXIÓN: Permitir offline
+        if (
+          onlineError.message.includes("Failed to fetch") ||
+          onlineError.message.includes("Network")
+        ) {
+          console.log("🌐 Error de red - Autenticando en modo offline");
+          dispatch({
+            type: types.authLogin,
+            payload: userData,
+          });
+        } else {
+          // ❌ Otros errores: Limpiar credenciales
+          console.error("❌ Error crítico en verificación:", onlineError);
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        }
       }
     } catch (error) {
       console.error("❌ Error en verificación de autenticación:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
     } finally {
       dispatch(checkingFinish());
+      // Limpiar flag después de un tiempo
+      setTimeout(() => {
+        window.sessionStorage.removeItem("token_expired_shown");
+      }, 5000);
     }
   };
 };
@@ -320,6 +359,16 @@ export const startOfflineChecking = () => {
 // ✅ SINCRONIZAR USUARIOS - VERSIÓN MEJORADA
 export const syncOfflineUsers = () => {
   return async (dispatch) => {
+    // ✅ EVITAR MÚLTIPLES SINCRONIZACIONES SIMULTÁNEAS
+    if (window.syncInProgress) {
+      console.log("⏳ Sincronización ya en progreso, omitiendo...");
+      return {
+        success: false,
+        error: "Sync already in progress",
+        silent: true,
+      };
+    }
+
     if (!navigator.onLine) {
       console.log("📴 Sin conexión - No se puede sincronizar usuarios");
       return {
@@ -329,7 +378,20 @@ export const syncOfflineUsers = () => {
       };
     }
 
+    // ✅ VERIFICAR TOKEN ANTES DE SINCRONIZAR
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log("❌ No hay token - No se puede sincronizar");
+      return {
+        success: false,
+        error: "No hay token disponible",
+        silent: true,
+      };
+    }
+
     try {
+      window.syncInProgress = true;
+
       Swal.fire({
         title: "Sincronizando...",
         text: "Actualizando datos de usuarios offline",
@@ -356,7 +418,6 @@ export const syncOfflineUsers = () => {
           stats.usersByRole[user.rol] = (stats.usersByRole[user.rol] || 0) + 1;
         });
 
-        // ✅ MENSAJE MEJORADO - Sin "error de sincronización"
         await Swal.fire({
           icon: "success",
           title: "Datos actualizados",
@@ -369,75 +430,26 @@ export const syncOfflineUsers = () => {
 
         return { success: true, count: result.count, stats };
       } else {
-        // ✅ MENSAJE MÁS AMIGABLE PARA FALLOS
-        throw new Error(result.error);
+        // ✅ ERRORES SILENCIOSOS PARA NO INTERRUMPIR AL USUARIO
+        console.warn("Sincronización falló silenciosamente:", result.error);
+        return {
+          success: false,
+          error: result.error,
+          silent: true,
+        };
       }
     } catch (error) {
       console.error("Error en sincronización de usuarios:", error);
       Swal.close();
 
-      // ✅ DETECTAR TIPO DE ERROR Y MOSTRAR MENSAJES APROPIADOS
-      if (
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("Network")
-      ) {
-        // ✅ CONEXIÓN PERDIDA DURANTE LA SINCRONIZACIÓN
-        await Swal.fire({
-          icon: "warning",
-          title: "Conexión interrumpida",
-          text: "La sincronización se pausó. Los datos locales están seguros. Se reanudará automáticamente cuando recuperes la conexión.",
-          confirmButtonText: "Entendido",
-          background: "#fffbf0",
-          color: "#78350f",
-        });
-      } else if (
-        error.message.includes("timeout") ||
-        error.message.includes("Timeout")
-      ) {
-        // ✅ TIEMPO DE ESPERA AGOTADO
-        await Swal.fire({
-          icon: "info",
-          title: "Servidor ocupado",
-          text: "El servidor está tardando en responder. Tus datos locales están seguros. Puedes intentar nuevamente más tarde.",
-          confirmButtonText: "Entendido",
-          background: "#f0f9ff",
-          color: "#1e293b",
-        });
-      } else if (
-        error.message.includes("401") ||
-        error.message.includes("token")
-      ) {
-        // ✅ ERROR DE AUTENTICACIÓN
-        await Swal.fire({
-          icon: "warning",
-          title: "Sesión expirada",
-          text: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
-          confirmButtonText: "Iniciar sesión",
-          background: "#fef2f2",
-          color: "#7f1d1d",
-        }).then(() => {
-          // Redirigir al login
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          window.location.href = "/login";
-        });
-      } else {
-        // ✅ ERROR GENÉRICO CON MENSAJE MÁS AMIGABLE
-        await Swal.fire({
-          icon: "info",
-          title: "Sincronización parcial",
-          text: "Algunos datos podrían no estar actualizados. Puedes seguir trabajando sin conexión sin problemas.",
-          confirmButtonText: "Continuar",
-          background: "#f0f9ff",
-          color: "#1e293b",
-        });
-      }
-
+      // ✅ MANEJO SILENCIOSO DE ERRORES
       return {
         success: false,
         error: error.message,
-        silent: true, // ✅ MARCADO COMO SILENCIOSO PARA NO PROPAGAR EL ERROR
+        silent: true,
       };
+    } finally {
+      window.syncInProgress = false;
     }
   };
 };

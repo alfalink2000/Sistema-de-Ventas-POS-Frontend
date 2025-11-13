@@ -9,6 +9,7 @@ import styles from "./Login.module.css";
 const Login = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasSyncedOnThisOnline, setHasSyncedOnThisOnline] = useState(false);
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -16,14 +17,22 @@ const Login = () => {
       console.log("🌐 Conexión restaurada");
       setIsOnline(true);
 
-      // ✅ SOLO SINCRONIZAR SI HAY CONEXIÓN Y NO ESTÁ YA SINCRONIZANDO
-      if (!isSyncing && navigator.onLine) {
+      // ✅ SOLO SINCRONIZAR UNA VEZ POR SESIÓN ONLINE
+      if (!hasSyncedOnThisOnline && !isSyncing) {
         setIsSyncing(true);
+        console.log("🔄 Iniciando sincronización única...");
+
         setTimeout(() => {
-          dispatch(syncOfflineUsers()).finally(() => {
-            setIsSyncing(false);
-          });
-        }, 2000);
+          dispatch(syncOfflineUsers())
+            .then((result) => {
+              if (result.success) {
+                setHasSyncedOnThisOnline(true);
+              }
+            })
+            .finally(() => {
+              setIsSyncing(false);
+            });
+        }, 3000); // Retraso para estabilizar conexión
       }
     };
 
@@ -36,15 +45,30 @@ const Login = () => {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
+    // ✅ SINCRONIZACIÓN INICIAL SI YA HAY CONEXIÓN
+    if (navigator.onLine && !hasSyncedOnThisOnline && !isSyncing) {
+      setIsSyncing(true);
+      setTimeout(() => {
+        dispatch(syncOfflineUsers())
+          .then((result) => {
+            if (result.success) {
+              setHasSyncedOnThisOnline(true);
+            }
+          })
+          .finally(() => {
+            setIsSyncing(false);
+          });
+      }, 2000);
+    }
+
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [dispatch, isSyncing]);
+  }, [dispatch, isSyncing, hasSyncedOnThisOnline]);
 
   return (
     <div className={styles.loginContainer}>
-      {/* ✅ HEADER MEJORADO CON ESTADO OFFLINE */}
       <div className={styles.offlineHeader}>
         <OfflineDataStatus />
       </div>
@@ -69,8 +93,6 @@ const Login = () => {
         </div>
 
         <LoginForm />
-
-        {/* ✅ INFORMACIÓN ADICIONAL PARA MODO OFFLINE */}
       </div>
     </div>
   );
