@@ -296,9 +296,9 @@
 
 // export default LoginForm;
 // components/features/auth/LoginForm/LoginForm.jsx - COMPLETO
+// components/features/auth/LoginForm/LoginForm.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
 import { startLogin } from "../../../../actions/authActions";
 import Input from "../../../ui/Input/Input";
 import styles from "./LoginForm.module.css";
@@ -317,18 +317,9 @@ const LoginForm = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { loading, error, isAuthenticated, checking } = useSelector(
+  const { loading, error, isAuthenticated } = useSelector(
     (state) => state.auth
   );
-
-  // ✅ REDIRIGIR SI YA ESTÁ AUTENTICADO
-  useEffect(() => {
-    if (isAuthenticated && !checking) {
-      console.log("✅ Usuario ya autenticado - Redirigiendo al dashboard");
-      navigate("/dashboard", { replace: true });
-    }
-  }, [isAuthenticated, checking, navigate]);
 
   // Detectar cambios de conexión
   useEffect(() => {
@@ -397,8 +388,10 @@ const LoginForm = () => {
             showConfirmButton: false,
           });
 
-          // ✅ REDIRIGIR AL DASHBOARD
-          navigate("/dashboard", { replace: true });
+          // ✅ NO USAR useNavigate - EL ROUTER DETECTARÁ EL CAMBIO DE ESTADO AUTOMÁTICAMENTE
+          console.log(
+            "✅ Login exitoso - Estado actualizado, AppRouter redirigirá automáticamente"
+          );
         } else {
           throw new Error(result.error || "Error en autenticación offline");
         }
@@ -409,12 +402,14 @@ const LoginForm = () => {
           startLogin(formData.username.trim(), formData.password)
         );
 
-        if (result?.success) {
-          // ✅ REDIRIGIR AL DASHBOARD DESPUÉS DE LOGIN EXITOSO
-          navigate("/dashboard", { replace: true });
-        } else {
+        if (!result?.success) {
           throw new Error(result?.error || "Error en autenticación online");
         }
+
+        // ✅ NO USAR useNavigate - startLogin YA ACTUALIZA EL ESTADO Y EL ROUTER REDIRIGE
+        console.log(
+          "✅ Login online exitoso - AppRouter redirigirá automáticamente"
+        );
       }
     } catch (err) {
       console.error("❌ Error en handleSubmit:", err);
