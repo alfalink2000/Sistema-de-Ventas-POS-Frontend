@@ -811,9 +811,13 @@ export const startLogin = (username, password) => {
             localStorage.setItem("token", token);
             localStorage.setItem("user", JSON.stringify(usuario));
 
-            console.log("✅ Login online exitoso");
+            console.log("✅ Login online exitoso - Credenciales guardadas");
 
-            // ✅ GUARDAR USUARIO EN INDEXEDDB PARA USO OFFLINO FUTURO
+            // ✅ CREAR TOKEN OFFLINE DE RESPALDO
+            const offlineToken = `offline-backup-${Date.now()}`;
+            localStorage.setItem("offline-token-backup", offlineToken);
+
+            // ✅ GUARDAR USUARIO EN INDEXEDDB PARA OFFLINE
             try {
               await AuthOfflineController.saveUser(usuario, token);
               console.log("✅ Usuario guardado para uso offline");
