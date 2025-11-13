@@ -139,6 +139,170 @@ export const startChecking = () => {
   };
 };
 // ✅ LOGIN PRINCIPAL
+// export const startLogin = (username, password) => {
+//   return async (dispatch) => {
+//     dispatch({ type: types.authStartLoading });
+
+//     try {
+//       console.log("🔐 INICIANDO LOGIN para:", username);
+
+//       let loginResult;
+
+//       // 1. INTENTAR ONLINE PRIMERO
+//       if (navigator.onLine) {
+//         try {
+//           console.log("🔄 Intentando login ONLINE...");
+//           const response = await fetchSinToken(
+//             "auth/login",
+//             { username, password },
+//             "POST"
+//           );
+
+//           console.log("📥 Respuesta del servidor:", response);
+
+//           if (response.ok === true) {
+//             const { token, usuario } = response;
+
+//             // ✅ GUARDAR TOKEN INMEDIATAMENTE
+//             localStorage.setItem("token", token);
+//             localStorage.setItem("user", JSON.stringify(usuario));
+
+//             console.log(
+//               "✅ Login online exitoso - Token guardado:",
+//               token ? "✅" : "❌"
+//             );
+
+//             // ✅ GUARDAR USUARIO EN INDEXEDDB
+//             console.log("💾 Guardando usuario en IndexedDB para offline...");
+//             try {
+//               const saveResult = await AuthOfflineController.saveUser(
+//                 usuario,
+//                 token
+//               );
+//               console.log("💾 Resultado de guardar usuario:", saveResult);
+
+//               if (!saveResult.success) {
+//                 console.error(
+//                   "❌ No se pudo guardar usuario offline:",
+//                   saveResult.error
+//                 );
+//               } else {
+//                 console.log(
+//                   "✅ Usuario guardado exitosamente para uso offline"
+//                 );
+//               }
+//             } catch (saveError) {
+//               console.error("❌ Error guardando usuario offline:", saveError);
+//             }
+
+//             // ✅ DISPATCH INMEDIATO
+//             dispatch({
+//               type: types.authLogin,
+//               payload: usuario,
+//             });
+
+//             // ✅ VERIFICAR INMEDIATAMENTE QUE EL TOKEN FUNCIONE
+//             try {
+//               console.log("🔍 Verificando que el token funcione...");
+//               const testResponse = await fetchConToken("productos");
+//               console.log("✅ Token verificado correctamente");
+//             } catch (tokenError) {
+//               console.error("❌ El token no funciona:", tokenError);
+//             }
+
+//             // ✅ CARGAR DATOS DESPUÉS DEL LOGIN
+//             try {
+//               await dispatch(loadProducts());
+//               await dispatch(loadCategories());
+//             } catch (loadError) {
+//               console.error("Error cargando datos:", loadError);
+//             }
+
+//             // ✅ SINCRONIZACIÓN NO BLOQUEANTE
+//             // setTimeout(async () => {
+//             //   try {
+//             //     if (navigator.onLine) {
+//             //       await SyncController.syncMasterData();
+//             //     }
+//             //   } catch (syncError) {
+//             //     console.error("❌ Error sincronizando:", syncError);
+//             //   }
+//             // }, 1000);
+
+//             await Swal.fire({
+//               icon: "success",
+//               title: "¡Bienvenido!",
+//               text: `Hola ${usuario.nombre}`,
+//               timer: 2000,
+//               showConfirmButton: false,
+//             });
+
+//             return { success: true, user: usuario };
+//           } else {
+//             throw new Error(response.error || "Credenciales incorrectas");
+//           }
+//         } catch (onlineError) {
+//           console.error("💥 Error en login online:", onlineError);
+//           // Si es error de red, continuar con offline
+//           if (onlineError.message.includes("Failed to fetch")) {
+//             console.log("🌐 Error de red - continuando offline");
+//           } else {
+//             throw onlineError;
+//           }
+//         }
+//       }
+
+//       // 2. MODO OFFLINE
+//       console.log("📴 Intentando login OFFLINE...");
+//       const offlineResult = await AuthOfflineController.verifyCredentials(
+//         username,
+//         password
+//       );
+
+//       if (offlineResult.success) {
+//         const { user, token } = offlineResult;
+
+//         localStorage.setItem("token", token);
+//         localStorage.setItem("user", JSON.stringify(user));
+
+//         dispatch({
+//           type: types.authLogin,
+//           payload: user,
+//         });
+
+//         await Swal.fire({
+//           icon: "warning",
+//           title: "Modo Offline",
+//           text: `Hola ${user.nombre}. Trabajando sin conexión.`,
+//           timer: 3000,
+//           showConfirmButton: false,
+//         });
+
+//         return { success: true, user: user, isOffline: true };
+//       } else {
+//         throw new Error(offlineResult.error || "Credenciales incorrectas");
+//       }
+//     } catch (error) {
+//       console.error("❌ Error final en login:", error);
+
+//       await Swal.fire({
+//         icon: "error",
+//         title: "Error de acceso",
+//         text: error.message,
+//         confirmButtonText: "Entendido",
+//       });
+
+//       dispatch({
+//         type: types.authError,
+//         payload: error.message,
+//       });
+
+//       return { success: false, error: error.message };
+//     } finally {
+//       dispatch({ type: types.authFinishLoading });
+//     }
+//   };
+// };
 export const startLogin = (username, password) => {
   return async (dispatch) => {
     dispatch({ type: types.authStartLoading });
@@ -146,9 +310,16 @@ export const startLogin = (username, password) => {
     try {
       console.log("🔐 INICIANDO LOGIN para:", username);
 
-      let loginResult;
+      // 1. PRIMERO VERIFICAR SI HAY USUARIOS OFFLINE DISPONIBLES
+      const offlineUsers = await AuthOfflineController.getAllOfflineUsers();
+      const hasOfflineUsers = offlineUsers && offlineUsers.length > 0;
 
-      // 1. INTENTAR ONLINE PRIMERO
+      console.log(
+        "📊 Usuarios offline disponibles:",
+        offlineUsers?.length || 0
+      );
+
+      // 2. SI ESTÁ ONLINE, INTENTAR LOGIN ONLINE PRIMERO
       if (navigator.onLine) {
         try {
           console.log("🔄 Intentando login ONLINE...");
@@ -172,27 +343,14 @@ export const startLogin = (username, password) => {
               token ? "✅" : "❌"
             );
 
-            // ✅ GUARDAR USUARIO EN INDEXEDDB
+            // ✅ GUARDAR USUARIO EN INDEXEDDB PARA USO OFFLINO FUTURO
             console.log("💾 Guardando usuario en IndexedDB para offline...");
             try {
-              const saveResult = await AuthOfflineController.saveUser(
-                usuario,
-                token
-              );
-              console.log("💾 Resultado de guardar usuario:", saveResult);
-
-              if (!saveResult.success) {
-                console.error(
-                  "❌ No se pudo guardar usuario offline:",
-                  saveResult.error
-                );
-              } else {
-                console.log(
-                  "✅ Usuario guardado exitosamente para uso offline"
-                );
-              }
+              await AuthOfflineController.saveUser(usuario, token);
+              console.log("✅ Usuario guardado exitosamente para uso offline");
             } catch (saveError) {
               console.error("❌ Error guardando usuario offline:", saveError);
+              // NO IMPEDIR EL LOGIN POR ERROR AL GUARDAR OFFLINE
             }
 
             // ✅ DISPATCH INMEDIATO
@@ -201,15 +359,6 @@ export const startLogin = (username, password) => {
               payload: usuario,
             });
 
-            // ✅ VERIFICAR INMEDIATAMENTE QUE EL TOKEN FUNCIONE
-            try {
-              console.log("🔍 Verificando que el token funcione...");
-              const testResponse = await fetchConToken("productos");
-              console.log("✅ Token verificado correctamente");
-            } catch (tokenError) {
-              console.error("❌ El token no funciona:", tokenError);
-            }
-
             // ✅ CARGAR DATOS DESPUÉS DEL LOGIN
             try {
               await dispatch(loadProducts());
@@ -217,17 +366,6 @@ export const startLogin = (username, password) => {
             } catch (loadError) {
               console.error("Error cargando datos:", loadError);
             }
-
-            // ✅ SINCRONIZACIÓN NO BLOQUEANTE
-            // setTimeout(async () => {
-            //   try {
-            //     if (navigator.onLine) {
-            //       await SyncController.syncMasterData();
-            //     }
-            //   } catch (syncError) {
-            //     console.error("❌ Error sincronizando:", syncError);
-            //   }
-            // }, 1000);
 
             await Swal.fire({
               icon: "success",
@@ -243,44 +381,61 @@ export const startLogin = (username, password) => {
           }
         } catch (onlineError) {
           console.error("💥 Error en login online:", onlineError);
-          // Si es error de red, continuar con offline
-          if (onlineError.message.includes("Failed to fetch")) {
-            console.log("🌐 Error de red - continuando offline");
+
+          // ✅ SI HAY ERROR DE RED Y HAY USUARIOS OFFLINE, INTENTAR OFFLINE
+          if (
+            onlineError.message.includes("Failed to fetch") &&
+            hasOfflineUsers
+          ) {
+            console.log("🌐 Error de red - continuando con login offline...");
+            // Continuará al bloque offline más abajo
           } else {
+            // ❌ SI NO HAY USUARIOS OFFLINE O ES OTRO ERROR, PROPAGAR EL ERROR
             throw onlineError;
           }
         }
       }
 
-      // 2. MODO OFFLINE
-      console.log("📴 Intentando login OFFLINE...");
-      const offlineResult = await AuthOfflineController.verifyCredentials(
-        username,
-        password
-      );
+      // 3. MODO OFFLINE O FALLBACK OFFLINE
+      // Solo intentar offline si hay usuarios disponibles offline
+      if (hasOfflineUsers) {
+        console.log("📴 Intentando login OFFLINE...");
+        const offlineResult = await AuthOfflineController.verifyCredentials(
+          username,
+          password
+        );
 
-      if (offlineResult.success) {
-        const { user, token } = offlineResult;
+        if (offlineResult.success) {
+          const { user, token } = offlineResult;
 
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
+          localStorage.setItem("token", token);
+          localStorage.setItem("user", JSON.stringify(user));
 
-        dispatch({
-          type: types.authLogin,
-          payload: user,
-        });
+          dispatch({
+            type: types.authLogin,
+            payload: user,
+          });
 
-        await Swal.fire({
-          icon: "warning",
-          title: "Modo Offline",
-          text: `Hola ${user.nombre}. Trabajando sin conexión.`,
-          timer: 3000,
-          showConfirmButton: false,
-        });
+          await Swal.fire({
+            icon: "warning",
+            title: "Modo Offline",
+            text: `Hola ${user.nombre}. Trabajando sin conexión.`,
+            timer: 3000,
+            showConfirmButton: false,
+          });
 
-        return { success: true, user: user, isOffline: true };
+          return { success: true, user: user, isOffline: true };
+        } else {
+          // ❌ FALLÓ LOGIN OFFLINE
+          throw new Error(
+            offlineResult.error || "Credenciales incorrectas en modo offline"
+          );
+        }
       } else {
-        throw new Error(offlineResult.error || "Credenciales incorrectas");
+        // ❌ NO HAY USUARIOS OFFLINE DISPONIBLES
+        throw new Error(
+          "No hay usuarios disponibles offline. Conecta a internet para primer acceso."
+        );
       }
     } catch (error) {
       console.error("❌ Error final en login:", error);
@@ -303,7 +458,6 @@ export const startLogin = (username, password) => {
     }
   };
 };
-
 // ✅ OFFLINE CHECKING
 export const startOfflineChecking = () => {
   return async (dispatch) => {
