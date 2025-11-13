@@ -147,20 +147,6 @@ const Caja = () => {
         </div>
       </div>
 
-      {/* ✅ ALERTA DE MODO OFFLINE */}
-      {!navigator.onLine && (
-        <div className={styles.offlineAlert}>
-          <FiAlertTriangle className={styles.alertIcon} />
-          <div className={styles.alertContent}>
-            <strong>Modo Offline</strong>
-            <span>
-              Las sesiones se guardarán localmente y se sincronizarán cuando
-              recuperes la conexión
-            </span>
-          </div>
-        </div>
-      )}
-
       <div className={styles.contentGrid}>
         {/* Panel de información de sesión */}
         <div className={styles.mainPanel}>
@@ -258,14 +244,7 @@ const Caja = () => {
               >
                 {navigator.onLine ? "🟢" : "🔴"}
               </div>
-              <span>{navigator.onLine ? "Conectado" : "Sin conexión"}</span>
             </div>
-            {!navigator.onLine && (
-              <p className={styles.connectionHelp}>
-                Los datos se guardarán localmente y se sincronizarán
-                automáticamente cuando recuperes la conexión.
-              </p>
-            )}
           </div>
         </div>
       </div>
