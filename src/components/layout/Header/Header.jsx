@@ -502,11 +502,6 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
         </button>
         <div className={styles.breadcrumb}>
           <span className={styles.appName}>KioskoFlow</span>
-          {!isOnline && (
-            <span className={styles.offlineBadge}>
-              <FiWifiOff /> Offline
-            </span>
-          )}
         </div>
       </div>
 
