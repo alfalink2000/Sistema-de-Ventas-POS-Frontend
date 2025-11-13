@@ -1,4 +1,4 @@
-// components/features/sales/Cart/Cart.jsx - VERSIÓN MINIMALISTA
+// components/features/sales/Cart/Cart.jsx - VERSIÓN CORREGIDA
 import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
 import CartItem from "../CartItem/CartItem";
@@ -43,8 +43,9 @@ const Cart = ({ onCheckout, disabled = false }) => {
 
   return (
     <div className={styles.cart}>
+      {/* ✅ HEADER FIJO */}
       <div className={styles.cartHeader}>
-        <h3>Carrito de Venta</h3>
+        <h3>Carrito de Venta ({items.length})</h3>
         <Button
           variant="secondary"
           size="small"
@@ -54,7 +55,7 @@ const Cart = ({ onCheckout, disabled = false }) => {
         </Button>
       </div>
 
-      {/* CONTENEDOR CON SCROLL PARA LOS PRODUCTOS */}
+      {/* ✅ CONTENEDOR CON SCROLL CONTROLADO */}
       <div className={styles.cartItemsContainer}>
         <div className={styles.cartItems}>
           {items.map((item) => (
@@ -63,6 +64,7 @@ const Cart = ({ onCheckout, disabled = false }) => {
         </div>
       </div>
 
+      {/* ✅ FOOTER SIEMPRE VISIBLE */}
       <div className={styles.cartFooter}>
         <div className={styles.total}>
           <span>Total:</span>
@@ -84,6 +86,7 @@ const Cart = ({ onCheckout, disabled = false }) => {
           onClick={onCheckout}
           fullWidth
           disabled={disabled || !sesionAbierta}
+          className={styles.checkoutButton}
         >
           {!sesionAbierta ? "Sesión Requerida" : "Proceder al Pago"}
         </Button>
