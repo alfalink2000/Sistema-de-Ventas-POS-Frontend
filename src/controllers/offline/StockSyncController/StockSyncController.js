@@ -354,9 +354,176 @@ class StockSyncController {
     }
   }
 
+  async getPendingStock() {
+    try {
+      const pendingStock = await IndexedDBService.safeGetByIndex(
+        this.storeName,
+        "sincronizado",
+        false
+      );
+      return pendingStock || [];
+    } catch (error) {
+      console.error("❌ Error obteniendo stock pendiente:", error);
+      return [];
+    }
+  }
+
+  async getPendingCount() {
+    try {
+      const pendientes = await this.getPendingStock();
+      return pendientes.length;
+    } catch (error) {
+      console.error("❌ Error obteniendo conteo de stock pendiente:", error);
+      return 0;
+    }
+  }
+
+  async markAsSynced(stockId) {
+    try {
+      const stockItem = await IndexedDBService.get(this.storeName, stockId);
+      if (stockItem) {
+        await IndexedDBService.put(this.storeName, {
+          ...stockItem,
+          sincronizado: true,
+          fecha_sincronizacion: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error(`❌ Error marcando stock como sincronizado:`, error);
+    }
+  }
   // 🔄 MÉTODO ALIAS para mantener compatibilidad
   async syncPendingChanges() {
-    return await this.syncPendingStockChanges();
+    try {
+      console.log("🔄 [STOCK SYNC] Iniciando sincronización de stock...");
+
+      const pendingStock = await this.getPendingStock();
+      console.log(`📦 [STOCK] ${pendingStock.length} cambios pendientes`);
+
+      if (pendingStock.length === 0) {
+        return {
+          success: true,
+          synchronized: 0,
+          message: "No hay cambios de stock pendientes",
+        };
+      }
+
+      let synchronized = 0;
+      let failed = 0;
+      const results = [];
+
+      for (const stockChange of pendingStock) {
+        try {
+          console.log(`🔄 Sincronizando cambio de stock: ${stockChange.id}`);
+
+          // Lógica de sincronización específica para stock
+          const response = await fetchConToken(
+            "stock/ajustes",
+            stockChange,
+            "POST"
+          );
+
+          if (response && response.ok === true) {
+            await this.markAsSynced(stockChange.id);
+            synchronized++;
+            results.push({
+              stock_id: stockChange.id,
+              status: "success",
+            });
+          } else {
+            throw new Error(response?.msg || "Error del servidor");
+          }
+        } catch (error) {
+          console.error(`❌ Error sincronizando stock:`, error);
+          failed++;
+          results.push({
+            stock_id: stockChange.id,
+            status: "failed",
+            error: error.message,
+          });
+        }
+      }
+
+      return {
+        success: failed === 0,
+        synchronized,
+        failed,
+        total: pendingStock.length,
+        results,
+      };
+    } catch (error) {
+      console.error("❌ Error sincronizando stock pendiente:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+  async syncPendingChanges() {
+    try {
+      console.log("🔄 [STOCK SYNC] Iniciando sincronización de stock...");
+
+      const pendingStock = await this.getPendingStock();
+      console.log(`📦 [STOCK] ${pendingStock.length} cambios pendientes`);
+
+      if (pendingStock.length === 0) {
+        return {
+          success: true,
+          synchronized: 0,
+          message: "No hay cambios de stock pendientes",
+        };
+      }
+
+      let synchronized = 0;
+      let failed = 0;
+      const results = [];
+
+      for (const stockChange of pendingStock) {
+        try {
+          console.log(`🔄 Sincronizando cambio de stock: ${stockChange.id}`);
+
+          // Lógica de sincronización específica para stock
+          const response = await fetchConToken(
+            "stock/ajustes",
+            stockChange,
+            "POST"
+          );
+
+          if (response && response.ok === true) {
+            await this.markAsSynced(stockChange.id);
+            synchronized++;
+            results.push({
+              stock_id: stockChange.id,
+              status: "success",
+            });
+          } else {
+            throw new Error(response?.msg || "Error del servidor");
+          }
+        } catch (error) {
+          console.error(`❌ Error sincronizando stock:`, error);
+          failed++;
+          results.push({
+            stock_id: stockChange.id,
+            status: "failed",
+            error: error.message,
+          });
+        }
+      }
+
+      return {
+        success: failed === 0,
+        synchronized,
+        failed,
+        total: pendingStock.length,
+        results,
+      };
+    } catch (error) {
+      console.error("❌ Error sincronizando stock pendiente:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
   }
   // ✅ OBTENER ESTADÍSTICAS DE PENDIENTES
   async getPendingStats() {
