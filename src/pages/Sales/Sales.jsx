@@ -8,6 +8,7 @@ import SesionCajaModal from "../../components/features/caja/SesionCajaModal/Sesi
 import { loadProducts } from "../../actions/productsActions";
 import { clearCart } from "../../actions/cartActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
+import PendienteModal from "../../components/features/sales/PendienteModal/PendienteModal";
 import {
   FiFilter,
   FiSearch,
@@ -300,6 +301,19 @@ const Sales = () => {
         </div>
       </div>
 
+      <Button
+        className={styles.pendienteButton}
+        onClick={() => setShowPendienteModal(true)}
+        disabled={!sesionAbierta || items.length === 0}
+      >
+        <FiClock className={styles.buttonIcon} />
+        Registrar Pendiente
+      </Button>
+
+      <PendienteModal
+        isOpen={showPendienteModal}
+        onClose={() => setShowPendienteModal(false)}
+      />
       <PaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
