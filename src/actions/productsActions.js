@@ -627,9 +627,9 @@ export const loadProducts = (forceRefresh = false) => {
       let source = "";
 
       if (navigator.onLine) {
-        // ✅ CARGA DESDE SERVIDOR CON MANTENIMIENTO DE STOCK LOCAL
+        // ✅ CARGA DESDE SERVIDOR CON MANTENIMIENTO DE STOCK Y PRECIOS LOCALES
         console.log(
-          "🌐 [PRODUCTS] Cargando desde servidor manteniendo stock local..."
+          "🌐 [PRODUCTS] Cargando desde servidor manteniendo stock y precios locales..."
         );
         const response = await fetchConToken("productos");
 
@@ -652,17 +652,19 @@ export const loadProducts = (forceRefresh = false) => {
 
             // ✅ OBTENER PRODUCTOS LOCALES ACTUALES
             const localProducts = await IndexedDBService.getAll("productos");
-            console.log(`📱 ${localProducts.length} productos en stock local`);
+            console.log(
+              `📱 ${localProducts.length} productos en datos locales`
+            );
 
-            // ✅ COMBINAR: MANTENER STOCK LOCAL PARA PRODUCTOS EXISTENTES
-            const mergedProducts = await mergeProductsWithLocalStock(
+            // ✅ COMBINAR: MANTENER STOCK Y PRECIOS LOCALES PARA PRODUCTOS EXISTENTES
+            const mergedProducts = await mergeProductsWithLocalData(
               serverProducts,
               localProducts
             );
             products = mergedProducts;
 
             console.log(
-              `🔄 Productos combinados: ${products.length} (Manteniendo stock local)`
+              `🔄 Productos combinados: ${products.length} (Manteniendo stock y precios locales)`
             );
 
             // ✅ GUARDAR PRODUCTOS COMBINADOS EN INDEXEDDB
@@ -680,7 +682,7 @@ export const loadProducts = (forceRefresh = false) => {
         }
       }
 
-      // ✅ SI ESTAMOS OFFLINO O FALLÓ LA CARGA ONLINE, USAR INDEXEDDB
+      // ✅ SI ESTAMOS OFFLINE O FALLÓ LA CARGA ONLINE, USAR INDEXEDDB
       if (!navigator.onLine || products.length === 0) {
         console.log("📱 Cargando desde IndexedDB...");
         try {
@@ -1799,6 +1801,115 @@ export const loadProductsStats = () => {
   };
 };
 
+// ✅ FUNCIÓN MEJORADA PARA COMBINAR PRODUCTOS MANTENIENDO STOCK Y PRECIOS LOCALES
+async function mergeProductsWithLocalData(serverProducts, localProducts) {
+  try {
+    console.log(
+      "🔄 Combinando productos del servidor con stock y precios locales..."
+    );
+
+    const localProductsMap = new Map();
+
+    // ✅ CREAR MAPA DE PRODUCTOS LOCALES POR NOMBRE (para búsqueda rápida)
+    localProducts.forEach((product) => {
+      if (product.nombre) {
+        const key = product.nombre.toLowerCase().trim();
+        localProductsMap.set(key, product);
+      }
+
+      // ✅ TAMBIÉN POR ID POR SI ACASO
+      if (product.id) {
+        localProductsMap.set(`id_${product.id}`, product);
+      }
+      if (product.id_local) {
+        localProductsMap.set(`local_${product.id_local}`, product);
+      }
+    });
+
+    const mergedProducts = serverProducts.map((serverProduct) => {
+      // ✅ BUSCAR SI EL PRODUCTO EXISTE LOCALMENTE POR NOMBRE
+      const localKey = serverProduct.nombre
+        ? serverProduct.nombre.toLowerCase().trim()
+        : null;
+      const existingLocalProduct = localKey
+        ? localProductsMap.get(localKey)
+        : null;
+
+      if (existingLocalProduct) {
+        console.log(`📦 Producto existente: "${serverProduct.nombre}"`, {
+          stock: `Local: ${existingLocalProduct.stock} | Servidor: ${serverProduct.stock}`,
+          precio: `Local: ${existingLocalProduct.precio} | Servidor: ${serverProduct.precio}`,
+          precio_compra: `Local: ${existingLocalProduct.precio_compra} | Servidor: ${serverProduct.precio_compra}`,
+        });
+
+        // ✅ PRODUCTO EXISTENTE: MANTENER STOCK Y PRECIOS LOCALES, ACTUALIZAR OTROS DATOS
+        return {
+          ...serverProduct, // Datos actualizados del servidor
+
+          // ✅ MANTENER STOCK LOCAL
+          stock: existingLocalProduct.stock,
+          stock_anterior: existingLocalProduct.stock_anterior,
+          historial_stock: existingLocalProduct.historial_stock || [],
+
+          // ✅ MANTENER PRECIOS LOCALES
+          precio: existingLocalProduct.precio,
+          precio_compra: existingLocalProduct.precio_compra,
+          precio_anterior: existingLocalProduct.precio_anterior,
+          historial_precios: existingLocalProduct.historial_precios || [],
+          margen_ganancia: existingLocalProduct.margen_ganancia,
+
+          // ✅ METADATOS DE ACTUALIZACIÓN
+          fecha_actualizacion: new Date().toISOString(),
+          ultima_actualizacion_precio:
+            existingLocalProduct.ultima_actualizacion_precio ||
+            new Date().toISOString(),
+
+          // ✅ PRESERVAR METADATOS LOCALES IMPORTANTES
+          id_local: existingLocalProduct.id_local,
+          sincronizado: true,
+          last_sync: new Date().toISOString(),
+          precio_modificado_localmente:
+            existingLocalProduct.precio_modificado_localmente || false,
+        };
+      } else {
+        // ✅ PRODUCTO NUEVO: USAR STOCK Y PRECIOS DEL SERVIDOR
+        console.log(
+          `🆕 Producto nuevo: "${serverProduct.nombre}" - Usando stock y precios del servidor`
+        );
+        return {
+          ...serverProduct,
+          sincronizado: true,
+          last_sync: new Date().toISOString(),
+          precio_modificado_localmente: false,
+        };
+      }
+    });
+
+    // ✅ IDENTIFICAR PRODUCTOS LOCALES QUE NO ESTÁN EN EL SERVIDOR (ELIMINADOS)
+    const serverProductNames = new Set(
+      serverProducts.map((p) => p.nombre?.toLowerCase().trim()).filter(Boolean)
+    );
+
+    const localOnlyProducts = localProducts.filter(
+      (localProduct) =>
+        !serverProductNames.has(localProduct.nombre?.toLowerCase().trim())
+    );
+
+    console.log(`📊 Resumen combinación: 
+      - Servidor: ${serverProducts.length}
+      - Locales preservados: ${localOnlyProducts.length}
+      - Total final: ${mergedProducts.length + localOnlyProducts.length}
+      - Precios locales mantenidos: ${
+        mergedProducts.filter((p) => p.precio_modificado_localmente).length
+      }`);
+
+    // ✅ COMBINAR PRODUCTOS ACTUALIZADOS + PRODUCTOS LOCALES NO EN SERVIDOR
+    return [...mergedProducts, ...localOnlyProducts];
+  } catch (error) {
+    console.error("❌ Error combinando productos:", error);
+    return serverProducts; // Fallback: usar productos del servidor
+  }
+}
 // actions/productsActions.js - AGREGAR
 export const reloadProductsAfterSale = () => {
   return async (dispatch) => {
@@ -2145,7 +2256,7 @@ export const syncProductsFromServer = () => {
   return async (dispatch) => {
     try {
       console.log(
-        "🔄 Sincronizando productos desde servidor (manteniendo stock local)..."
+        "🔄 Sincronizando productos desde servidor (manteniendo stock y precios locales)..."
       );
 
       if (!navigator.onLine) {
@@ -2169,8 +2280,8 @@ export const syncProductsFromServer = () => {
         // ✅ OBTENER PRODUCTOS LOCALES ACTUALES
         const localProducts = await IndexedDBService.getAll("productos");
 
-        // ✅ COMBINAR MANTENIENDO STOCK LOCAL
-        const mergedProducts = await mergeProductsWithLocalStock(
+        // ✅ COMBINAR MANTENIENDO STOCK Y PRECIOS LOCALES
+        const mergedProducts = await mergeProductsWithLocalData(
           response.productos,
           localProducts
         );
@@ -2195,12 +2306,15 @@ export const syncProductsFromServer = () => {
           payload: mergedProducts,
         });
 
-        console.log("✅ Productos sincronizados manteniendo stock local");
+        console.log(
+          "✅ Productos sincronizados manteniendo stock y precios locales"
+        );
         return {
           success: true,
           source: "server",
           count: mergedProducts.length,
           maintainedLocalStock: true,
+          maintainedLocalPrices: true,
         };
       } else {
         throw new Error(response?.error || "Error del servidor");
@@ -2219,6 +2333,157 @@ export const syncProductsFromServer = () => {
     }
   };
 };
+// ✅ FUNCIÓN PARA MARCAR PRECIO MODIFICADO LOCALMENTE
+export const markPriceAsModifiedLocally = (productId, newPrice) => {
+  return async (dispatch, getState) => {
+    try {
+      console.log(
+        `💰 Marcando precio como modificado localmente: ${productId} -> ${newPrice}`
+      );
+
+      const producto = await IndexedDBService.get("productos", productId);
+      if (!producto) {
+        console.warn(`⚠️ Producto no encontrado: ${productId}`);
+        return false;
+      }
+
+      const productoActualizado = {
+        ...producto,
+        precio: newPrice,
+        precio_modificado_localmente: true,
+        ultima_actualizacion_precio: new Date().toISOString(),
+        historial_precios: [
+          ...(producto.historial_precios || []),
+          {
+            fecha: new Date().toISOString(),
+            precio_anterior: producto.precio,
+            precio_nuevo: newPrice,
+            tipo: "modificacion_local",
+            usuario: getState().auth.user?.nombre || "Sistema",
+          },
+        ],
+        sincronizado: false,
+      };
+
+      await IndexedDBService.put("productos", productoActualizado);
+
+      // ✅ ACTUALIZAR REDUX
+      dispatch({
+        type: types.productUpdated,
+        payload: productoActualizado,
+      });
+
+      console.log(`✅ Precio marcado como modificado localmente: ${productId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error marcando precio como modificado:`, error);
+      return false;
+    }
+  };
+};
+
+// ✅ FUNCIÓN ESPECÍFICA PARA ACTUALIZAR PRECIO CON MARCACIÓN LOCAL
+// ✅ FUNCIÓN ESPECÍFICA PARA ACTUALIZAR PRECIO CON MARCACIÓN LOCAL
+export const updateProductPrice = (productId, priceData) => {
+  return async (dispatch, getState) => {
+    try {
+      console.log(`💰 Actualizando precio: ${productId}`, priceData);
+
+      const { precio, precio_compra, motivo = "Ajuste manual" } = priceData;
+      const state = getState();
+      const { user } = state.auth;
+
+      // ✅ OBTENER PRODUCTO ACTUAL
+      const productoExistente = await IndexedDBService.get(
+        "productos",
+        productId
+      );
+      if (!productoExistente) {
+        throw new Error("Producto no encontrado");
+      }
+
+      const precioAnterior = productoExistente.precio;
+      const precioCompraAnterior = productoExistente.precio_compra;
+
+      // ✅ PREPARAR ACTUALIZACIÓN
+      const updates = {
+        precio: precio !== undefined ? precio : productoExistente.precio,
+        precio_compra:
+          precio_compra !== undefined
+            ? precio_compra
+            : productoExistente.precio_compra,
+        precio_modificado_localmente: true,
+        ultima_actualizacion_precio: new Date().toISOString(),
+        sincronizado: false,
+        historial_precios: [
+          ...(productoExistente.historial_precios || []),
+          {
+            fecha: new Date().toISOString(),
+            precio_anterior: precioAnterior,
+            precio_nuevo: precio,
+            precio_compra_anterior: precioCompraAnterior,
+            precio_compra_nuevo: precio_compra,
+            tipo: "ajuste_manual",
+            motivo: motivo,
+            usuario: user?.nombre || "Sistema",
+          },
+        ],
+      };
+
+      // ✅ CALCULAR NUEVO MARGEN SI ES POSIBLE
+      if (precio !== undefined && precio_compra !== undefined) {
+        updates.margen_ganancia =
+          precio_compra > 0
+            ? (((precio - precio_compra) / precio_compra) * 100).toFixed(2)
+            : 0;
+      }
+
+      const productoActualizado = { ...productoExistente, ...updates };
+
+      if (navigator.onLine) {
+        // Online: intentar actualizar en servidor también
+        console.log("🌐 Enviando actualización de precio al servidor...");
+        const response = await fetchConToken(
+          `productos/${productId}/precio`,
+          { precio, precio_compra, motivo },
+          "PUT"
+        );
+
+        if (response && response.ok) {
+          productoActualizado.sincronizado = true;
+          productoActualizado.last_sync = new Date().toISOString();
+        }
+      }
+
+      // ✅ GUARDAR EN INDEXEDDB
+      await IndexedDBService.put("productos", productoActualizado);
+
+      // ✅ ACTUALIZAR REDUX
+      dispatch({
+        type: types.productUpdated,
+        payload: productoActualizado,
+      });
+
+      console.log(`✅ Precio actualizado y marcado como local: ${productId}`);
+
+      return {
+        success: true,
+        producto: productoActualizado,
+        cambios: {
+          precio: { anterior: precioAnterior, nuevo: precio },
+          precio_compra: {
+            anterior: precioCompraAnterior,
+            nuevo: precio_compra,
+          },
+        },
+      };
+    } catch (error) {
+      console.error(`❌ Error actualizando precio ${productId}:`, error);
+      return { success: false, error: error.message };
+    }
+  };
+};
+
 // ✅ LISTENER PARA ACTUALIZACIONES AUTOMÁTICAS
 export const setupProductsSyncListener = () => {
   return (dispatch) => {
