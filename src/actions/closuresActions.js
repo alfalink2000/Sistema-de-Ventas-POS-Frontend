@@ -644,7 +644,7 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
 
     console.log(`🔍 [CLOSURES] Buscando ventas para sesión: ${sesionCajaId}`);
 
-    // Si no hay ventas cargadas, cargarlas
+    // Obtener ventas de la sesión
     let ventasSesion = [];
     if (ventas.ventas && ventas.ventas.length > 0) {
       ventasSesion = ventas.ventas.filter(
@@ -652,17 +652,7 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
           venta.sesion_caja_id === sesionCajaId ||
           venta.sesion_caja_id_local === sesionCajaId
       );
-      console.log(
-        `📊 [CLOSURES] ${ventasSesion.length} ventas encontradas en estado Redux`
-      );
     } else {
-      const pendientesTotals =
-        await PendientesOfflineController.calculatePendientesTotals(
-          sesionCajaId
-        );
-
-      console.log("🔄 [CLOSURES] Cargando ventas desde el servidor...");
-      // Cargar ventas específicas de esta sesión
       await dispatch(loadSales());
       const { ventas: ventasActualizadas } = getState();
       ventasSesion = ventasActualizadas.ventas.filter(
@@ -670,12 +660,13 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
           venta.sesion_caja_id === sesionCajaId ||
           venta.sesion_caja_id_local === sesionCajaId
       );
-      console.log(
-        `📊 [CLOSURES] ${ventasSesion.length} ventas cargadas después de dispatch`
-      );
     }
 
-    // Calcular totales
+    // ✅ OBTENER PENDIENTES CORRECTAMENTE
+    const pendientesTotals =
+      await PendientesOfflineController.calculatePendientesTotals(sesionCajaId);
+
+    // Calcular totales de ventas
     const calculo = {
       cantidad_ventas: ventasSesion.length,
       total_ventas: 0,
@@ -684,7 +675,10 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
       total_transferencia: 0,
       ganancia_bruta: 0,
       saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
-      pendientesTotals: 0,
+      // ✅ INCLUIR TOTALES DE PENDIENTES
+      total_retiros_pendientes: pendientesTotals.total_retiros || 0,
+      total_ingresos_pendientes: pendientesTotals.total_ingresos || 0,
+      total_pendientes_pago: pendientesTotals.total_pendientes || 0,
     };
 
     ventasSesion.forEach((venta) => {
@@ -693,13 +687,16 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
       calculo.total_tarjeta += parseFloat(venta.monto_tarjeta) || 0;
       calculo.total_transferencia += parseFloat(venta.monto_transferencia) || 0;
       calculo.ganancia_bruta += parseFloat(venta.ganancia_bruta) || 0;
-      calculo.pendientesTotals += parseFloat(venta.ganancia_bruta) || 0;
     });
 
-    // Calcular saldo final teórico
+    // ✅ CÁLCULO CORRECTO DEL SALDO FINAL TEÓRICO
     calculo.saldo_final_teorico =
-      calculo.saldo_inicial + calculo.total_efectivo + calculo.pendientesTotals;
-    calculo.diferencia = 0; // Se calculará después con el saldo final real
+      calculo.saldo_inicial +
+      calculo.total_efectivo +
+      calculo.total_ingresos_pendientes -
+      calculo.total_retiros_pendientes;
+
+    calculo.diferencia = 0;
 
     console.log("✅ [CLOSURES] Cálculo local completado:", calculo);
     return calculo;

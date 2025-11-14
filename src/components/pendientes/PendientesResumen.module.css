@@ -1,0 +1,121 @@
+.pendientesResumen {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.header h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #495057;
+}
+
+.sectionIcon {
+  color: #6c757d;
+}
+
+.verDetallesBtn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.verDetallesBtn:hover {
+  background: #5a6268;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #6c757d;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.cardContent {
+  text-align: center;
+}
+
+.monto {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.detalle {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.impactoCard {
+  grid-column: 1 / -1;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #007bff;
+}
+
+.impactoHeader {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #007bff;
+}
+
+.impactoContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.impactoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.positivo {
+  color: #16a34a;
+  font-weight: bold;
+}
+
+.negativo {
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.impactoNote {
+  font-size: 12px;
+  color: #6c757d;
+  font-style: italic;
+}

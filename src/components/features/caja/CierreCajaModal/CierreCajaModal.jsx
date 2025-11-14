@@ -684,7 +684,7 @@ import {
   FiCreditCard,
 } from "react-icons/fi";
 import styles from "./CierreCajaModal.module.css";
-
+import PendientesResumen from "../../../pendientes/PendientesResumen";
 // ✅ IMPORTAR ACTIONS
 import {
   closeSesionCaja,
@@ -707,7 +707,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const [ventasDelDia, setVentasDelDia] = useState([]);
   const [mostrarDetalleProductos, setMostrarDetalleProductos] = useState(false);
   const [mostrarDetalleVentas, setMostrarDetalleVentas] = useState(false);
-
+  const [mostrarModalPendientes, setMostrarModalPendientes] = useState(false);
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
@@ -719,6 +719,84 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     SalesOfflineController,
     loaded: controllersLoaded,
   } = useOfflineControllers();
+
+  const handleVerDetallesPendientes = async () => {
+    if (!sesion) return;
+
+    try {
+      const sesionId = sesion.id || sesion.id_local;
+      const pendientes =
+        await PendientesOfflineController.getPendientesBySesion(sesionId);
+
+      await Swal.fire({
+        title: "📋 Detalle de Pendientes",
+        html: `
+        <div style="text-align: left; max-height: 60vh; overflow-y: auto;">
+          <h4>Resumen de Movimientos</h4>
+          <div style="margin-bottom: 20px;">
+            <p><strong>Retiros:</strong> ${
+              pendientesTotals?.cantidad_retiros || 0
+            } movimientos (-$${pendientesTotals?.total_retiros?.toFixed(2)})</p>
+            <p><strong>Ingresos:</strong> ${
+              pendientesTotals?.cantidad_ingresos || 0
+            } movimientos (+$${pendientesTotals?.total_ingresos?.toFixed(
+          2
+        )})</p>
+            <p><strong>Pendientes:</strong> ${
+              pendientesTotals?.cantidad_pendientes || 0
+            } movimientos ($${pendientesTotals?.total_pendientes?.toFixed(
+          2
+        )})</p>
+          </div>
+          
+          <h4>Lista Completa</h4>
+          <div style="max-height: 300px; overflow-y: auto;">
+            ${pendientes
+              .map(
+                (p) => `
+              <div style="padding: 8px; margin: 5px 0; background: #f8f9fa; border-radius: 5px; border-left: 4px solid ${
+                p.tipo === "retiro"
+                  ? "#dc2626"
+                  : p.tipo === "ingreso"
+                  ? "#16a34a"
+                  : "#d97706"
+              };">
+                <div style="display: flex; justify-content: space-between;">
+                  <strong>${p.descripcion}</strong>
+                  <span style="color: ${
+                    p.tipo === "retiro"
+                      ? "#dc2626"
+                      : p.tipo === "ingreso"
+                      ? "#16a34a"
+                      : "#d97706"
+                  };">
+                    ${
+                      p.tipo === "retiro"
+                        ? "-"
+                        : p.tipo === "ingreso"
+                        ? "+"
+                        : ""
+                    }$${parseFloat(p.monto).toFixed(2)}
+                  </span>
+                </div>
+                <div style="font-size: 12px; color: #666;">
+                  ${new Date(p.fecha).toLocaleString()} | 
+                  ${p.tipo.toUpperCase()}
+                </div>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+        </div>
+      `,
+        width: 600,
+        confirmButtonText: "Cerrar",
+      });
+    } catch (error) {
+      console.error("❌ Error mostrando detalles de pendientes:", error);
+    }
+  };
 
   // ✅ OBTENER VENTAS CON PRODUCTOS DE LA SESIÓN
   const obtenerVentasConProductos = useCallback(async () => {
@@ -1549,38 +1627,10 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           {renderResumenVentas()}
         </div>
         // Después de la sección de resumen de ventas, agregar:
-        <div className={styles.pendientesSection}>
-          <h4>
-            <FiClock className={styles.sectionIcon} />
-            Pendientes e Imprevistos
-          </h4>
-
-          {pendientesTotals && (
-            <div className={styles.pendientesGrid}>
-              <div className={styles.pendienteItem}>
-                <span>Retiros de Efectivo:</span>
-                <span className={styles.negative}>
-                  -${pendientesTotals.total_retiros?.toFixed(2)}
-                </span>
-                <small>{pendientesTotals.cantidad_retiros} retiros</small>
-              </div>
-              <div className={styles.pendienteItem}>
-                <span>Ingresos de Efectivo:</span>
-                <span className={styles.positive}>
-                  +${pendientesTotals.total_ingresos?.toFixed(2)}
-                </span>
-                <small>{pendientesTotals.cantidad_ingresos} ingresos</small>
-              </div>
-              <div className={styles.pendienteItem}>
-                <span>Pendientes de Pago:</span>
-                <span className={styles.warning}>
-                  ${pendientesTotals.total_pendientes?.toFixed(2)}
-                </span>
-                <small>{pendientesTotals.cantidad_pendientes} pendientes</small>
-              </div>
-            </div>
-          )}
-        </div>
+        <PendientesResumen
+          pendientesTotals={pendientesTotals}
+          onVerDetalles={handleVerDetallesPendientes}
+        />
         {/* Resumen de Productos */}
         {renderResumenProductos()}
         {/* Detalle de Productos */}
