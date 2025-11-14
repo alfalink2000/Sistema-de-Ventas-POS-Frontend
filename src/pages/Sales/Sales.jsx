@@ -296,6 +296,14 @@ const Sales = () => {
         </div>
 
         <div className={styles.cartSection}>
+          <Button
+            className={styles.pendienteButton}
+            onClick={() => setShowPendienteModal(true)}
+            disabled={!sesionAbierta || items.length === 0}
+          >
+            <FiClock className={styles.buttonIcon} />
+            Registrar Pendiente
+          </Button>
           <Cart
             onCheckout={handleCheckout}
             disabled={!sesionAbierta || items.length === 0}
@@ -303,14 +311,14 @@ const Sales = () => {
         </div>
       </div>
 
-      <Button
+      {/* <Button
         className={styles.pendienteButton}
         onClick={() => setShowPendienteModal(true)}
         disabled={!sesionAbierta || items.length === 0}
       >
         <FiClock className={styles.buttonIcon} />
         Registrar Pendiente
-      </Button>
+      </Button> */}
 
       <PendienteModal
         isOpen={showPendienteModal}
