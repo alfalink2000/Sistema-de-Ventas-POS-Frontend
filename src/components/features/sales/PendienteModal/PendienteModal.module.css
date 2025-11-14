@@ -1,6 +1,47 @@
+/* components/features/sales/PendienteModal/PendienteModal.module.css - VERSIÓN CORREGIDA */
+
+/* ✅ OVERLAY DEL MODAL - DEBE CUBRIR TODO Y TENER z-index MUY ALTO */
+.modalOverlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important; /* ✅ MUY ALTO */
+  padding: 20px;
+}
+
+/* ✅ CONTENIDO DEL MODAL - MÁS ALTO AÚN */
+.modalContent {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  max-width: 500px !important;
+  width: 100% !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  z-index: 10000 !important; /* ✅ MÁS ALTO QUE EL OVERLAY */
+  position: relative !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ✅ CONTENEDOR PRINCIPAL DEL MODAL */
 .pendienteModal {
-  padding: 0;
-  z-index: 100;
+  position: relative;
+  z-index: 10001; /* ✅ MÁS ALTO QUE EL CONTENIDO */
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* ✅ ASEGURAR QUE TODOS LOS ELEMENTOS DEL MODAL TENGAN z-index ALTO */
+.pendienteModal * {
+  position: relative;
+  z-index: auto;
 }
 
 /* Información de Sesión */
@@ -8,11 +49,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 20px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
+  z-index: 10002;
 }
 
 .sessionBadge {
@@ -28,7 +69,7 @@
 
 .sessionSaldo {
   background: rgba(255, 255, 255, 0.2);
-  padding: 4px 12px;
+  padding: 6px 12px;
   border-radius: 20px;
   font-size: 14px;
   font-weight: 500;
@@ -37,18 +78,20 @@
 /* Sección de Tipo */
 .tipoSection {
   margin-bottom: 24px;
+  padding: 0 20px;
+  padding-top: 20px;
 }
 
 .label {
   display: block;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: 12px;
+  font-size: 16px;
 }
 
 .labelIcon {
-  margin-right: 6px;
+  margin-right: 8px;
   opacity: 0.7;
 }
 
@@ -56,8 +99,8 @@
   display: block;
   font-weight: normal;
   color: #6b7280;
-  font-size: 12px;
-  margin-top: 2px;
+  font-size: 13px;
+  margin-top: 4px;
 }
 
 .tipoOptions {
@@ -69,24 +112,25 @@
 
 .tipoOption {
   border: 2px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
   background: white;
+  z-index: 10002;
 }
 
 .tipoOption:hover {
   border-color: #9ca3af;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .tipoOptionSelected {
   border-width: 2px;
   background: #f8fafc;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .tipoIcon {
@@ -117,6 +161,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  padding: 0 20px;
 }
 
 .formGroup {
@@ -125,14 +170,16 @@
 }
 
 .textarea {
-  padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
   font-size: 14px;
   resize: vertical;
   min-height: 80px;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
   font-family: inherit;
+  background: white;
+  z-index: 10002;
 }
 
 .textarea:focus {
@@ -142,11 +189,13 @@
 }
 
 .input {
-  padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
   font-size: 16px;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  background: white;
+  z-index: 10002;
 }
 
 .input:focus {
@@ -158,13 +207,15 @@
 /* Resumen */
 .resumenSection {
   margin: 16px 0;
+  padding: 0 20px;
 }
 
 .resumenCard {
   background: #f8fafc;
   border-left: 4px solid;
-  border-radius: 6px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 20px;
+  z-index: 10002;
 }
 
 .resumenHeader {
@@ -211,10 +262,98 @@
   gap: 12px;
   justify-content: flex-end;
   margin-top: 24px;
-  padding-top: 20px;
+  padding: 20px;
   border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+  z-index: 10002;
 }
 
+/* Advertencia Offline */
+.offlineWarning {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  margin: 20px;
+  margin-top: 0;
+  z-index: 10002;
+}
+
+.offlineWarning span {
+  display: block;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 4px;
+}
+
+.offlineWarning small {
+  color: #92400e;
+  font-size: 12px;
+}
+
+/* Estados de deshabilitado */
+.textarea:disabled,
+.input:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* ✅ GARANTIZAR QUE EL MODAL ESTÉ SIEMPRE ENCIMA */
+:global(.ReactModal__Overlay) {
+  z-index: 9999 !important;
+}
+
+:global(.ReactModal__Content) {
+  z-index: 10000 !important;
+}
+
+/* ✅ CLASE PARA CUANDO EL MODAL ESTÁ ABIERTO */
+body.modal-open {
+  overflow: hidden;
+}
+
+body.modal-open .productGrid,
+body.modal-open .productCard,
+body.modal-open .addToCartButton,
+body.modal-open .outOfStock {
+  z-index: 1 !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modalOverlay {
+    padding: 10px;
+  }
+
+  .modalContent {
+    max-height: 95vh;
+    margin: 0;
+  }
+
+  .tipoOptions {
+    grid-template-columns: 1fr;
+  }
+
+  .sessionInfo {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    padding: 16px;
+  }
+
+  .actions {
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .form,
+  .tipoSection,
+  .resumenSection {
+    padding: 0 16px;
+  }
+}
 /* Advertencia Offline */
 .offlineWarning {
   background: #fef3c7;

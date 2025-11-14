@@ -177,28 +177,3 @@
     transform: rotate(360deg);
   }
 }
-
-/* ESTILOS GLOBALES PARA MODALES - Asegurar que estén por encima */
-.modal-overlay {
-  z-index: 1000 !important;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  background: rgba(0, 0, 0, 0.6) !important;
-}
-
-.modal-content {
-  z-index: 1001 !important;
-  position: relative !important;
-}
-
-/* Asegurar que los botones de productos estén detrás de los modales */
-.product-card * {
-  z-index: auto !important;
-}
-
-.add-to-cart-button {
-  z-index: 10 !important;
-}
