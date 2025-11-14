@@ -685,9 +685,17 @@ const isNetworkError = (error) => {
   );
 };
 
+let authCheckInProgress = false;
 // ✅ VERIFICACIÓN DE AUTENTICACIÓN - VERSIÓN CORREGIDA SIN BUCLE
 export const startChecking = () => {
   return async (dispatch) => {
+    if (authCheckInProgress) {
+      console.log("⏳ Verificación ya en progreso, omitiendo...");
+      return;
+    }
+
+    authCheckInProgress = true;
+
     const token = localStorage.getItem("token");
     const user = localStorage.getItem("user");
 
@@ -697,7 +705,7 @@ export const startChecking = () => {
       isOnline: navigator.onLine,
     });
 
-    // ✅ CASO 1: NO HAY CREDENCIALES - LIMPIAR SILENCIOSAMENTE
+    // ✅ CASO 1: NO HAY CREDENCIALES - LIMPIAR INMEDIATAMENTE
     if (!token || !user) {
       console.log("❌ No hay credenciales - Limpiando silenciosamente");
       dispatch(checkingFinish());
@@ -707,84 +715,51 @@ export const startChecking = () => {
     try {
       const userData = JSON.parse(user);
 
-      // ✅ VERIFICAR SI EL USUARIO EXISTE EN CACHE OFFLINE
-      const offlineUser = await AuthOfflineController.getUserByUsername(
-        userData.username
-      );
-
-      if (!offlineUser) {
-        console.log(
-          "❌ Usuario no encontrado en cache - Limpiando silenciosamente"
-        );
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        dispatch({ type: types.authLogout });
-        dispatch(checkingFinish());
-        return;
-      }
-
-      console.log("✅ Usuario encontrado en cache offline");
-
-      // ✅ MODO OFFLINE: AUTENTICAR SILENCIOSAMENTE
+      // ✅ VERIFICACIÓN OFFLINE RÁPIDA
       if (!navigator.onLine) {
         console.log("📱 Modo offline - Autenticando silenciosamente");
-        dispatch({
-          type: types.authLogin,
-          payload: userData,
-        });
+        dispatch({ type: types.authLogin, payload: userData });
         dispatch(checkingFinish());
         return;
       }
 
-      // ✅ MODO ONLINE: VERIFICAR TOKEN SILENCIOSAMENTE
-      console.log("🌐 Modo online - Verificando token silenciosamente...");
+      // ✅ VERIFICACIÓN ONLINE CON TIMEOUT
+      console.log("🌐 Modo online - Verificando token...");
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), 5000)
+      );
+
+      const verificationPromise = fetchConToken("auth/verify-token");
 
       try {
-        // ✅ TIMEOUT PARA EVITAR BLOQUEO
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout verificando token")), 8000)
-        );
-
-        const verificationPromise = fetchConToken("auth/verify-token");
-
         const response = await Promise.race([
           verificationPromise,
           timeoutPromise,
         ]);
 
         if (response.ok === true) {
-          console.log("✅ Token válido - Autenticando silenciosamente");
-          dispatch({
-            type: types.authLogin,
-            payload: userData,
-          });
+          console.log("✅ Token válido - Autenticando");
+          dispatch({ type: types.authLogin, payload: userData });
         } else {
-          // ❌ TOKEN INVÁLIDO - LIMPIAR SILENCIOSAMENTE SIN MOSTRAR ERROR
-          console.log("❌ Token inválido - Limpiando silenciosamente");
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          dispatch({ type: types.authLogout });
+          throw new Error("Token inválido");
         }
       } catch (onlineError) {
         console.log(
-          "🌐 Error de red - Autenticando offline silenciosamente:",
+          "❌ Error online, usando datos offline:",
           onlineError.message
         );
-        // ✅ EN CASO DE ERROR DE RED: PERMITIR OFFLINE SILENCIOSAMENTE
-        dispatch({
-          type: types.authLogin,
-          payload: userData,
-        });
+        // Fallback a datos offline
+        dispatch({ type: types.authLogin, payload: userData });
       }
     } catch (error) {
-      console.log(
-        "❌ Error en verificación - Limpiando silenciosamente:",
-        error.message
-      );
+      console.log("❌ Error en verificación - Limpiando:", error.message);
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       dispatch({ type: types.authLogout });
     } finally {
+      // ✅ GARANTIZAR que checking termina
+      authCheckInProgress = false;
       dispatch(checkingFinish());
     }
   };

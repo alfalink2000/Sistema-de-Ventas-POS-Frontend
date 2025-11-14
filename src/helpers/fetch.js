@@ -379,9 +379,18 @@ async function handleResponse(response, context) {
   const contentType = response.headers.get("content-type");
 
   // ✅ Manejar error 401 antes de procesar la respuesta
-  if (response.status === 401 && navigator.onLine) {
-    console.error(`❌ ${context} - Error 401: No autorizado`);
-    throw new Error("401 - Token no válido o expirado");
+  // ✅ MANEJAR 401 DE FORMA MÁS SEGURA
+  if (response.status === 401) {
+    console.log(`🔐 ${context} - Error 401 detectado`);
+
+    // No limpiar credenciales inmediatamente, esperar verificación
+    const token = localStorage.getItem("token");
+    if (token && !token.includes("offline")) {
+      console.log("🔄 Token parece ser válido pero falló, verificando...");
+      // La verificación se hará en el flujo normal
+    }
+
+    throw new Error("401 - No autorizado");
   }
 
   // Verificar si la respuesta es JSON

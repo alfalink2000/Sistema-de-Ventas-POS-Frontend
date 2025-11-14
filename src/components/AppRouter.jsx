@@ -53,22 +53,30 @@ const AppRouter = () => {
     };
   }, []);
 
-  // ✅ VERIFICACIÓN DE AUTENTICACIÓN
+  // CORREGIDO - AppRouter.jsx
   useEffect(() => {
-    if (!checking) {
-      const checkAuth = async () => {
-        if (isOnline) {
-          console.log("🌐 Modo online - Verificación completa");
-          await dispatch(startChecking());
-        } else {
-          console.log("📱 Modo offline - Verificación local");
-          await dispatch(startOfflineChecking());
-        }
-      };
+    const verifyAuth = async () => {
+      // Solo verificar si no estamos en medio de otra verificación
+      if (!checking) {
+        console.log("🔄 Iniciando verificación de autenticación...");
 
-      checkAuth();
-    }
-  }, [dispatch, isOnline, checking]);
+        try {
+          if (isOnline) {
+            await dispatch(startChecking());
+          } else {
+            await dispatch(startOfflineChecking());
+          }
+        } catch (error) {
+          console.error("❌ Error en verificación:", error);
+          // Forzar fin de checking en caso de error
+          dispatch({ type: types.authCheckingFinish });
+        }
+      }
+    };
+
+    // Verificar solo si hay cambios en la conexión O al montar
+    verifyAuth();
+  }, [dispatch, isOnline]); // ← Remover checking de dependencias
 
   useEffect(() => {
     const testCache = async () => {

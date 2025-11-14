@@ -404,13 +404,10 @@ const DataLoader = ({
   // ✅ CARGA ESENCIAL MEJORADA - ENFOQUE OFFLINE PRIMERO
   useEffect(() => {
     const shouldLoadData =
-      !checking &&
-      isAuthenticated &&
-      user &&
-      !loadAttemptedRef.current &&
-      !loadState.initialLoadComplete;
+      !checking && isAuthenticated && user && !loadAttemptedRef.current;
 
     if (shouldLoadData) {
+      console.log("🎯 Condiciones cumplidas, iniciando carga de datos...");
       loadAttemptedRef.current = true;
 
       const loadEssentialData = async () => {
