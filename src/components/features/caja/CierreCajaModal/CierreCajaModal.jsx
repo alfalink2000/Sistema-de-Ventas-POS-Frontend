@@ -697,6 +697,7 @@ import {
   createClosure,
   calculateClosureTotals,
 } from "../../../../actions/closuresActions";
+import { getPendientesBySesion } from "../../../../actions/pendientesActions";
 
 const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const [saldoFinalReal, setSaldoFinalReal] = useState("");
@@ -709,11 +710,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
   const [productosAgrupados, setProductosAgrupados] = useState([]);
   const [ventasDelDia, setVentasDelDia] = useState([]);
   const [mostrarDetalleProductos, setMostrarDetalleProductos] = useState(false);
-  const [pendientesTotals, setPendientesTotals] = useState(null);
 
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const isOnline = navigator.onLine;
+  const { pendientes, pendientesTotals } = useSelector(
+    (state) => state.pendientes
+  );
 
   // ✅ USAR HOOK PARA CONTROLADORES
   const {
@@ -724,47 +727,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     loaded: controllersLoaded,
   } = useOfflineControllers();
 
-  // ✅ OBTENER PENDIENTES DE LA SESIÓN
-  const obtenerPendientesSesion = useCallback(async () => {
-    if (!sesion || !PendientesOfflineController) {
-      setPendientesTotals(null);
-      return;
-    }
-
-    try {
+  // ✅ CARGAR PENDIENTES AL ABRIR MODAL
+  useEffect(() => {
+    if (isOpen && sesion) {
       const sesionId = sesion.id || sesion.id_local;
-      const pendientes =
-        await PendientesOfflineController.getPendientesBySesion(sesionId);
-
-      // Calcular totales de pendientes
-      const totals = {
-        cantidad_retiros: 0,
-        total_retiros: 0,
-        cantidad_ingresos: 0,
-        total_ingresos: 0,
-        cantidad_pendientes: 0,
-        total_pendientes: 0,
-      };
-
-      pendientes.forEach((p) => {
-        if (p.tipo === "retiro") {
-          totals.cantidad_retiros++;
-          totals.total_retiros += parseFloat(p.monto);
-        } else if (p.tipo === "ingreso") {
-          totals.cantidad_ingresos++;
-          totals.total_ingresos += parseFloat(p.monto);
-        } else {
-          totals.cantidad_pendientes++;
-          totals.total_pendientes += parseFloat(p.monto);
-        }
-      });
-
-      setPendientesTotals(totals);
-    } catch (error) {
-      console.error("❌ Error obteniendo pendientes:", error);
-      setPendientesTotals(null);
+      dispatch(getPendientesBySesion(sesionId));
     }
-  }, [sesion, PendientesOfflineController]);
+  }, [isOpen, sesion, dispatch]);
 
   // ✅ MANEJAR VER DETALLES DE PENDIENTES
   const handleVerDetallesPendientes = async () => {
@@ -1016,7 +985,22 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     };
   };
 
-  // ✅ CALCULAR TOTALES COMPLETOS MEJORADO
+  // ✅ CALCULAR SALDO FINAL TEÓRICO INCLUYENDO PENDIENTES
+  const calcularSaldoFinalTeorico = useCallback(
+    (totalesVentas, pendientesTotals, saldoInicial) => {
+      if (!totalesVentas || !pendientesTotals) return saldoInicial;
+
+      return (
+        saldoInicial +
+        (totalesVentas.total_efectivo || 0) +
+        (pendientesTotals.total_ingresos || 0) -
+        (pendientesTotals.total_retiros || 0)
+      );
+    },
+    []
+  );
+
+  // ✅ CALCULAR TOTALES COMPLETOS MEJORADO CON PENDIENTES
   const calcularTotalesCompletos = useCallback(async () => {
     if (!sesion || !controllersLoaded) return;
 
@@ -1058,7 +1042,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       }
 
       const saldoInicial = sesion.saldo_inicial || 0;
-      const saldoFinalTeorico = saldoInicial + (totals?.total_efectivo || 0);
+
+      // ✅ USAR LA NUEVA FUNCIÓN QUE INCLUYE PENDIENTES
+      const saldoFinalTeorico = calcularSaldoFinalTeorico(
+        totals,
+        pendientesTotals,
+        saldoInicial
+      );
 
       const totalesCompletos = {
         ...totals,
@@ -1076,9 +1066,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             .filter((v) => v.metodo_pago === "tarjeta")
             .reduce((sum, v) => sum + (v.total || 0), 0),
         cantidad_ventas: totals?.cantidad_ventas || ventas.length,
-        saldo_final_teorico: saldoFinalTeorico,
+        saldo_final_teorico: saldoFinalTeorico, // ✅ AHORA INCLUYE PENDIENTES
         saldo_inicial: saldoInicial,
         ganancia_bruta: totals?.ganancia_bruta || 0,
+        // ✅ INCLUIR TOTALES DE PENDIENTES EN EL OBJETO
+        total_retiros_pendientes: pendientesTotals?.total_retiros || 0,
+        total_ingresos_pendientes: pendientesTotals?.total_ingresos || 0,
+        total_pendientes_pago: pendientesTotals?.total_pendientes || 0,
       };
 
       setTotales(totalesCompletos);
@@ -1087,7 +1081,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         setSaldoFinalReal(saldoFinalTeorico.toFixed(2));
       }
 
-      console.log("✅ Totales calculados:", totalesCompletos);
+      console.log("✅ Totales calculados CON PENDIENTES:", totalesCompletos);
     } catch (error) {
       console.error("❌ Error calculando totales:", error);
       setErrorCalculo(error.message || "No se pudieron calcular los totales.");
@@ -1100,6 +1094,9 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         saldo_final_teorico: sesion?.saldo_inicial || 0,
         saldo_inicial: sesion?.saldo_inicial || 0,
         ganancia_bruta: 0,
+        total_retiros_pendientes: 0,
+        total_ingresos_pendientes: 0,
+        total_pendientes_pago: 0,
       });
     } finally {
       setCalculating(false);
@@ -1113,21 +1110,16 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     ClosuresOfflineController,
     obtenerVentasConProductos,
     obtenerProductosAgrupados,
+    pendientesTotals,
+    calcularSaldoFinalTeorico,
   ]);
 
   // ✅ EFFECT PRINCIPAL
   useEffect(() => {
     if (isOpen && sesion && controllersLoaded) {
       calcularTotalesCompletos();
-      obtenerPendientesSesion();
     }
-  }, [
-    isOpen,
-    sesion,
-    controllersLoaded,
-    calcularTotalesCompletos,
-    obtenerPendientesSesion,
-  ]);
+  }, [isOpen, sesion, controllersLoaded, calcularTotalesCompletos]);
 
   // ✅ EFFECT PARA DIFERENCIA
   useEffect(() => {
@@ -1291,6 +1283,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         0
       );
 
+      // ✅ INCLUIR PENDIENTES EN EL CIERRE
       const closureData = {
         sesion_caja_id: sesion.id || sesion.id_local,
         sesion_caja_id_local: sesion.id_local || sesionId,
@@ -1310,6 +1303,13 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         productos_vendidos: productos.length,
         unidades_vendidas: totalUnidades,
         cantidad_ventas: totales?.cantidad_ventas || 0,
+        // ✅ INCLUIR DATOS DE PENDIENTES EN EL CIERRE
+        total_retiros_pendientes: pendientesTotals?.total_retiros || 0,
+        total_ingresos_pendientes: pendientesTotals?.total_ingresos || 0,
+        total_pendientes_pago: pendientesTotals?.total_pendientes || 0,
+        cantidad_retiros: pendientesTotals?.cantidad_retiros || 0,
+        cantidad_ingresos: pendientesTotals?.cantidad_ingresos || 0,
+        cantidad_pendientes: pendientesTotals?.cantidad_pendientes || 0,
       };
 
       let result;
@@ -1391,6 +1391,18 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             }</strong></p>
             <p>Unidades: <strong>${closureData.unidades_vendidas}</strong></p>
             ${
+              pendientesTotals &&
+              (pendientesTotals.cantidad_retiros > 0 ||
+                pendientesTotals.cantidad_ingresos > 0 ||
+                pendientesTotals.cantidad_pendientes > 0)
+                ? `<p>Movimientos Pendientes: <strong>${
+                    (pendientesTotals.cantidad_retiros || 0) +
+                    (pendientesTotals.cantidad_ingresos || 0) +
+                    (pendientesTotals.cantidad_pendientes || 0)
+                  }</strong></p>`
+                : ""
+            }
+            ${
               !isOnline
                 ? "<p>📱 Se sincronizará cuando recuperes conexión</p>"
                 : ""
@@ -1430,7 +1442,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     setProductosAgrupados([]);
     setVentasDelDia([]);
     setMostrarDetalleProductos(false);
-    setPendientesTotals(null);
     onClose();
   };
 
@@ -1688,6 +1699,14 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           />
           <div className={styles.helperText}>
             Saldo teórico: ${totales?.saldo_final_teorico?.toFixed(2) || "0.00"}
+            {pendientesTotals &&
+              (pendientesTotals.total_ingresos > 0 ||
+                pendientesTotals.total_retiros > 0) &&
+              ` (incluye ${pendientesTotals.total_ingresos > 0 ? "+" : ""}$${
+                pendientesTotals.total_ingresos || 0
+              } ingresos ${pendientesTotals.total_retiros > 0 ? "-" : ""}$${
+                pendientesTotals.total_retiros || 0
+              } retiros)`}
           </div>
         </div>
 

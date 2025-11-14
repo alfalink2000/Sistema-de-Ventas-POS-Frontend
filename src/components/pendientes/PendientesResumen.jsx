@@ -6,9 +6,12 @@ import {
   FiDollarSign,
   FiInfo,
 } from "react-icons/fi";
+import { useSelector } from "react-redux";
 import styles from "./PendientesResumen.module.css";
 
-const PendientesResumen = ({ pendientesTotals, onVerDetalles, sesionId }) => {
+const PendientesResumen = ({ onVerDetalles }) => {
+  const { pendientesTotals } = useSelector((state) => state.pendientes);
+
   if (!pendientesTotals) {
     return (
       <div className={styles.pendientesResumen}>

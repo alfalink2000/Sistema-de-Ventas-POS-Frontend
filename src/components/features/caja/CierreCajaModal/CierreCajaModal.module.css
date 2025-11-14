@@ -1,7 +1,32 @@
+/* CierreCajaModal.module.css - ESTILOS CORREGIDOS SIN DOBLE SCROLL */
+
 .modalContent {
-  padding: 0;
-  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 75vh;
+  overflow: hidden;
+}
+
+/* Contenedor principal con scroll UNICO */
+.modalContent > * {
+  flex-shrink: 0;
+}
+
+/* Solo el contenido principal hace scroll */
+.modalContent > :not(.actions) {
   overflow-y: auto;
+  flex: 1;
+  padding: 0 20px 20px 20px;
+}
+
+/* Las acciones siempre visibles en la parte inferior */
+.actions {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #e2e8f0;
 }
 
 /* Estados */
@@ -262,8 +287,7 @@
 }
 
 /* Secciones de detalle */
-.productosSection,
-.ventasSection {
+.productosSection {
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -292,15 +316,13 @@
   margin-left: auto;
 }
 
-/* Listas de productos y ventas */
-.productosList,
-.ventasList {
-  max-height: 400px;
+/* Listas de productos */
+.productosList {
+  max-height: 300px;
   overflow-y: auto;
 }
 
-.productoItem,
-.ventaItem {
+.productoItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -309,13 +331,11 @@
   transition: background-color 0.2s ease;
 }
 
-.productoItem:hover,
-.ventaItem:hover {
+.productoItem:hover {
   background: #f8fafc;
 }
 
-.productoItem:last-child,
-.ventaItem:last-child {
+.productoItem:last-child {
   border-bottom: none;
 }
 
@@ -350,74 +370,6 @@
   font-weight: 700;
   color: #059669;
   font-size: 16px;
-}
-
-/* Estilos para ventas */
-.ventaInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-}
-
-.ventaHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ventaId {
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 14px;
-  font-family: monospace;
-}
-
-.ventaMetodo {
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.ventaMetodo.efectivo {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.ventaMetodo.tarjeta {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.ventaDetalles {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.ventaFecha,
-.ventaProductos {
-  background: #f1f5f9;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.ventaTotal {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 16px;
-}
-
-.ventasResumen {
-  background: #f0fdf4;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  border: 1px solid #bbf7d0;
-  border-left: 4px solid #16a34a;
 }
 
 /* Formularios */
@@ -514,9 +466,10 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-top: 24px;
-  padding-top: 20px;
+  padding: 20px;
+  background: #f8f9fa;
   border-top: 1px solid #e2e8f0;
+  margin-top: auto;
 }
 
 .mainActions {
@@ -524,25 +477,21 @@
   gap: 12px;
 }
 
-/* Scroll */
-.productosList::-webkit-scrollbar,
-.ventasList::-webkit-scrollbar {
+/* Scroll personalizado */
+.productosList::-webkit-scrollbar {
   width: 6px;
 }
 
-.productosList::-webkit-scrollbar-track,
-.ventasList::-webkit-scrollbar-track {
+.productosList::-webkit-scrollbar-track {
   background: #f1f1f1;
 }
 
-.productosList::-webkit-scrollbar-thumb,
-.ventasList::-webkit-scrollbar-thumb {
+.productosList::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
-.productosList::-webkit-scrollbar-thumb:hover,
-.ventasList::-webkit-scrollbar-thumb:hover {
+.productosList::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
 
@@ -574,15 +523,13 @@
     justify-content: space-between;
   }
 
-  .productoItem,
-  .ventaItem {
+  .productoItem {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
 
-  .productoTotal,
-  .ventaTotal {
+  .productoTotal {
     align-self: flex-end;
   }
 }
@@ -599,68 +546,6 @@
   }
 }
 
-.productosSection,
-.ventasSection {
+.productosSection {
   animation: fadeIn 0.3s ease-out;
-}
-
-/* Sección de Pendientes */
-.pendientesSection {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 16px;
-  margin: 16px 0;
-  border-left: 4px solid #f59e0b;
-}
-
-.pendientesGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.pendienteItem {
-  background: white;
-  padding: 12px;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  text-align: center;
-}
-
-.pendienteItem span:first-child {
-  display: block;
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.pendienteItem span:last-child {
-  display: block;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.negative {
-  color: #dc2626;
-}
-
-.positive {
-  color: #16a34a;
-}
-
-.warning {
-  color: #d97706;
-}
-
-.pendienteItem small {
-  color: #9ca3af;
-  font-size: 11px;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .pendientesGrid {
-    grid-template-columns: 1fr;
-  }
 }

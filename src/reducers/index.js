@@ -8,3 +8,4 @@ export { closuresReducer } from "./closuresReducer";
 export { detallesVentaReducer } from "./detallesVentaReducer";
 export { sesionesCajaReducer } from "./sesionesCajaReducer";
 export { usersReducer } from "./usersReducer";
+export { pendientesReducer } from "./pendientesReducer";

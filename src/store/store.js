@@ -10,6 +10,7 @@ import {
   detallesVentaReducer,
   sesionesCajaReducer,
   usersReducer,
+  pendientesReducer,
 } from "../reducers/index";
 
 const rootReducer = combineReducers({
@@ -22,6 +23,7 @@ const rootReducer = combineReducers({
   detallesVenta: detallesVentaReducer,
   sesionesCaja: sesionesCajaReducer,
   users: usersReducer,
+  pendientes: pendientesReducer,
 });
 
 const composeEnhancers =
