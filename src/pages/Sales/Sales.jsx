@@ -18,6 +18,7 @@ import {
   FiWifiOff,
   FiAlertTriangle,
   FiShoppingCart,
+  FiClock,
 } from "react-icons/fi";
 import styles from "./Sales.module.css";
 import IndexedDBService from "../../services/IndexedDBService";
