@@ -506,6 +506,7 @@ export const loadTodayClosure = () => {
 };
 
 // En closuresActions.js - VERSIÓN COMPLETAMENTE CORREGIDA
+// ✅ MÉTODO COMPLETO - calculateClosureTotals (ACTUALIZADO)
 export const calculateClosureTotals = (sesionCajaId) => {
   return async (dispatch, getState) => {
     try {
@@ -560,8 +561,18 @@ export const calculateClosureTotals = (sesionCajaId) => {
                 throw new Error("Sesión no encontrada en estado local");
               }
 
-              // Calcular totales manualmente
-              totales = calcularTotalesDesdeVentas(ventasSesion, sesion);
+              // ✅ OBTENER PENDIENTES PARA CÁLCULO ONLINE
+              const pendientesTotals =
+                await PendientesOfflineController.calculatePendientesTotals(
+                  sesionCajaId
+                );
+
+              // Calcular totales manualmente CON PENDIENTES
+              totales = calcularTotalesDesdeVentas(
+                ventasSesion,
+                sesion,
+                pendientesTotals
+              );
               console.log(
                 "✅ [CLOSURES] Totales calculados manualmente online:",
                 totales
@@ -588,7 +599,7 @@ export const calculateClosureTotals = (sesionCajaId) => {
         totales = await calculateLocalTotals(sesionCajaId, dispatch, getState);
       }
 
-      // ✅ ASEGURAR QUE TENEMOS TODOS LOS CAMPOS REQUERIDOS
+      // ✅ ASEGURAR QUE TENEMOS TODOS LOS CAMPOS REQUERIDOS CON PENDIENTES
       const totalesCompletos = {
         cantidad_ventas: totales.cantidad_ventas || 0,
         total_ventas: totales.total_ventas || 0,
@@ -598,10 +609,20 @@ export const calculateClosureTotals = (sesionCajaId) => {
         ganancia_bruta: totales.ganancia_bruta || 0,
         saldo_inicial: totales.saldo_inicial || 0,
         saldo_final_teorico: totales.saldo_final_teorico || 0,
+        // ✅ INCLUIR PENDIENTES EN LA RESPUESTA
+        total_retiros_pendientes: totales.total_retiros_pendientes || 0,
+        total_ingresos_pendientes: totales.total_ingresos_pendientes || 0,
+        total_pendientes_pago: totales.total_pendientes_pago || 0,
+        cantidad_retiros: totales.cantidad_retiros || 0,
+        cantidad_ingresos: totales.cantidad_ingresos || 0,
+        cantidad_pendientes: totales.cantidad_pendientes || 0,
         diferencia: 0, // Se calculará después con saldo final real
       };
 
-      console.log("✅ [CLOSURES] Totales finales:", totalesCompletos);
+      console.log(
+        "✅ [CLOSURES] Totales finales CON PENDIENTES:",
+        totalesCompletos
+      );
       return totalesCompletos;
     } catch (error) {
       console.error("❌ [CLOSURES] Error calculando totales:", error);
@@ -621,6 +642,12 @@ export const calculateClosureTotals = (sesionCajaId) => {
         ganancia_bruta: 0,
         saldo_inicial: sesion?.saldo_inicial || 0,
         saldo_final_teorico: sesion?.saldo_inicial || 0,
+        total_retiros_pendientes: 0,
+        total_ingresos_pendientes: 0,
+        total_pendientes_pago: 0,
+        cantidad_retiros: 0,
+        cantidad_ingresos: 0,
+        cantidad_pendientes: 0,
         diferencia: 0,
       };
 
@@ -631,6 +658,7 @@ export const calculateClosureTotals = (sesionCajaId) => {
 };
 
 // ✅ FUNCIÓN AUXILIAR PARA CÁLCULO LOCAL
+// ✅ MÉTODO COMPLETO CORREGIDO - calculateLocalTotals
 const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
   try {
     const { sesionesCaja, ventas } = getState();
@@ -652,7 +680,11 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
           venta.sesion_caja_id === sesionCajaId ||
           venta.sesion_caja_id_local === sesionCajaId
       );
+      console.log(
+        `📊 [CLOSURES] ${ventasSesion.length} ventas encontradas en estado Redux`
+      );
     } else {
+      console.log("🔄 [CLOSURES] Cargando ventas desde el servidor...");
       await dispatch(loadSales());
       const { ventas: ventasActualizadas } = getState();
       ventasSesion = ventasActualizadas.ventas.filter(
@@ -660,11 +692,15 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
           venta.sesion_caja_id === sesionCajaId ||
           venta.sesion_caja_id_local === sesionCajaId
       );
+      console.log(
+        `📊 [CLOSURES] ${ventasSesion.length} ventas cargadas después de dispatch`
+      );
     }
 
     // ✅ OBTENER PENDIENTES CORRECTAMENTE
     const pendientesTotals =
       await PendientesOfflineController.calculatePendientesTotals(sesionCajaId);
+    console.log("📊 [CLOSURES] Totales de pendientes:", pendientesTotals);
 
     // Calcular totales de ventas
     const calculo = {
@@ -679,8 +715,12 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
       total_retiros_pendientes: pendientesTotals.total_retiros || 0,
       total_ingresos_pendientes: pendientesTotals.total_ingresos || 0,
       total_pendientes_pago: pendientesTotals.total_pendientes || 0,
+      cantidad_retiros: pendientesTotals.cantidad_retiros || 0,
+      cantidad_ingresos: pendientesTotals.cantidad_ingresos || 0,
+      cantidad_pendientes: pendientesTotals.cantidad_pendientes || 0,
     };
 
+    // Calcular totales de ventas
     ventasSesion.forEach((venta) => {
       calculo.total_ventas += parseFloat(venta.total) || 0;
       calculo.total_efectivo += parseFloat(venta.monto_efectivo) || 0;
@@ -689,14 +729,14 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
       calculo.ganancia_bruta += parseFloat(venta.ganancia_bruta) || 0;
     });
 
-    // ✅ CÁLCULO CORRECTO DEL SALDO FINAL TEÓRICO
+    // ✅ CÁLCULO CORRECTO DEL SALDO FINAL TEÓRICO CON PENDIENTES
     calculo.saldo_final_teorico =
       calculo.saldo_inicial +
       calculo.total_efectivo +
       calculo.total_ingresos_pendientes -
       calculo.total_retiros_pendientes;
 
-    calculo.diferencia = 0;
+    calculo.diferencia = 0; // Se calculará después con el saldo final real
 
     console.log("✅ [CLOSURES] Cálculo local completado:", calculo);
     return calculo;
@@ -707,7 +747,12 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
 };
 
 // ✅ FUNCIÓN AUXILIAR PARA CALCULAR TOTALES DESDE VENTAS
-const calcularTotalesDesdeVentas = (ventasSesion, sesion) => {
+// ✅ FUNCIÓN AUXILIAR ACTUALIZADA - calcularTotalesDesdeVentas CON PENDIENTES
+const calcularTotalesDesdeVentas = (
+  ventasSesion,
+  sesion,
+  pendientesTotals = null
+) => {
   const calculo = {
     cantidad_ventas: ventasSesion.length,
     total_ventas: 0,
@@ -716,6 +761,13 @@ const calcularTotalesDesdeVentas = (ventasSesion, sesion) => {
     total_transferencia: 0,
     ganancia_bruta: 0,
     saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
+    // ✅ INCLUIR PENDIENTES SI SE PROVEEN
+    total_retiros_pendientes: pendientesTotals?.total_retiros || 0,
+    total_ingresos_pendientes: pendientesTotals?.total_ingresos || 0,
+    total_pendientes_pago: pendientesTotals?.total_pendientes || 0,
+    cantidad_retiros: pendientesTotals?.cantidad_retiros || 0,
+    cantidad_ingresos: pendientesTotals?.cantidad_ingresos || 0,
+    cantidad_pendientes: pendientesTotals?.cantidad_pendientes || 0,
   };
 
   ventasSesion.forEach((venta) => {
@@ -726,7 +778,13 @@ const calcularTotalesDesdeVentas = (ventasSesion, sesion) => {
     calculo.ganancia_bruta += parseFloat(venta.ganancia_bruta) || 0;
   });
 
-  calculo.saldo_final_teorico = calculo.saldo_inicial + calculo.total_efectivo;
+  // ✅ CÁLCULO CORRECTO CON PENDIENTES
+  calculo.saldo_final_teorico =
+    calculo.saldo_inicial +
+    calculo.total_efectivo +
+    calculo.total_ingresos_pendientes -
+    calculo.total_retiros_pendientes;
+
   calculo.diferencia = 0;
 
   return calculo;
