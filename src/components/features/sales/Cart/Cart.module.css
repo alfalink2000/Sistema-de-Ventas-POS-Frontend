@@ -1,6 +1,6 @@
 /* components/features/sales/Cart/Cart.module.css - VERSIÓN CORREGIDA */
 
-/* ESTADO VACÍO */
+/* ESTADO VACÍO (se mantiene igual) */
 .emptyCart {
   background: white;
   border-radius: 12px;
@@ -82,15 +82,14 @@
   border: 1px solid #f1f5f9;
   display: flex;
   flex-direction: column;
-  height: 100%;
+
+  /* ✅ ALTURA FIJA CRÍTICA - ESTO ES LO MÁS IMPORTANTE */
+  height: 600px; /* Altura fija base */
+  max-height: 80vh; /* Máximo 80% de la altura de la ventana */
+
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-
-  /* ✅ ALTURA FIJA Y ESTRUCTURA FLEXIBLE */
-  min-height: 500px;
-  max-height: 100vh;
-
-  /* ✅ NUEVO: Layout de grid para estructura fija */
-  grid-template-rows: auto 1fr auto;
+  position: relative;
+  overflow: hidden; /* Evita que el contenido se salga */
 }
 
 .cartHeader {
@@ -102,8 +101,6 @@
   flex-shrink: 0;
   background: white;
   z-index: 10;
-  position: sticky;
-  top: 0;
 }
 
 .cartHeader h3 {
@@ -115,43 +112,25 @@
 
 /* ✅ CONTENEDOR DE SCROLL CORREGIDO - ESTO ES CLAVE */
 .cartItemsContainer {
-  flex: 1;
+  flex: 1; /* Ocupa todo el espacio disponible */
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
 
-  /* ✅ ALTURA DINÁMICA QUE FUNCIONA */
-  min-height: 0; /* IMPORTANTE: Permite que el flex funcione */
-  max-height: none;
+  /* ✅ PROPIEDADES CRÍTICAS PARA EL SCROLL */
+  min-height: 0; /* Permite que flex:1 funcione correctamente */
+  height: 0; /* Fuerza el cálculo correcto del flex */
 
   /* ✅ Scroll suave */
   scroll-behavior: smooth;
 }
 
-/* ✅ MEJORAS EN LA BARRA DE SCROLL */
-.cartItemsContainer::-webkit-scrollbar {
-  width: 8px;
-}
-
-.cartItemsContainer::-webkit-scrollbar-track {
-  background: #f8fafc;
-  border-radius: 4px;
-}
-
-.cartItemsContainer::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.cartItemsContainer::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* ✅ CONTENEDOR DE ITEMS - SIN RESTRICCIONES DE ALTURA */
+/* ✅ CONTENEDOR DE ITEMS */
 .cartItems {
   padding: 0;
   display: flex;
   flex-direction: column;
+  min-height: min-content; /* Asegura que tenga al menos el contenido */
 }
 
 /* ✅ FOOTER FIJO - CORREGIDO */
@@ -159,17 +138,8 @@
   padding: 20px 24px;
   border-top: 1px solid #f1f5f9;
   background: #f8fafc;
-  flex-shrink: 0;
-
-  /* ✅ POSICIONAMIENTO ABSOLUTO EN EL BOTTOM */
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-
-  /* ✅ SOMBRA PARA SEPARACIÓN VISUAL */
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0; /* No se reduce */
+  margin-top: auto; /* Se empuja hacia abajo */
 }
 
 .total {
@@ -205,7 +175,6 @@
   font-weight: 500;
 }
 
-/* ✅ BOTÓN DE CHECKOUT MEJORADO */
 .checkoutButton {
   width: 100%;
   padding: 16px 24px !important;
@@ -230,6 +199,25 @@
   box-shadow: none !important;
 }
 
+/* ✅ MEJORAS EN LA BARRA DE SCROLL */
+.cartItemsContainer::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cartItemsContainer::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 3px;
+}
+
+.cartItemsContainer::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.cartItemsContainer::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* ============================================= */
 /* ✅ RESPONSIVE - CORREGIDO */
 /* ============================================= */
@@ -251,6 +239,11 @@
 
   .emptyText {
     font-size: 0.85rem;
+  }
+
+  .cart {
+    height: 500px; /* Altura menor en tablets */
+    max-height: 70vh;
   }
 
   .cartHeader {
@@ -301,7 +294,8 @@
   }
 
   .cart {
-    min-height: 400px;
+    height: 450px; /* Altura menor en móviles */
+    max-height: 65vh;
     border-radius: 8px;
   }
 
@@ -341,8 +335,9 @@
 
 /* ✅ ESTILOS PARA PANTALLAS GRANDES */
 @media (min-width: 1440px) {
-  .cartItemsContainer {
-    max-height: 65vh;
+  .cart {
+    height: 700px;
+    max-height: 75vh;
   }
 }
 
@@ -384,23 +379,4 @@
   padding: 40px;
   color: #64748b;
   font-size: 0.9rem;
-}
-
-/* ✅ INDICADOR DE SCROLL (opcional) */
-.scrollIndicator {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.cartItemsContainer:hover .scrollIndicator {
-  opacity: 1;
 }
