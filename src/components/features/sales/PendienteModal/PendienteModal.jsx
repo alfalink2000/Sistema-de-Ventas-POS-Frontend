@@ -111,6 +111,8 @@ const PendienteModal = ({ isOpen, onClose }) => {
       onClose={handleClose}
       title="Registrar Pendiente/Imprevisto"
       size="medium"
+      overlayClassName={styles.modalOverlay}
+      className={styles.modalContent}
     >
       <div className={styles.pendienteModal}>
         {/* Información de la Sesión */}

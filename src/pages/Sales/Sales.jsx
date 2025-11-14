@@ -32,13 +32,26 @@ const Sales = () => {
     pendingSessions: 0,
     pendingClosures: 0,
   });
-
+  const [showPendienteModal, setShowPendienteModal] = useState(false);
   const dispatch = useDispatch();
 
   const { products, loading, error } = useSelector((state) => state.products);
   const { items } = useSelector((state) => state.cart);
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
   const { user } = useSelector((state) => state.auth);
+
+  // ✅ EFECTO PARA AGREGAR/REMOVER CLASE AL BODY CUANDO EL MODAL ESTÁ ABIERTO
+  useEffect(() => {
+    if (showPendienteModal) {
+      document.body.classList.add("modal-open");
+    } else {
+      document.body.classList.remove("modal-open");
+    }
+
+    return () => {
+      document.body.classList.remove("modal-open");
+    };
+  }, [showPendienteModal]);
 
   // ✅ MONITOREO DE CONEXIÓN
   useEffect(() => {

@@ -403,6 +403,124 @@ class SalesOfflineController extends BaseOfflineController {
     }
   }
 
+  async getVentasBySesion(sesionId) {
+    return await this.getSalesBySession(sesionId);
+  }
+  // ✅ MÉTODO MEJORADO PARA OBTENER VENTAS CON PRODUCTOS
+  async getVentasConProductosBySesion(sesionId) {
+    try {
+      console.log(
+        `🔍 [SALES] Buscando ventas con productos para sesión: ${sesionId}`
+      );
+
+      // Obtener ventas de la sesión
+      const ventas = await this.getSalesBySession(sesionId);
+      console.log(`📊 [SALES] ${ventas.length} ventas encontradas`);
+
+      // Para cada venta, obtener sus productos/detalles
+      const ventasConProductos = [];
+
+      for (const venta of ventas) {
+        let productosVenta = [];
+
+        // ✅ INTENTAR DIFERENTES ESTRUCTURAS
+        if (venta.productos && Array.isArray(venta.productos)) {
+          // Caso 1: Productos directamente en la venta
+          productosVenta = venta.productos;
+          console.log(
+            `🛒 Venta ${venta.id_local} tiene productos directos: ${productosVenta.length}`
+          );
+        } else {
+          // Caso 2: Buscar en detalles
+          const detalles = await this.getSaleDetails(venta.id_local);
+          console.log(
+            `📋 Venta ${venta.id_local} tiene detalles: ${detalles.length}`
+          );
+
+          // Convertir detalles a formato de productos
+          productosVenta = detalles.map((detalle) => ({
+            producto_id: detalle.producto_id,
+            cantidad: detalle.cantidad,
+            precio_unitario: detalle.precio_unitario,
+            subtotal: detalle.subtotal,
+            nombre: detalle.producto_nombre,
+            producto_nombre: detalle.producto_nombre,
+          }));
+        }
+
+        ventasConProductos.push({
+          ...venta,
+          productos: productosVenta,
+        });
+      }
+
+      console.log(
+        `✅ [SALES] ${ventasConProductos.length} ventas con productos procesadas`
+      );
+
+      // DEBUG: Mostrar resumen de productos
+      const totalProductos = ventasConProductos.reduce(
+        (sum, v) => sum + (v.productos?.length || 0),
+        0
+      );
+      console.log(
+        `📦 Total de productos en todas las ventas: ${totalProductos}`
+      );
+
+      return ventasConProductos;
+    } catch (error) {
+      console.error("❌ Error obteniendo ventas con productos:", error);
+      return [];
+    }
+  }
+  // ✅ MÉTODO PARA DEBUG DETALLADO DE VENTAS
+  async debugVentasSesion(sesionId) {
+    try {
+      console.log(`🐛 [DEBUG] Iniciando debug para sesión: ${sesionId}`);
+
+      const ventas = await this.getSalesBySession(sesionId);
+      console.log(`📊 [DEBUG] ${ventas.length} ventas encontradas`);
+
+      for (const [index, venta] of ventas.entries()) {
+        console.log(`\n--- Venta ${index + 1} ---`);
+        console.log(`ID: ${venta.id_local || venta.id}`);
+        console.log(`Total: $${venta.total}`);
+        console.log(`Método Pago: ${venta.metodo_pago}`);
+        console.log(`Fecha: ${venta.fecha_venta || venta.created_at}`);
+
+        // Verificar productos directos
+        if (venta.productos && Array.isArray(venta.productos)) {
+          console.log(`🛒 Productos directos: ${venta.productos.length}`);
+          venta.productos.forEach((p, i) => {
+            console.log(
+              `   ${i + 1}. ${p.nombre || p.producto_nombre} - x${
+                p.cantidad
+              } - $${p.precio_unitario}`
+            );
+          });
+        } else {
+          console.log(`❌ No tiene productos directos`);
+        }
+
+        // Verificar detalles
+        const detalles = await this.getSaleDetails(venta.id_local);
+        console.log(`📋 Detalles: ${detalles.length}`);
+        detalles.forEach((d, i) => {
+          console.log(
+            `   ${i + 1}. ${d.producto_nombre} - x${d.cantidad} - $${
+              d.precio_unitario
+            }`
+          );
+        });
+      }
+
+      return ventas;
+    } catch (error) {
+      console.error("❌ Error en debug:", error);
+      return [];
+    }
+  }
+
   // ✅ MÉTODO PARA OBTENER RESUMEN COMPLETO DE VENTAS
   async getSalesSummaryBySession(sesionId) {
     try {

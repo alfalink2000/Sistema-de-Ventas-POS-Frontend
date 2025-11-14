@@ -662,6 +662,7 @@
 
 // export default CierreCajaModal;
 // CierreCajaModal.js
+// CierreCajaModal.js
 import { useState, useEffect, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useOfflineControllers } from "../../../../hooks/useOfflineControllers";
@@ -1290,35 +1291,20 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         0
       );
 
-      // ✅ DATOS COMPLETOS DEL CIERRE CON PENDIENTES
       const closureData = {
         sesion_caja_id: sesion.id || sesion.id_local,
         sesion_caja_id_local: sesion.id_local || sesionId,
         vendedor_id: user.id,
         vendedor_nombre: user.nombre || user.username,
-
-        // Totales de ventas
         total_ventas: totales?.total_ventas || 0,
         total_efectivo: totales?.total_efectivo || 0,
         total_tarjeta: totales?.total_tarjeta || 0,
         total_transferencia: totales?.total_transferencia || 0,
         ganancia_bruta: totales?.ganancia_bruta || 0,
-
-        // Saldos
         saldo_inicial: totales?.saldo_inicial || sesion.saldo_inicial || 0,
         saldo_final_teorico: totales?.saldo_final_teorico || 0,
         saldo_final_real: saldoFinalNumero,
         diferencia: diferencia,
-
-        // ✅ PENDIENTES INCLUIDOS EN EL CIERRE
-        total_retiros_pendientes: pendientesTotals?.total_retiros || 0,
-        total_ingresos_pendientes: pendientesTotals?.total_ingresos || 0,
-        total_pendientes_pago: pendientesTotals?.total_pendientes || 0,
-        cantidad_retiros: pendientesTotals?.cantidad_retiros || 0,
-        cantidad_ingresos: pendientesTotals?.cantidad_ingresos || 0,
-        cantidad_pendientes: pendientesTotals?.cantidad_pendientes || 0,
-
-        // Información adicional
         observaciones: observaciones.trim() || null,
         fecha_apertura: sesion.fecha_apertura,
         productos_vendidos: productos.length,
@@ -1387,53 +1373,31 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         });
       }
 
-      // ✅ MENSAJE DE CONFIRMACIÓN MEJORADO CON PENDIENTES
       await Swal.fire({
         icon: "success",
         title: isOnline ? "Cierre Completado" : "Cierre Guardado",
         html: `
-        <div style="text-align: left; font-size: 14px;">
-          <p><strong>${
-            isOnline
-              ? "✅ Sesión cerrada exitosamente"
-              : "📱 Cierre guardado localmente"
-          }</strong></p>
-          
-          <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;">
-            <p><strong>Resumen Financiero:</strong></p>
-            <p>• Total Ventas: <strong>$${closureData.total_ventas.toFixed(
+          <div style="text-align: left;">
+            <p><strong>${
+              isOnline
+                ? "Sesión cerrada exitosamente"
+                : "Cierre guardado localmente"
+            }</strong></p>
+            <p>Total Ventas: <strong>$${closureData.total_ventas.toFixed(
               2
             )}</strong></p>
-            <p>• Productos Vendidos: <strong>${
+            <p>Productos Vendidos: <strong>${
               closureData.productos_vendidos
-            }</strong> productos</p>
-            <p>• Unidades: <strong>${
-              closureData.unidades_vendidas
-            }</strong> unidades</p>
+            }</strong></p>
+            <p>Unidades: <strong>${closureData.unidades_vendidas}</strong></p>
+            ${
+              !isOnline
+                ? "<p>📱 Se sincronizará cuando recuperes conexión</p>"
+                : ""
+            }
           </div>
-
-          <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0;">
-            <p><strong>Movimientos Pendientes:</strong></p>
-            <p>• Retiros: <strong style="color: #dc2626;">-$${closureData.total_retiros_pendientes.toFixed(
-              2
-            )}</strong></p>
-            <p>• Ingresos: <strong style="color: #16a34a;">+$${closureData.total_ingresos_pendientes.toFixed(
-              2
-            )}</strong></p>
-            <p>• Pendientes: <strong style="color: #d97706;">$${closureData.total_pendientes_pago.toFixed(
-              2
-            )}</strong></p>
-          </div>
-
-          ${
-            !isOnline
-              ? "<p>📱 Se sincronizará automáticamente cuando recuperes la conexión</p>"
-              : ""
-          }
-        </div>
-      `,
+        `,
         confirmButtonText: "Aceptar",
-        width: 500,
       });
 
       if (user?.id) {
@@ -1455,6 +1419,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
       setProcessing(false);
     }
   };
+
   // ✅ CERRAR MODAL
   const handleCloseModal = () => {
     setSaldoFinalReal("");
@@ -1697,7 +1662,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         <PendientesResumen
           pendientesTotals={pendientesTotals}
           onVerDetalles={handleVerDetallesPendientes}
-          sesionId={sesion?.id || sesion?.id_local}
         />
 
         {/* Resumen de Productos */}

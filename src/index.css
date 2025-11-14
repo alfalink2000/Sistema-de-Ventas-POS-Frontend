@@ -102,3 +102,37 @@ body {
 .mb-4 {
   margin-bottom: var(--spacing-lg);
 }
+
+/* ESTILOS GLOBALES PARA GARANTIZAR EL z-index CORRECTO */
+
+/* ✅ EL MODAL DEBE ESTAR POR ENCIMA DE TODO */
+.modal-overlay {
+  z-index: 9999 !important;
+}
+
+.modal-content {
+  z-index: 10000 !important;
+}
+
+/* ✅ CUANDO EL MODAL ESTÁ ABIERTO, EL CONTENIDO PRINCIPAL DEBE ESTAR DETRÁS */
+body.modal-open {
+  overflow: hidden;
+}
+
+body.modal-open main,
+body.modal-open .sales-page,
+body.modal-open .product-grid,
+body.modal-open .product-card,
+body.modal-open .add-to-cart-button {
+  z-index: 1 !important;
+  position: relative !important;
+}
+
+/* ✅ GARANTIZAR QUE LOS ELEMENTOS DEL MODAL TENGAN z-index ALTO */
+.modal-backdrop {
+  z-index: 9998 !important;
+}
+
+.modal-dialog {
+  z-index: 9999 !important;
+}
