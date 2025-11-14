@@ -1,4 +1,4 @@
-// components/layout/Header/Header.jsx - VERSIÓN COMPLETA CORREGIDA
+// components/layout/Header/Header.jsx - VERSIÓN CORREGIDA
 import { useDispatch, useSelector } from "react-redux";
 import {
   FiMenu,
@@ -506,11 +506,9 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
       </div>
 
       <div className={styles.headerRight}>
-        {/* INDICADOR DE SINCRONIZACIÓN */}
+        {/* INDICADOR DE SINCRONIZACIÓN - VERSIÓN SIMPLIFICADA */}
         <div
-          className={`${styles.syncIndicator} ${
-            totalPending > 0 ? styles.hasPending : ""
-          }`}
+          className={styles.syncIndicator}
           onClick={() => setShowSyncModal(true)}
           title="Estado de sincronización"
         >
@@ -518,25 +516,15 @@ const Header = ({ user, onToggleSidebar, sidebarOpen }) => {
             <div
               className={`${styles.syncIcon} ${
                 isOnline ? styles.online : styles.offline
-              } ${totalPending > 0 ? styles.pending : ""}`}
+              }`}
             >
               {isOnline ? <FiWifi /> : <FiWifiOff />}
             </div>
-            {totalPending > 0 && isOnline && (
-              <div className={styles.syncBadge}>
-                {totalPending > 99 ? "99+" : totalPending}
-              </div>
-            )}
           </div>
           <div className={styles.syncInfo}>
             <span className={styles.syncStatus}>
               {isOnline ? "En línea" : "Offline"}
             </span>
-            {totalPending > 0 && isOnline && (
-              <span className={styles.pendingText}>
-                {totalPending} pendientes
-              </span>
-            )}
           </div>
         </div>
 

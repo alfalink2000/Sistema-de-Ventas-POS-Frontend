@@ -674,17 +674,12 @@ import {
   FiDollarSign,
   FiClock,
   FiShoppingCart,
-  FiBarChart2,
   FiPackage,
   FiList,
   FiAlertTriangle,
   FiChevronDown,
   FiChevronUp,
-  FiTrendingUp,
   FiBox,
-  FiPercent,
-  FiCheckCircle,
-  FiXCircle,
   FiInfo,
   FiCreditCard,
 } from "react-icons/fi";
@@ -725,25 +720,172 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     loaded: controllersLoaded,
   } = useOfflineControllers();
 
-  // ✅ OBTENER VENTAS DE LA SESIÓN
-  const obtenerVentasSesion = useCallback(async () => {
-    if (!sesion || !SalesOfflineController) return [];
+  // ✅ OBTENER VENTAS CON PRODUCTOS DE LA SESIÓN
+  const obtenerVentasConProductos = useCallback(async () => {
+    if (!sesion) return [];
 
     try {
       const sesionId = sesion.id || sesion.id_local;
       console.log(`🔍 Obteniendo ventas para sesión: ${sesionId}`);
 
-      const ventas = await SalesOfflineController.getVentasBySesion(sesionId);
+      let ventas = [];
+
+      if (SalesOfflineController) {
+        // ✅ USAR EL CONTROLADOR SI ESTÁ DISPONIBLE
+        ventas = await SalesOfflineController.getVentasBySesion(sesionId);
+      } else {
+        // ✅ FALLBACK: BUSCAR DIRECTAMENTE EN INDEXEDDB
+        const IndexedDBService = await import(
+          "../../../../services/IndexedDBService"
+        ).then((module) => module.default);
+
+        // Buscar en ventas pendientes (offline)
+        const ventasPendientes = await IndexedDBService.getAll(
+          "ventas_pendientes"
+        );
+        const ventasSesionPendientes = ventasPendientes.filter(
+          (v) =>
+            v.sesion_caja_id === sesionId || v.sesion_caja_id_local === sesionId
+        );
+
+        // Buscar en ventas (online/sincronizadas)
+        const ventasOnline = await IndexedDBService.getAll("ventas");
+        const ventasSesionOnline = ventasOnline.filter(
+          (v) => v.sesion_caja_id === sesionId
+        );
+
+        ventas = [...ventasSesionPendientes, ...ventasSesionOnline];
+      }
+
       console.log(`📊 ${ventas.length} ventas encontradas para la sesión`);
 
-      setVentasDelDia(ventas);
-      return ventas;
+      // ✅ VERIFICAR SI LAS VENTAS TIENEN PRODUCTOS
+      const ventasConProductos = ventas.map((venta) => {
+        // Si la venta no tiene productos, intentar obtenerlos de los detalles
+        if (!venta.productos || venta.productos.length === 0) {
+          console.warn(
+            `⚠️ Venta ${venta.id_local || venta.id} no tiene productos directos`
+          );
+        }
+        return venta;
+      });
+
+      setVentasDelDia(ventasConProductos);
+      return ventasConProductos;
     } catch (error) {
       console.error("❌ Error obteniendo ventas:", error);
       setVentasDelDia([]);
       return [];
     }
   }, [sesion, SalesOfflineController]);
+
+  // ✅ OBTENER PRODUCTOS AGRUPADOS MEJORADO
+  const obtenerProductosAgrupados = useCallback(async (ventas) => {
+    if (!ventas || ventas.length === 0) {
+      console.log("📭 No hay ventas para agrupar productos");
+      return [];
+    }
+
+    try {
+      console.log(
+        `📦 Procesando ${ventas.length} ventas para agrupar productos...`
+      );
+
+      const productosMap = new Map();
+      let productosConProblemas = 0;
+
+      ventas.forEach((venta) => {
+        // ✅ VERIFICAR DIFERENTES ESTRUCTURAS DE PRODUCTOS
+        let productosVenta = [];
+
+        if (venta.productos && Array.isArray(venta.productos)) {
+          // Caso 1: Productos directamente en la venta
+          productosVenta = venta.productos;
+        } else if (venta.detalles && Array.isArray(venta.detalles)) {
+          // Caso 2: Productos en detalles
+          productosVenta = venta.detalles;
+        } else if (venta.items && Array.isArray(venta.items)) {
+          // Caso 3: Productos en items
+          productosVenta = venta.items;
+        } else {
+          console.warn(
+            `⚠️ Venta ${
+              venta.id_local || venta.id
+            } no tiene estructura de productos reconocida:`,
+            venta
+          );
+          productosConProblemas++;
+          return;
+        }
+
+        // ✅ PROCESAR CADA PRODUCTO DE LA VENTA
+        productosVenta.forEach((productoVenta) => {
+          const productoId =
+            productoVenta.producto_id ||
+            productoVenta.id ||
+            productoVenta.productoId;
+
+          if (!productoId) {
+            console.warn("❌ Producto sin ID:", productoVenta);
+            return;
+          }
+
+          const nombre =
+            productoVenta.nombre ||
+            productoVenta.producto_nombre ||
+            "Producto sin nombre";
+          const cantidad = parseInt(
+            productoVenta.cantidad || productoVenta.quantity || 1
+          );
+          const precioUnitario = parseFloat(
+            productoVenta.precio_unitario ||
+              productoVenta.precio ||
+              productoVenta.price ||
+              0
+          );
+          const subtotal = parseFloat(
+            productoVenta.subtotal || precioUnitario * cantidad
+          );
+
+          const existing = productosMap.get(productoId);
+
+          if (existing) {
+            existing.cantidad_total += cantidad;
+            existing.subtotal_total += subtotal;
+          } else {
+            productosMap.set(productoId, {
+              producto_id: productoId,
+              nombre: nombre,
+              cantidad_total: cantidad,
+              subtotal_total: subtotal,
+              precio_unitario: precioUnitario,
+            });
+          }
+        });
+      });
+
+      const productosArray = Array.from(productosMap.values());
+
+      console.log(
+        `✅ ${productosArray.length} productos agrupados correctamente`
+      );
+      console.log(
+        `⚠️ ${productosConProblemas} ventas con problemas de estructura`
+      );
+
+      if (productosConProblemas > 0) {
+        console.log(
+          "🔍 Ventas con problemas:",
+          ventas.filter((v) => !v.productos && !v.detalles && !v.items)
+        );
+      }
+
+      return productosArray;
+    } catch (error) {
+      console.error("❌ Error obteniendo productos agrupados:", error);
+      return [];
+    }
+  }, []);
 
   // ✅ CALCULAR TOTALES COMPLETOS MEJORADO
   const calcularTotalesCompletos = useCallback(async () => {
@@ -754,7 +896,11 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
     try {
       // ✅ PRIMERO OBTENER VENTAS
-      const ventas = await obtenerVentasSesion();
+      const ventas = await obtenerVentasConProductos();
+
+      // ✅ LUEGO OBTENER PRODUCTOS AGRUPADOS
+      const productos = await obtenerProductosAgrupados(ventas);
+      setProductosAgrupados(productos);
 
       let totals;
       const sesionId = sesion.id || sesion.id_local;
@@ -781,7 +927,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
         }
       }
 
-      // ✅ SI NO HAY TOTALES DEL CONTROLADOR, CALCULAR MANUALMENTE
+      // ✅ SI NO HAY TOTALES DEL CONTROLADOR, CALCULAR MANUALMENTE DESDE VENTAS
       if (!totals && ventas.length > 0) {
         console.log("🧮 Calculando totales manualmente desde ventas...");
         totals = calcularTotalesManual(ventas);
@@ -842,7 +988,8 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     isOnline,
     controllersLoaded,
     ClosuresOfflineController,
-    obtenerVentasSesion,
+    obtenerVentasConProductos,
+    obtenerProductosAgrupados,
   ]);
 
   // ✅ CALCULAR TOTALES MANUALMENTE DESDE VENTAS
@@ -866,77 +1013,12 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     };
   };
 
-  // ✅ OBTENER PRODUCTOS AGRUPADOS MEJORADO
-  const obtenerProductosAgrupados = useCallback(async () => {
-    if (!sesion) return;
-
-    try {
-      const ventas = await obtenerVentasSesion();
-      console.log(
-        `📦 Procesando ${ventas.length} ventas para agrupar productos...`
-      );
-
-      // ✅ AGRUPAR PRODUCTOS DE TODAS LAS VENTAS
-      const productosMap = new Map();
-
-      ventas.forEach((venta) => {
-        if (venta.productos && Array.isArray(venta.productos)) {
-          venta.productos.forEach((productoVenta) => {
-            const key = productoVenta.producto_id || productoVenta.id;
-            const existing = productosMap.get(key);
-
-            if (existing) {
-              existing.cantidad_total += productoVenta.cantidad || 1;
-              existing.subtotal_total +=
-                productoVenta.subtotal ||
-                productoVenta.precio_unitario * productoVenta.cantidad ||
-                0;
-            } else {
-              productosMap.set(key, {
-                producto_id: key,
-                nombre:
-                  productoVenta.nombre ||
-                  productoVenta.producto_nombre ||
-                  "Producto sin nombre",
-                cantidad_total: productoVenta.cantidad || 1,
-                subtotal_total:
-                  productoVenta.subtotal ||
-                  productoVenta.precio_unitario * productoVenta.cantidad ||
-                  0,
-                precio_unitario: productoVenta.precio_unitario || 0,
-              });
-            }
-          });
-        }
-      });
-
-      const productosArray = Array.from(productosMap.values());
-      console.log(
-        `✅ ${productosArray.length} productos agrupados correctamente`
-      );
-      setProductosAgrupados(productosArray);
-
-      return productosArray;
-    } catch (error) {
-      console.error("❌ Error obteniendo productos agrupados:", error);
-      setProductosAgrupados([]);
-      return [];
-    }
-  }, [sesion, obtenerVentasSesion]);
-
   // ✅ EFFECT PRINCIPAL
   useEffect(() => {
     if (isOpen && sesion && controllersLoaded) {
       calcularTotalesCompletos();
-      obtenerProductosAgrupados();
     }
-  }, [
-    isOpen,
-    sesion,
-    controllersLoaded,
-    calcularTotalesCompletos,
-    obtenerProductosAgrupados,
-  ]);
+  }, [isOpen, sesion, controllersLoaded, calcularTotalesCompletos]);
 
   // ✅ EFFECT PARA DIFERENCIA
   useEffect(() => {
@@ -954,8 +1036,8 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     if (!sesion) return;
 
     try {
-      const ventas = await obtenerVentasSesion();
-      const productos = await obtenerProductosAgrupados();
+      const ventas = await obtenerVentasConProductos();
+      const productos = productosAgrupados;
 
       const totalUnidades = productos.reduce(
         (sum, p) => sum + p.cantidad_total,
@@ -986,7 +1068,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             </div>
             
             <div style="margin-bottom: 15px;">
-              <h4 style="margin: 0 0 10px 0; color: #333;">Ventas del Día</h4>
+              <h4 style="margin: 0 0 10px 0; color: #333;">Estructura de Ventas</h4>
               <div style="max-height: 200px; overflow-y: auto;">
                 ${ventas
                   .map(
@@ -1007,8 +1089,18 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
                           ? "💵 Efectivo"
                           : "💳 Tarjeta"
                       } |
-                      ${venta.productos?.length || 0} productos
+                      Productos: ${
+                        venta.productos?.length ||
+                        venta.detalles?.length ||
+                        venta.items?.length ||
+                        0
+                      }
                     </div>
+                    ${
+                      !venta.productos && !venta.detalles && !venta.items
+                        ? '<div style="color: red; font-size: 11px;">⚠️ Sin estructura de productos</div>'
+                        : ""
+                    }
                   </div>
                 `
                   )
@@ -1016,6 +1108,9 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
               </div>
             </div>
 
+            ${
+              productos.length > 0
+                ? `
             <div style="margin-bottom: 15px;">
               <h4 style="margin: 0 0 10px 0; color: #333;">Productos Vendidos</h4>
               <div style="max-height: 200px; overflow-y: auto;">
@@ -1034,6 +1129,9 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
                   .join("")}
               </div>
             </div>
+            `
+                : '<p style="color: red;">❌ No se encontraron productos agrupados</p>'
+            }
           </div>
         `,
         width: 600,
@@ -1078,7 +1176,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
     try {
       const sesionId = sesion.id || sesion.id_local;
-      const productos = await obtenerProductosAgrupados();
+      const productos = productosAgrupados;
       const totalUnidades = productos.reduce(
         (sum, p) => sum + p.cantidad_total,
         0
@@ -1373,65 +1471,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
     );
   };
 
-  // ✅ RENDER DETALLE DE VENTAS
-  const renderDetalleVentas = () => {
-    if (!mostrarDetalleVentas || ventasDelDia.length === 0) return null;
-
-    return (
-      <div className={styles.ventasSection}>
-        <div className={styles.sectionHeader}>
-          <FiShoppingCart />
-          <span>Detalle de Ventas del Día</span>
-          <span className={styles.badge}>{ventasDelDia.length} ventas</span>
-        </div>
-
-        <div className={styles.ventasList}>
-          {ventasDelDia
-            .sort(
-              (a, b) =>
-                new Date(b.fecha_venta || b.created_at) -
-                new Date(a.fecha_venta || a.created_at)
-            )
-            .map((venta) => (
-              <div
-                key={venta.id_local || venta.id}
-                className={styles.ventaItem}
-              >
-                <div className={styles.ventaInfo}>
-                  <div className={styles.ventaHeader}>
-                    <span className={styles.ventaId}>
-                      Venta {venta.id_local?.substring(0, 8) || venta.id}
-                    </span>
-                    <span
-                      className={`${styles.ventaMetodo} ${
-                        styles[venta.metodo_pago]
-                      }`}
-                    >
-                      {venta.metodo_pago === "efectivo"
-                        ? "💵 Efectivo"
-                        : "💳 Tarjeta"}
-                    </span>
-                  </div>
-                  <div className={styles.ventaDetalles}>
-                    <span className={styles.ventaFecha}>
-                      {new Date(
-                        venta.fecha_venta || venta.created_at
-                      ).toLocaleTimeString()}
-                    </span>
-                    <span className={styles.ventaProductos}>
-                      {venta.productos?.length || 0} productos
-                    </span>
-                  </div>
-                </div>
-                <div className={styles.ventaTotal}>
-                  ${(venta.total || 0).toFixed(2)}
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-    );
-  };
+  // ... (el resto del componente permanece igual)
 
   if (!controllersLoaded) {
     return (
@@ -1516,26 +1556,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
 
         {/* Detalle de Productos */}
         {renderDetalleProductos()}
-
-        {/* Detalle de Ventas */}
-        {ventasDelDia.length > 0 && (
-          <div className={styles.ventasResumen}>
-            <div className={styles.resumenHeader}>
-              <div className={styles.resumenTitle}>
-                <FiList />
-                <span>Ventas del Día</span>
-              </div>
-              <button
-                className={styles.toggleButton}
-                onClick={() => setMostrarDetalleVentas(!mostrarDetalleVentas)}
-              >
-                {mostrarDetalleVentas ? <FiChevronUp /> : <FiChevronDown />}
-                {mostrarDetalleVentas ? "Ocultar" : "Ver"} Ventas
-              </button>
-            </div>
-            {renderDetalleVentas()}
-          </div>
-        )}
 
         {/* Entrada de Saldo Final */}
         <div className={styles.formGroup}>
