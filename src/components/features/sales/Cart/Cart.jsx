@@ -1,4 +1,4 @@
-// components/features/sales/Cart/Cart.jsx - VERSIÓN CORREGIDA
+// components/features/sales/Cart/Cart.jsx - VERSIÓN MEJORADA
 import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
 import CartItem from "../CartItem/CartItem";
@@ -6,7 +6,6 @@ import Button from "../../../ui/Button/Button";
 import { FiShoppingCart, FiArrowRight, FiClock } from "react-icons/fi";
 import styles from "./Cart.module.css";
 
-import { useState } from "react";
 const Cart = ({ onCheckout, disabled = false }) => {
   const dispatch = useDispatch();
   const { items } = useSelector((state) => state.cart);
@@ -18,6 +17,13 @@ const Cart = ({ onCheckout, disabled = false }) => {
       0
     );
   };
+
+  const getTotalItems = () => {
+    return items.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  // Determinar si mostrar modo compacto
+  const isCompact = items.length > 8;
 
   if (items.length === 0) {
     return (
@@ -43,41 +49,52 @@ const Cart = ({ onCheckout, disabled = false }) => {
   }
 
   return (
-    <div className={styles.cart}>
-      {/* ✅ HEADER FIJO */}
+    <div className={`${styles.cart} ${isCompact ? styles.compact : ""}`}>
+      {/* ✅ HEADER FIJO CON CONTADOR */}
       <div className={styles.cartHeader}>
-        <h3>Carrito de Venta ({items.length})</h3>
+        <div>
+          <h3>Carrito de Venta</h3>
+          <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+            {items.length} productos • {getTotalItems()} unidades
+          </span>
+        </div>
         <Button
           variant="secondary"
           size="small"
           onClick={() => dispatch(clearCart())}
+          disabled={disabled}
         >
           Limpiar
         </Button>
       </div>
 
-      {/* ✅ CONTENEDOR CON SCROLL CONTROLADO */}
+      {/* ✅ CONTENEDOR DE SCROLL MEJORADO */}
       <div className={styles.cartItemsContainer}>
         <div className={styles.cartItems}>
-          {items.map((item) => (
-            <CartItem key={item.id} item={item} />
+          {items.map((item, index) => (
+            <CartItem key={`${item.id}-${index}`} item={item} />
           ))}
         </div>
+
+        {/* ✅ INDICADOR DE SCROLL (opcional) */}
+        {items.length > 5 && (
+          <div className={styles.scrollIndicator}>↑ Desliza para ver más ↑</div>
+        )}
       </div>
 
       {/* ✅ FOOTER SIEMPRE VISIBLE */}
       <div className={styles.cartFooter}>
         <div className={styles.total}>
-          <span>Total:</span>
+          <span>Total a Pagar:</span>
           <span className={styles.totalAmount}>
             ${getTotalPrice().toFixed(2)}
           </span>
         </div>
 
-        {/* ✅ DESHABILITAR BOTÓN SI NO HAY SESIÓN */}
+        {/* ✅ MENSAJE DE ADVERTENCIA MEJORADO */}
         {!sesionAbierta && (
           <div className={styles.warningMessage}>
-            ⚠️ Abre una sesión de caja para vender
+            ⚠️ Debes abrir una sesión de caja para realizar ventas
           </div>
         )}
 
@@ -89,7 +106,11 @@ const Cart = ({ onCheckout, disabled = false }) => {
           disabled={disabled || !sesionAbierta}
           className={styles.checkoutButton}
         >
-          {!sesionAbierta ? "Sesión Requerida" : "Proceder al Pago"}
+          {!sesionAbierta ? (
+            <>📋 Sesión de Caja Requerida</>
+          ) : (
+            <>💳 Proceder al Pago (${getTotalPrice().toFixed(2)})</>
+          )}
         </Button>
       </div>
     </div>

@@ -1,5 +1,6 @@
-/* components/features/sales/Cart/Cart.module.css */
-/* ESTADO VACÍO - VERSIÓN MINIMALISTA */
+/* components/features/sales/Cart/Cart.module.css - VERSIÓN CORREGIDA */
+
+/* ESTADO VACÍO */
 .emptyCart {
   background: white;
   border-radius: 12px;
@@ -14,7 +15,6 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Ilustración minimalista */
 .emptyIllustration {
   margin-bottom: 24px;
 }
@@ -35,7 +35,6 @@
   border: 1px solid #e2e8f0;
 }
 
-/* Contenido de texto minimalista */
 .emptyContent {
   max-width: 280px;
 }
@@ -55,7 +54,6 @@
   font-weight: 400;
 }
 
-/* Indicador de acción sutil */
 .emptyHint {
   display: flex;
   align-items: center;
@@ -74,20 +72,8 @@
   color: #64748b;
 }
 
-/* Efectos hover sutiles */
-.emptyCart:hover {
-  border-color: #e2e8f0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s ease;
-}
-
-.emptyCart:hover .cartIcon {
-  color: #94a3b8;
-  transition: color 0.2s ease;
-}
-
 /* ============================================= */
-/* ✅ ESTILOS CORREGIDOS PARA CARRITO CON PRODUCTOS */
+/* ✅ CARRITO CON PRODUCTOS - CORREGIDO */
 /* ============================================= */
 
 .cart {
@@ -99,9 +85,12 @@
   height: 100%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-  /* ✅ NUEVO: Estructura de layout fija */
+  /* ✅ ALTURA FIJA Y ESTRUCTURA FLEXIBLE */
   min-height: 500px;
   max-height: 100vh;
+
+  /* ✅ NUEVO: Layout de grid para estructura fija */
+  grid-template-rows: auto 1fr auto;
 }
 
 .cartHeader {
@@ -110,7 +99,11 @@
   justify-content: space-between;
   padding: 20px 24px;
   border-bottom: 1px solid #f1f5f9;
-  flex-shrink: 0; /* ✅ Evita que el header se encoja */
+  flex-shrink: 0;
+  background: white;
+  z-index: 10;
+  position: sticky;
+  top: 0;
 }
 
 .cartHeader h3 {
@@ -120,53 +113,63 @@
   font-weight: 600;
 }
 
-/* ✅ CONTENEDOR CON SCROLL CORREGIDO - ALTURA FIJA */
+/* ✅ CONTENEDOR DE SCROLL CORREGIDO - ESTO ES CLAVE */
 .cartItemsContainer {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
-  min-height: 200px; /* ✅ Altura mínima */
-  max-height: calc(100vh - 280px); /* ✅ Altura máxima calculada */
 
-  /* ✅ Mejor scroll */
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
+  /* ✅ ALTURA DINÁMICA QUE FUNCIONA */
+  min-height: 0; /* IMPORTANTE: Permite que el flex funcione */
+  max-height: none;
+
+  /* ✅ Scroll suave */
+  scroll-behavior: smooth;
 }
 
+/* ✅ MEJORAS EN LA BARRA DE SCROLL */
 .cartItemsContainer::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .cartItemsContainer::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
+  background: #f8fafc;
+  border-radius: 4px;
 }
 
 .cartItemsContainer::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .cartItemsContainer::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
+/* ✅ CONTENEDOR DE ITEMS - SIN RESTRICCIONES DE ALTURA */
 .cartItems {
   padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ✅ FOOTER FIJO - SIEMPRE VISIBLE */
+/* ✅ FOOTER FIJO - CORREGIDO */
 .cartFooter {
   padding: 20px 24px;
   border-top: 1px solid #f1f5f9;
   background: #f8fafc;
-  flex-shrink: 0; /* ✅ Evita que el footer se encoja */
+  flex-shrink: 0;
 
-  /* ✅ Asegurar que esté siempre abajo */
-  margin-top: auto;
+  /* ✅ POSICIONAMIENTO ABSOLUTO EN EL BOTTOM */
   position: sticky;
   bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
+
+  /* ✅ SOMBRA PARA SEPARACIÓN VISUAL */
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .total {
@@ -181,45 +184,47 @@
 .total span:first-child {
   color: #475569;
   font-weight: 500;
+  font-size: 1rem;
 }
 
 .totalAmount {
   color: #1e293b;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
 .warningMessage {
   background: #fef3c7;
   color: #92400e;
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
   border: 1px solid #fcd34d;
   text-align: center;
+  font-weight: 500;
 }
 
-/* ✅ BOTÓN DE PAGO MEJORADO */
+/* ✅ BOTÓN DE CHECKOUT MEJORADO */
 .checkoutButton {
   width: 100%;
-  padding: 14px 20px !important;
-  font-size: 1rem !important;
+  padding: 16px 24px !important;
+  font-size: 1.1rem !important;
   font-weight: 600 !important;
-  border-radius: 10px !important;
-  transition: all 0.2s ease !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  border: none !important;
 }
 
 .checkoutButton:not(:disabled):hover {
   transform: translateY(-2px) !important;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
-/* ✅ ESTADO DE DESHABILITADO MEJORADO */
 .checkoutButton:disabled {
-  background: #94a3b8 !important;
-  border-color: #94a3b8 !important;
+  background: #cbd5e1 !important;
+  color: #64748b !important;
   cursor: not-allowed !important;
   transform: none !important;
   box-shadow: none !important;
@@ -236,7 +241,7 @@
   }
 
   .cartIcon {
-    font-size: 2.5rem;
+    font-size: 4rem;
     padding: 16px;
   }
 
@@ -248,21 +253,25 @@
     font-size: 0.85rem;
   }
 
-  .emptyContent {
-    max-width: 240px;
-  }
-
   .cartHeader {
     padding: 16px 20px;
+  }
+
+  .cartHeader h3 {
+    font-size: 1rem;
   }
 
   .cartFooter {
     padding: 16px 20px;
   }
 
-  /* ✅ Ajuste de altura para móviles */
-  .cartItemsContainer {
-    max-height: calc(100vh - 250px);
+  .totalAmount {
+    font-size: 1.3rem;
+  }
+
+  .checkoutButton {
+    padding: 14px 20px !important;
+    font-size: 1rem !important;
   }
 }
 
@@ -274,8 +283,8 @@
   }
 
   .cartIcon {
-    font-size: 2rem;
-    padding: 14px;
+    font-size: 3rem;
+    padding: 12px;
   }
 
   .emptyTitle {
@@ -292,18 +301,106 @@
   }
 
   .cart {
-    min-height: 450px;
+    min-height: 400px;
     border-radius: 8px;
   }
 
-  .cartItemsContainer {
-    max-height: calc(100vh - 220px);
+  .cartHeader {
+    padding: 12px 16px;
+  }
+
+  .cartFooter {
+    padding: 12px 16px;
+  }
+
+  .total {
+    margin-bottom: 12px;
+    padding: 8px 0;
+  }
+
+  .total span:first-child {
+    font-size: 0.9rem;
+  }
+
+  .totalAmount {
+    font-size: 1.2rem;
+  }
+
+  .warningMessage {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+
+  .checkoutButton {
+    padding: 12px 16px !important;
+    font-size: 0.95rem !important;
+    border-radius: 8px !important;
   }
 }
 
-/* ✅ ESTILOS PARA PANTALLAS MUY GRANDES */
+/* ✅ ESTILOS PARA PANTALLAS GRANDES */
 @media (min-width: 1440px) {
   .cartItemsContainer {
-    max-height: 600px;
+    max-height: 65vh;
   }
+}
+
+/* ✅ ESTILOS PARA MODO COMPACTO (MUCHOS PRODUCTOS) */
+.cart.compact .cartItem {
+  padding: 12px 16px;
+}
+
+.cart.compact .itemImage {
+  width: 50px;
+  height: 50px;
+}
+
+.cart.compact .itemName {
+  font-size: 0.9rem;
+}
+
+/* ✅ ANIMACIONES MEJORADAS */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cartItem {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* ✅ ESTADO DE CARGANDO */
+.cartLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* ✅ INDICADOR DE SCROLL (opcional) */
+.scrollIndicator {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.cartItemsContainer:hover .scrollIndicator {
+  opacity: 1;
 }

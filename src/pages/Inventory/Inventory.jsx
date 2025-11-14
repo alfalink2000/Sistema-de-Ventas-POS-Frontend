@@ -1,4 +1,4 @@
-// pages/Inventory/Inventory.jsx - VERSIÓN FINAL CORREGIDA
+// pages/Inventory/Inventory.jsx - VERSIÓN CON FILTROS
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loadProductsFromIndexedDB } from "../../actions/salesActions";
@@ -13,6 +13,9 @@ import {
   FiEye,
   FiWifi,
   FiWifiOff,
+  FiFilter,
+  FiSearch,
+  FiX,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import styles from "./Inventory.module.css";
@@ -24,6 +27,11 @@ const Inventory = () => {
   const [editingStock, setEditingStock] = useState(null);
   const [newStockValue, setNewStockValue] = useState("");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // ✅ ESTADOS PARA FILTROS (SIMILAR A PRODUCTS)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [categories, setCategories] = useState([]);
 
   // ✅ EFFECT PARA DETECTAR CONEXIÓN
   useEffect(() => {
@@ -52,16 +60,57 @@ const Inventory = () => {
     dispatch(loadProductsFromIndexedDB());
   }, [dispatch]);
 
+  // ✅ EFFECT PARA EXTRAER CATEGORÍAS ÚNICAS DE LOS PRODUCTOS
+  useEffect(() => {
+    if (products && products.length > 0) {
+      const uniqueCategories = [
+        ...new Set(
+          products
+            .map((p) => p.categoria_nombre)
+            .filter(Boolean)
+            .sort()
+        ),
+      ];
+      setCategories(uniqueCategories);
+    }
+  }, [products]);
+
   // ✅ PROTEGER CONTRA DATOS INVALIDOS
   const safeProducts = Array.isArray(products) ? products : [];
 
-  const lowStockProducts = safeProducts.filter(
+  // ✅ FUNCIÓN DE FILTRADO (SIMILAR A PRODUCTS)
+  const filteredProducts = safeProducts.filter((product) => {
+    const matchesSearch =
+      product.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.codigo_barras?.includes(searchTerm);
+
+    const matchesCategory =
+      selectedCategory === "all" ||
+      product.categoria_nombre === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // ✅ CALCULAR ESTADÍSTICAS SOBRE PRODUCTOS FILTRADOS
+  const lowStockProducts = filteredProducts.filter(
     (p) => p.stock <= (p.stock_minimo || 5) && p.stock > 0
   );
-  const outOfStockProducts = safeProducts.filter((p) => p.stock === 0);
-  const healthyStockProducts = safeProducts.filter(
+  const outOfStockProducts = filteredProducts.filter((p) => p.stock === 0);
+  const healthyStockProducts = filteredProducts.filter(
     (p) => p.stock > (p.stock_minimo || 5)
   );
+
+  // ✅ MANEJAR BÚSQUEDA
+  const handleSearch = (term) => {
+    setSearchTerm(term);
+  };
+
+  // ✅ LIMPIAR FILTROS
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("all");
+  };
 
   // ✅ MEJORAR LA FUNCIÓN requestAdminPassword
   const requestAdminPassword = async (action = "realizar esta acción") => {
@@ -332,7 +381,108 @@ const Inventory = () => {
         </div>
       </div>
 
-      {/* ✅ RESUMEN DE ALERTAS */}
+      {/* ✅ SECCIÓN DE FILTROS (NUEVA) */}
+      <div className={styles.filtersSection}>
+        <div className={styles.filtersHeader}>
+          <h3>
+            <FiFilter className={styles.sectionIcon} />
+            Filtros de Inventario
+          </h3>
+          <div className={styles.resultsInfo}>
+            <span className={styles.resultsCount}>
+              Mostrando {filteredProducts.length} de {safeProducts.length}{" "}
+              productos
+            </span>
+            {(searchTerm || selectedCategory !== "all") && (
+              <button
+                className={styles.clearFilters}
+                onClick={handleClearFilters}
+              >
+                <FiX />
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.filtersContent}>
+          {/* ✅ BARRA DE BÚSQUEDA */}
+          <div className={styles.searchGroup}>
+            <div className={styles.searchInputContainer}>
+              <FiSearch className={styles.searchIcon} />
+              <input
+                type="text"
+                placeholder="Buscar productos por nombre, descripción o código de barras..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={styles.searchInput}
+              />
+              {searchTerm && (
+                <button
+                  className={styles.clearSearch}
+                  onClick={() => setSearchTerm("")}
+                >
+                  <FiX />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ✅ FILTRO POR CATEGORÍA */}
+          <div className={styles.filterGroup}>
+            <FiFilter className={styles.filterIcon} />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className={styles.categorySelect}
+            >
+              <option value="all">Todas las categorías</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* ✅ BOTÓN DE ACTUALIZAR */}
+          <div className={styles.actionButtons}>
+            <button
+              className={styles.refreshButton}
+              onClick={handleRefreshInventory}
+              disabled={loading}
+            >
+              <FiRefreshCw className={loading ? styles.spinning : ""} />
+              {loading ? "Cargando..." : "Actualizar"}
+            </button>
+          </div>
+        </div>
+
+        {/* ✅ INDICADORES DE FILTRO ACTIVO */}
+        {(searchTerm || selectedCategory !== "all") && (
+          <div className={styles.activeFilters}>
+            <div className={styles.activeFiltersHeader}>
+              <span>Filtros activos:</span>
+            </div>
+            <div className={styles.activeFiltersList}>
+              {searchTerm && (
+                <span className={styles.activeFilter}>
+                  Búsqueda: "{searchTerm}"
+                  <button onClick={() => setSearchTerm("")}>×</button>
+                </span>
+              )}
+              {selectedCategory !== "all" && (
+                <span className={styles.activeFilter}>
+                  Categoría: {selectedCategory}
+                  <button onClick={() => setSelectedCategory("all")}>×</button>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ✅ RESUMEN DE ALERTAS (ACTUALIZADO PARA PRODUCTOS FILTRADOS) */}
       <div className={styles.alertsSummary}>
         {outOfStockProducts.length > 0 && (
           <div className={styles.alertCard}>
@@ -364,6 +514,24 @@ const Inventory = () => {
           </div>
         )}
 
+        {filteredProducts.length === 0 && safeProducts.length > 0 && (
+          <div className={`${styles.alertCard} ${styles.info}`}>
+            <div className={styles.alertHeader}>
+              <div className={styles.alertTitle}>
+                <FiSearch className={styles.alertIcon} />
+                <h3>Sin Resultados</h3>
+              </div>
+            </div>
+            <p>No hay productos que coincidan con los filtros aplicados</p>
+            <button
+              className={styles.clearFiltersBtn}
+              onClick={handleClearFilters}
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        )}
+
         {safeProducts.length === 0 && (
           <div className={`${styles.alertCard} ${styles.info}`}>
             <div className={styles.alertHeader}>
@@ -377,27 +545,22 @@ const Inventory = () => {
         )}
       </div>
 
-      {/* ✅ LISTA DETALLADA DE INVENTARIO */}
-      {safeProducts.length > 0 && (
+      {/* ✅ LISTA DETALLADA DE INVENTARIO (ACTUALIZADA CON FILTROS) */}
+      {filteredProducts.length > 0 && (
         <div className={styles.inventorySection}>
           <div className={styles.sectionHeader}>
             <h2>
               <FiPackage className={styles.sectionIcon} />
-              Inventario Completo
+              Inventario{" "}
+              {filteredProducts.length !== safeProducts.length
+                ? `Filtrado (${filteredProducts.length})`
+                : "Completo"}
             </h2>
             <div className={styles.sectionActions}>
               <span className={styles.userRoleBadge}>
                 <FiShield className={styles.roleIcon} />
                 {currentUser?.rol === "admin" ? "Administrador" : "Vendedor"}
               </span>
-              <button
-                className={styles.refreshButton}
-                onClick={handleRefreshInventory}
-                disabled={loading}
-              >
-                <FiRefreshCw className={loading ? styles.spinning : ""} />
-                {loading ? "Cargando..." : "Actualizar"}
-              </button>
             </div>
           </div>
 
@@ -411,7 +574,7 @@ const Inventory = () => {
             </div>
 
             <div className={styles.tableBody}>
-              {safeProducts.map((product) => {
+              {filteredProducts.map((product) => {
                 const status = getStockStatus(product);
                 const canEditStock = currentUser?.rol === "admin";
                 const productId = product.id;
