@@ -9,6 +9,7 @@ import { loadProducts } from "../../actions/productsActions";
 import { clearCart } from "../../actions/cartActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
 import PendienteModal from "../../components/features/sales/PendienteModal/PendienteModal";
+import Button from "../../../ui/Button/Button";
 import {
   FiFilter,
   FiSearch,
