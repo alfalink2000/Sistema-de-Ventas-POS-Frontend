@@ -687,7 +687,6 @@ import {
   FiXCircle,
   FiInfo,
   FiCreditCard,
-  FiCash,
 } from "react-icons/fi";
 import styles from "./CierreCajaModal.module.css";
 
@@ -1264,7 +1263,7 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           <span>${totales.total_ventas?.toFixed(2)}</span>
         </div>
         <div className={styles.totalItem}>
-          <FiCash />
+          <FiDollarSign />
           <span>Ventas Efectivo:</span>
           <span>${totales.total_efectivo?.toFixed(2)}</span>
         </div>

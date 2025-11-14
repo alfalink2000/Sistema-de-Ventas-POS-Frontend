@@ -1,4 +1,4 @@
-// pages/Login/Login.jsx - VERSIÓN MEJORADA
+// pages/Login/Login.jsx - VERSIÓN ESTÁTICA
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import LoginForm from "../../components/features/auth/LoginForm/LoginForm";
@@ -15,7 +15,6 @@ const Login = () => {
       console.log("🌐 Conexión restaurada - Login page");
       setIsOnline(true);
 
-      // ✅ SINCRONIZAR SOLO SI HAY USUARIOS OFFLINE EXISTENTES
       setTimeout(async () => {
         try {
           const users = await AuthOfflineController.getAllOfflineUsers();
@@ -50,7 +49,11 @@ const Login = () => {
       </div>
 
       <div className={styles.loginBackground}>
-        <div className={styles.backgroundPattern}></div>
+        <div className={styles.backgroundPattern}>
+          <div className={`${styles.geometricShape} ${styles.shape1}`}></div>
+          <div className={`${styles.geometricShape} ${styles.shape2}`}></div>
+          <div className={`${styles.geometricShape} ${styles.shape3}`}></div>
+        </div>
       </div>
 
       <div className={styles.loginCard}>
