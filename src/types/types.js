@@ -237,4 +237,10 @@ export const types = {
   // ✅ NUEVOS TYPES PARA ELIMINACIÓN
   closureDeleteLocal: "[Closures] Delete Local Closure",
   closuresClearAllLocal: "[Closures] Clear All Local Closures",
+
+  // Pendientes
+  pendienteAdd: "[Pendientes] Agregar pendiente",
+  pendientesLoad: "[Pendientes] Cargar pendientes",
+  pendienteUpdate: "[Pendientes] Actualizar pendiente",
+  pendienteDelete: "[Pendientes] Eliminar pendiente",
 };

@@ -5,6 +5,7 @@ import Swal from "sweetalert2";
 import IndexedDBService from "../services/IndexedDBService";
 import ClosuresOfflineController from "../controllers/offline/ClosuresOfflineController/ClosuresOfflineController";
 // import SyncController from "../controllers/offline/SyncController/SyncController";
+import PendientesOfflineController from "../controllers/offline/PendientesOfflineController/PendientesOfflineController";
 
 export const loadClosures = (limite = 100, pagina = 1) => {
   return async (dispatch) => {
@@ -504,9 +505,6 @@ export const loadTodayClosure = () => {
   };
 };
 
-// ✅ CORREGIDO: CALCULAR TOTALES COMPLETOS CON OFFLINE
-// En closuresActions.js - ACTUALIZAR calculateClosureTotals
-// En closuresActions.js - CORREGIR LA FUNCIÓN calculateClosureTotals
 // En closuresActions.js - VERSIÓN COMPLETAMENTE CORREGIDA
 export const calculateClosureTotals = (sesionCajaId) => {
   return async (dispatch, getState) => {
@@ -632,7 +630,6 @@ export const calculateClosureTotals = (sesionCajaId) => {
   };
 };
 
-// ✅ FUNCIÓN AUXILIAR PARA CÁLCULO LOCAL (COMMON)
 // ✅ FUNCIÓN AUXILIAR PARA CÁLCULO LOCAL
 const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
   try {
@@ -659,6 +656,11 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
         `📊 [CLOSURES] ${ventasSesion.length} ventas encontradas en estado Redux`
       );
     } else {
+      const pendientesTotals =
+        await PendientesOfflineController.calculatePendientesTotals(
+          sesionCajaId
+        );
+
       console.log("🔄 [CLOSURES] Cargando ventas desde el servidor...");
       // Cargar ventas específicas de esta sesión
       await dispatch(loadSales());
@@ -682,6 +684,7 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
       total_transferencia: 0,
       ganancia_bruta: 0,
       saldo_inicial: parseFloat(sesion.saldo_inicial) || 0,
+      pendientesTotals: 0,
     };
 
     ventasSesion.forEach((venta) => {
@@ -690,11 +693,12 @@ const calculateLocalTotals = async (sesionCajaId, dispatch, getState) => {
       calculo.total_tarjeta += parseFloat(venta.monto_tarjeta) || 0;
       calculo.total_transferencia += parseFloat(venta.monto_transferencia) || 0;
       calculo.ganancia_bruta += parseFloat(venta.ganancia_bruta) || 0;
+      calculo.pendientesTotals += parseFloat(venta.ganancia_bruta) || 0;
     });
 
     // Calcular saldo final teórico
     calculo.saldo_final_teorico =
-      calculo.saldo_inicial + calculo.total_efectivo;
+      calculo.saldo_inicial + calculo.total_efectivo + calculo.pendientesTotals;
     calculo.diferencia = 0; // Se calculará después con el saldo final real
 
     console.log("✅ [CLOSURES] Cálculo local completado:", calculo);

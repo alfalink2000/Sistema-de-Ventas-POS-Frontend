@@ -5,12 +5,13 @@ import CartItem from "../CartItem/CartItem";
 import Button from "../../../ui/Button/Button";
 import { FiShoppingCart, FiArrowRight } from "react-icons/fi";
 import styles from "./Cart.module.css";
+import PendienteModal from "../PendienteModal/PendienteModal";
 
 const Cart = ({ onCheckout, disabled = false }) => {
   const dispatch = useDispatch();
   const { items } = useSelector((state) => state.cart);
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
-
+  const [showPendienteModal, setShowPendienteModal] = useState(false);
   const getTotalPrice = () => {
     return items.reduce(
       (total, item) => total + item.precio * item.quantity,
@@ -79,7 +80,14 @@ const Cart = ({ onCheckout, disabled = false }) => {
             ⚠️ Abre una sesión de caja para vender
           </div>
         )}
-
+        <Button
+          className={styles.pendienteButton}
+          onClick={() => setShowPendienteModal(true)}
+          disabled={!sesionAbierta || items.length === 0}
+        >
+          <FiClock className={styles.buttonIcon} />
+          Registrar Pendiente
+        </Button>
         <Button
           variant="primary"
           size="large"
@@ -91,6 +99,10 @@ const Cart = ({ onCheckout, disabled = false }) => {
           {!sesionAbierta ? "Sesión Requerida" : "Proceder al Pago"}
         </Button>
       </div>
+      <PendienteModal
+        isOpen={showPendienteModal}
+        onClose={() => setShowPendienteModal(false)}
+      />
     </div>
   );
 };

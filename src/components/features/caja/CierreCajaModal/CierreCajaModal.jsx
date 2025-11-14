@@ -1514,7 +1514,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           {isOnline ? <FiWifi /> : <FiWifiOff />}
           <span>{isOnline ? "Conectado" : "Sin conexión"}</span>
         </div>
-
         {/* Información de la Sesión */}
         <div className={styles.sessionInfo}>
           <h4>
@@ -1541,7 +1540,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             </div>
           </div>
         </div>
-
         {/* Resumen de Ventas */}
         <div className={styles.salesSummary}>
           <h4>
@@ -1550,13 +1548,43 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
           </h4>
           {renderResumenVentas()}
         </div>
+        // Después de la sección de resumen de ventas, agregar:
+        <div className={styles.pendientesSection}>
+          <h4>
+            <FiClock className={styles.sectionIcon} />
+            Pendientes e Imprevistos
+          </h4>
 
+          {pendientesTotals && (
+            <div className={styles.pendientesGrid}>
+              <div className={styles.pendienteItem}>
+                <span>Retiros de Efectivo:</span>
+                <span className={styles.negative}>
+                  -${pendientesTotals.total_retiros?.toFixed(2)}
+                </span>
+                <small>{pendientesTotals.cantidad_retiros} retiros</small>
+              </div>
+              <div className={styles.pendienteItem}>
+                <span>Ingresos de Efectivo:</span>
+                <span className={styles.positive}>
+                  +${pendientesTotals.total_ingresos?.toFixed(2)}
+                </span>
+                <small>{pendientesTotals.cantidad_ingresos} ingresos</small>
+              </div>
+              <div className={styles.pendienteItem}>
+                <span>Pendientes de Pago:</span>
+                <span className={styles.warning}>
+                  ${pendientesTotals.total_pendientes?.toFixed(2)}
+                </span>
+                <small>{pendientesTotals.cantidad_pendientes} pendientes</small>
+              </div>
+            </div>
+          )}
+        </div>
         {/* Resumen de Productos */}
         {renderResumenProductos()}
-
         {/* Detalle de Productos */}
         {renderDetalleProductos()}
-
         {/* Entrada de Saldo Final */}
         <div className={styles.formGroup}>
           <label className={styles.label}>
@@ -1577,7 +1605,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             Saldo teórico: ${totales?.saldo_final_teorico?.toFixed(2) || "0.00"}
           </div>
         </div>
-
         {/* Diferencia */}
         {saldoFinalReal && (
           <div className={styles.differenceSection}>
@@ -1609,7 +1636,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             )}
           </div>
         )}
-
         {/* Observaciones */}
         <div className={styles.formGroup}>
           <label className={styles.label}>
@@ -1624,7 +1650,6 @@ const CierreCajaModal = ({ isOpen, onClose, sesion }) => {
             className={styles.textarea}
           />
         </div>
-
         {/* Acciones */}
         <div className={styles.actions}>
           <Button

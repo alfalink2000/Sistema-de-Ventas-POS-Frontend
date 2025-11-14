@@ -3,7 +3,7 @@ import { openDB } from "idb";
 class IndexedDBService {
   constructor() {
     this.dbName = "OfflinePOS";
-    this.dbVersion = 15; // Incrementado para nuevos stores
+    this.dbVersion = 16; // Incrementado para nuevos stores
     this.db = null;
     this.initialized = false;
   }
@@ -138,6 +138,23 @@ class IndexedDBService {
           // =============================================
           // 📱 STORES PARA DATOS OFFLINE (Pendientes de Sincronización)
           // =============================================
+
+          // 🛒 Valor de pendiente o interrupcion (Offline)
+          if (!db.objectStoreNames.contains("pendientes")) {
+            const pendientesStore = db.createObjectStore("pendientes", {
+              keyPath: "id_local",
+            });
+            pendientesStore.createIndex("sincronizado", "sincronizado");
+            pendientesStore.createIndex("fecha", "fecha");
+            pendientesStore.createIndex("sesion_caja_id", "sesion_caja_id");
+            pendientesStore.createIndex(
+              "sesion_caja_id_local",
+              "sesion_caja_id_local"
+            );
+            pendientesStore.createIndex("tipo", "tipo"); // 'retiro', 'ingreso', 'pendiente'
+            pendientesStore.createIndex("estado", "estado");
+            console.log('✅ Object store "pendientes" creado');
+          }
           // 🛒 PRODUCTOS PENDIENTES (Offline)
           if (!db.objectStoreNames.contains("productos_pendientes")) {
             const pendingProductsStore = db.createObjectStore(
