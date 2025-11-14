@@ -48,6 +48,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  z-index: 1;
 }
 
 .productCard:hover {
@@ -101,9 +102,12 @@
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  z-index: 2;
+  z-index: 10;
 }
 
+.modal-open .addToCartButton {
+  z-index: 1; /* ✅ MUCHO MÁS BAJO cuando hay modal abierto */
+}
 .addToCartButton:hover:not(:disabled) {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   transform: scale(1.05);
@@ -130,7 +134,7 @@
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 600;
-  z-index: 2;
+  z-index: 10;
 }
 
 /* INFORMACIÓN DEL PRODUCTO MÁS COMPACTA */
@@ -455,5 +459,5 @@
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 600;
-  z-index: 2;
+  z-index: 10;
 }
