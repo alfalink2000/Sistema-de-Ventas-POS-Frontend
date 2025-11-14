@@ -6,7 +6,7 @@
   gap: 12px;
   padding: 16px 0;
   position: relative;
-  z-index: 1; /* ✅ CONTENEDOR PRINCIPAL CON z-index BAJO */
+  z-index: 0; /* ✅ CONTENEDOR PRINCIPAL CON z-index BAJO */
 }
 
 /* VERSIÓN COMPACTA PARA VENTAS - MÁS COLUMNAS */
