@@ -302,7 +302,7 @@ const Sales = () => {
             disabled={!sesionAbierta || items.length === 0}
           >
             <FiClock className={styles.buttonIcon} />
-            Registrar Pendiente
+            Registrar Pendiente/Intervención
           </Button>
           <Cart
             onCheckout={handleCheckout}
