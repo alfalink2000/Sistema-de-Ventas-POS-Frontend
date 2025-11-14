@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { clearCart } from "../../../../actions/cartActions";
 import CartItem from "../CartItem/CartItem";
 import Button from "../../../ui/Button/Button";
-import { FiShoppingCart, FiArrowRight } from "react-icons/fi";
+import { FiShoppingCart, FiArrowRight, FiClock } from "react-icons/fi";
 import styles from "./Cart.module.css";
 import PendienteModal from "../PendienteModal/PendienteModal";
 import { useState } from "react";
