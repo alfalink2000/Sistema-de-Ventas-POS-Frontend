@@ -6,7 +6,7 @@ import Button from "../../../ui/Button/Button";
 import { FiShoppingCart, FiArrowRight } from "react-icons/fi";
 import styles from "./Cart.module.css";
 import PendienteModal from "../PendienteModal/PendienteModal";
-
+import { useState } from "react";
 const Cart = ({ onCheckout, disabled = false }) => {
   const dispatch = useDispatch();
   const { items } = useSelector((state) => state.cart);
