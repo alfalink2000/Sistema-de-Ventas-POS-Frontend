@@ -186,8 +186,24 @@ class StockSyncController {
   }
 
   // ✅ SINCRONIZAR CAMBIOS PENDIENTES
+  // En StockSyncController.js - agregar esta función mejorada
   async syncPendingStockChanges() {
     try {
+      // ✅ VERIFICACIÓN MEJORADA DE AUTENTICACIÓN
+      const token = localStorage.getItem("token");
+      const user = localStorage.getItem("user");
+
+      if (!token || !user) {
+        console.warn(
+          "🔐 No hay credenciales de autenticación, omitiendo sincronización de stock"
+        );
+        return {
+          success: false,
+          error: "No autenticado",
+          skipped: true,
+        };
+      }
+
       if (!navigator.onLine) {
         console.log("📴 No hay conexión, no se puede sincronizar");
         return { success: false, error: "Sin conexión a internet" };
@@ -224,23 +240,28 @@ class StockSyncController {
       let fallidos = 0;
       const resultados = [];
 
-      // ✅ SINCRONIZAR EN SERIE
+      // ✅ SINCRONIZAR EN SERIE CON MEJOR MANEJO DE ERRORES
       for (const cambio of cambiosNoSincronizados) {
         try {
           console.log(
             `🔄 Sincronizando stock para producto ${cambio.producto_id}: ${cambio.stock_anterior} → ${cambio.stock_nuevo}`
           );
 
+          // ✅ VERIFICAR TOKEN ANTES DE CADA REQUEST
+          const currentToken = localStorage.getItem("token");
+          if (!currentToken) {
+            throw new Error("Token de autenticación no disponible");
+          }
+
           // Preparar datos para el servidor
           const stockData = {
             stock: cambio.stock_nuevo,
             motivo: cambio.motivo,
-            adminPassword: "", // Se puede ajustar según necesidad
           };
 
           console.log(`🌐 Enviando al servidor:`, stockData);
 
-          // ✅ ENVIAR AL SERVIDOR
+          // ✅ ENVIAR AL SERVIDOR CON MANEJO ESPECÍFICO DE 401
           const response = await fetchConToken(
             `productos/${cambio.producto_id}/stock`,
             stockData,
@@ -278,6 +299,25 @@ class StockSyncController {
             error
           );
 
+          // ✅ MANEJO ESPECÍFICO PARA ERRORES 401
+          if (
+            error.message.includes("401") ||
+            error.message.includes("No autorizado")
+          ) {
+            console.warn(
+              `🔐 Error de autenticación sincronizando stock ${cambio.producto_id} - Reintentando más tarde`
+            );
+
+            // No incrementar fallidos para 401 - se reintentará después
+            resultados.push({
+              producto_id: cambio.producto_id,
+              status: "skipped",
+              error: "Error de autenticación - Se reintentará más tarde",
+            });
+
+            continue; // Continuar con el siguiente cambio
+          }
+
           fallidos++;
           resultados.push({
             producto_id: cambio.producto_id,
@@ -285,7 +325,7 @@ class StockSyncController {
             error: error.message,
           });
 
-          // ✅ INCREMENTAR INTENTOS
+          // ✅ INCREMENTAR INTENTOS SOLO PARA ERRORES NO DE AUTENTICACIÓN
           await IndexedDBService.put(this.storeName, {
             ...cambio,
             intentos: (cambio.intentos || 0) + 1,

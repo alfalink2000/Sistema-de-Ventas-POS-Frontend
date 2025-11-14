@@ -17,7 +17,9 @@ import "./index.css";
 
 function AppContent() {
   const dispatch = useDispatch();
-  const { checking, isAuthenticated } = useSelector((state) => state.auth);
+  const { checking, isAuthenticated, user } = useSelector(
+    (state) => state.auth
+  );
 
   useEffect(() => {
     console.log("🚀 App iniciando...");
@@ -39,15 +41,15 @@ function AppContent() {
         const criticalControllers = [
           {
             name: "SessionsSyncController",
-            instance: SessionsSyncController, // Ya es instancia
+            instance: SessionsSyncController,
           },
           {
             name: "ClosuresSyncController",
-            instance: ClosuresSyncController, // Ya es instancia - NO usar new
+            instance: ClosuresSyncController,
           },
           {
             name: "StockSyncController",
-            instance: StockSyncController, // Ya es instancia
+            instance: StockSyncController,
           },
         ];
 
@@ -61,14 +63,10 @@ function AppContent() {
                 `✅ ${controller.name} - syncPendingChanges disponible`
               );
 
-              // ✅ OPCIONAL: Ejecutar sincronización inicial si hay conexión
-              if (navigator.onLine) {
-                console.log(
-                  `🔄 ${controller.name} - Sincronizando pendientes...`
-                );
-                const result = await controller.instance.syncPendingChanges();
-                console.log(`📊 ${controller.name} - Resultado:`, result);
-              }
+              // ✅ NO EJECUTAR SINCRONIZACIÓN INMEDIATA - SOLO VERIFICAR DISPONIBILIDAD
+              console.log(
+                `⏸️ ${controller.name} - Sincronización pausada hasta autenticación`
+              );
             } else {
               console.warn(
                 `⚠️ ${controller.name} - syncPendingChanges NO disponible`
@@ -97,6 +95,83 @@ function AppContent() {
 
     initializeAppSafely();
   }, []);
+
+  // ✅ NUEVO EFFECT: Sincronizar solo cuando el usuario esté autenticado
+  useEffect(() => {
+    const syncWhenAuthenticated = async () => {
+      // Solo sincronizar si el usuario está autenticado y hay conexión
+      if (isAuthenticated && user && navigator.onLine) {
+        console.log(
+          `🔐 Usuario autenticado: ${user.nombre} - Iniciando sincronización segura...`
+        );
+
+        try {
+          // Pequeño delay para asegurar que todo esté listo
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // ✅ VERIFICAR TOKEN ANTES DE SINCRONIZAR
+          const token = localStorage.getItem("token");
+          if (!token) {
+            console.log("⏸️ No hay token disponible, omitiendo sincronización");
+            return;
+          }
+
+          console.log("🔄 Iniciando sincronización de cambios pendientes...");
+
+          // Sincronizar en orden específico
+          const syncResults = [];
+
+          // 1. Stock primero
+          try {
+            console.log("📦 Sincronizando cambios de stock...");
+            const stockResult = await StockSyncController.syncPendingChanges();
+            syncResults.push({ type: "stock", result: stockResult });
+          } catch (stockError) {
+            console.error("❌ Error sincronizando stock:", stockError);
+            syncResults.push({ type: "stock", error: stockError.message });
+          }
+
+          // 2. Sesiones después
+          try {
+            console.log("🏦 Sincronizando sesiones...");
+            const sessionsResult =
+              await SessionsSyncController.syncPendingChanges();
+            syncResults.push({ type: "sessions", result: sessionsResult });
+          } catch (sessionsError) {
+            console.error("❌ Error sincronizando sesiones:", sessionsError);
+            syncResults.push({
+              type: "sessions",
+              error: sessionsError.message,
+            });
+          }
+
+          // 3. Cierres al final
+          try {
+            console.log("💰 Sincronizando cierres...");
+            const closuresResult =
+              await ClosuresSyncController.syncPendingChanges();
+            syncResults.push({ type: "closures", result: closuresResult });
+          } catch (closuresError) {
+            console.error("❌ Error sincronizando cierres:", closuresError);
+            syncResults.push({
+              type: "closures",
+              error: closuresError.message,
+            });
+          }
+
+          console.log("📊 Resumen de sincronización:", syncResults);
+        } catch (error) {
+          console.error("❌ Error en sincronización autenticada:", error);
+        }
+      } else {
+        console.log(
+          `⏸️ Sincronización pausada - Autenticado: ${isAuthenticated}, Online: ${navigator.onLine}`
+        );
+      }
+    };
+
+    syncWhenAuthenticated();
+  }, [isAuthenticated, user]); // Solo se ejecuta cuando cambia la autenticación
 
   return (
     <>
