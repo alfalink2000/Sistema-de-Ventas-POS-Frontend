@@ -230,7 +230,7 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
 
           <div className={styles.systemInfo}>
             <div className={styles.versionBadge}>
-              <span>v1.0</span>
+              <span>v2.0</span>
             </div>
             <span className={styles.systemText}>Sistema POS</span>
           </div>
