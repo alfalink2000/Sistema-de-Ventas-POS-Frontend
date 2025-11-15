@@ -200,6 +200,7 @@
 //   fetchConToken,
 //   fetchWithRetry,
 // };
+// fetch.js - VERSIÓN COMPLETAMENTE CORREGIDA
 import Swal from "sweetalert2";
 
 // URL base - ya corregida para Render
@@ -379,7 +380,6 @@ async function handleResponse(response, context) {
   const contentType = response.headers.get("content-type");
 
   // ✅ Manejar error 401 antes de procesar la respuesta
-  // ✅ MANEJAR 401 DE FORMA MÁS SEGURA
   if (response.status === 401) {
     console.log(`🔐 ${context} - Error 401 detectado`);
 
@@ -421,7 +421,7 @@ async function handleResponse(response, context) {
   }
 }
 
-// ✅ FETCH SIN TOKEN - CON MANEJO MEJORADO DE TIMEOUTS
+// ✅ FETCH SIN TOKEN - COMPLETAMENTE CORREGIDO
 export const fetchSinToken = async (endpoint, data, method = "GET") => {
   const url = `${baseURL}/${endpoint}`;
 
@@ -441,16 +441,21 @@ export const fetchSinToken = async (endpoint, data, method = "GET") => {
     config.body = isFormData ? data : JSON.stringify(data);
   }
 
-  try {
-    console.log(`🌐 fetchSinToken: ${method} ${url}`);
+  // ✅ DEFINIR TIMEOUT FUERA DEL TRY PARA QUE ESTÉ DISPONIBLE EN CATCH
+  const timeoutDuration = endpoint === "auth/login" ? 20000 : 15000; // 20s para login, 15s para otros
 
-    // ✅ TIMEOUT ESPECÍFICO PARA LOGIN
-    const timeout = endpoint === "auth/login" ? 10000 : 15000;
+  try {
+    console.log(
+      `🌐 fetchSinToken: ${method} ${url} (timeout: ${timeoutDuration}ms)`
+    );
+
+    // ✅ AGREGAR TIMEOUT CON ABORTCONTROLLER
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log(`⏰ Timeout en ${endpoint} después de ${timeout}ms`);
+      console.log(`⏰ Timeout en ${endpoint} después de ${timeoutDuration}ms`);
       controller.abort();
-    }, timeout);
+    }, timeoutDuration);
+
     config.signal = controller.signal;
 
     const response = await fetch(url, config);
@@ -460,9 +465,17 @@ export const fetchSinToken = async (endpoint, data, method = "GET") => {
   } catch (error) {
     console.error(`❌ Error en fetchSinToken (${method} ${endpoint}):`, error);
 
+    // ✅ LIMPIAR TIMEOUT EN CASO DE ERROR
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    // ✅ MANEJO ESPECÍFICO DE ABORTERROR
     if (error.name === "AbortError") {
-      console.log(`⏰ Timeout en ${endpoint}`);
-      throw new Error(`La solicitud tardó demasiado tiempo (${timeout}ms)`);
+      console.log(`⏰ Timeout en ${endpoint} después de ${timeoutDuration}ms`);
+      throw new Error(
+        `La solicitud tardó demasiado tiempo (${timeoutDuration}ms)`
+      );
     }
 
     // ✅ SI FALLÓ PERO ESTAMOS OFFLINE, USAR MODO OFFLINE
@@ -475,7 +488,7 @@ export const fetchSinToken = async (endpoint, data, method = "GET") => {
   }
 };
 
-// ✅ FETCH CON TOKEN - CON MANEJO MEJORADO DE TIMEOUTS
+// ✅ FETCH CON TOKEN - COMPLETAMENTE CORREGIDO
 export const fetchConToken = async (endpoint, data, method = "GET") => {
   const url = `${baseURL}/${endpoint}`;
 
@@ -514,21 +527,26 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
     config.body = isFormData ? data : JSON.stringify(data);
   }
 
-  try {
-    console.log(`🔗 Ejecutando petición con token...`);
+  // ✅ DEFINIR TIMEOUT FUERA DEL TRY
+  const timeoutDuration =
+    endpoint === "auth/verify-token"
+      ? 10000
+      : endpoint === "auth/login"
+      ? 20000
+      : 15000;
 
-    // ✅ TIMEOUT REDUCIDO ESPECÍFICAMENTE PARA VERIFICACIÓN
-    const timeout =
-      endpoint === "auth/verify-token"
-        ? 8000
-        : endpoint === "auth/login"
-        ? 10000
-        : 15000;
+  try {
+    console.log(
+      `🔗 Ejecutando petición con token... (timeout: ${timeoutDuration}ms)`
+    );
+
+    // ✅ TIMEOUT CON ABORTCONTROLLER
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log(`⏰ Timeout en ${endpoint}`);
+      console.log(`⏰ Timeout en ${endpoint} después de ${timeoutDuration}ms`);
       controller.abort();
-    }, timeout);
+    }, timeoutDuration);
+
     config.signal = controller.signal;
 
     const response = await fetch(url, config);
@@ -538,15 +556,42 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
   } catch (error) {
     console.error(`❌ Error en fetchConToken (${method} ${endpoint}):`, error);
 
+    // ✅ LIMPIAR TIMEOUT EN CASO DE ERROR
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    // ✅ MANEJO ESPECÍFICO DE ABORTERROR
     if (error.name === "AbortError") {
-      console.log(`⏰ Timeout en ${endpoint}`);
-      throw new Error(`La solicitud tardó demasiado tiempo (${timeout}ms)`);
+      console.log(`⏰ Timeout en ${endpoint} después de ${timeoutDuration}ms`);
+      throw new Error(
+        `La solicitud tardó demasiado tiempo (${timeoutDuration}ms)`
+      );
     }
 
     // ✅ SI ESTAMOS OFFLINO O HAY ERROR DE RED, USAR MODO OFFLINE
     if (!navigator.onLine) {
       console.log(`📴 Fallback a modo offline por error de red`);
       return await handleOfflineOperation(endpoint, method, data);
+    }
+
+    // ✅ SOLO MOSTRAR ERROR DE SESIÓN PARA ENDPOINTS CRÍTICOS EN ONLINE
+    if (
+      navigator.onLine &&
+      (error.message.includes("401") ||
+        error.message.includes("Token no válido") ||
+        error.message.includes("jwt expired") ||
+        error.message.includes("No autorizado"))
+    ) {
+      const criticalEndpoints = [
+        "auth/verify-token",
+        "users/profile",
+        "productos",
+      ];
+
+      if (criticalEndpoints.includes(endpoint)) {
+        await mostrarErrorSesionExpirada();
+      }
     }
 
     throw error;

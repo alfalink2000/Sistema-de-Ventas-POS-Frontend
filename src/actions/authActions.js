@@ -782,7 +782,7 @@ export const startLogin = (username, password) => {
         offlineUsers?.length || 0
       );
 
-      // ✅ 2. SI ESTÁ ONLINE, INTENTAR LOGIN ONLINE
+      // ✅ 2. SI ESTÁ ONLINE, INTENTAR LOGIN ONLINE PRIMERO
       if (navigator.onLine) {
         try {
           console.log("🔄 Intentando login ONLINE...");
@@ -837,16 +837,6 @@ export const startLogin = (username, password) => {
               payload: usuario,
             });
 
-            // ✅ CARGAR DATOS DESPUÉS DEL LOGIN (NO BLOQUEANTE)
-            setTimeout(() => {
-              try {
-                dispatch(loadProducts());
-                dispatch(loadCategories());
-              } catch (loadError) {
-                console.error("Error cargando datos:", loadError);
-              }
-            }, 100);
-
             return { success: true, user: usuario };
           } else {
             // ✅ MANEJAR ERRORES DEL SERVIDOR
@@ -857,10 +847,11 @@ export const startLogin = (username, password) => {
         } catch (onlineError) {
           console.error("💥 Error en login online:", onlineError);
 
-          // ✅ SI ES ERROR DE RED Y HAY USUARIOS OFFLINE, INTENTAR OFFLINE
+          // ✅ SI ES ERROR DE RED/TIMEOUT Y HAY USUARIOS OFFLINE, INTENTAR OFFLINE
           if (
             (onlineError.message.includes("Failed to fetch") ||
               onlineError.message.includes("AbortError") ||
+              onlineError.message.includes("timeout") ||
               onlineError.message.includes("Network")) &&
             hasOfflineUsers
           ) {
