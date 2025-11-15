@@ -568,23 +568,12 @@ const LoginForm = () => {
             )}
           </button>
         </div>
-
-        <div className={styles.helperLinks}>
-          <button
-            type="button"
-            onClick={handleForgotPassword}
-            className={styles.forgotPassword}
-            disabled={localLoading || offlineMode}
-          >
-            ¿Olvidaste tu contraseña?
-          </button>
-        </div>
       </div>
 
       <div className={styles.formFooter}>
         <p className={styles.helpText}>
           <ShieldIcon />
-          Sistema seguro • v1.0 {offlineMode && "• Offline"}
+          Sistema seguro • v2.0 {offlineMode && "• Offline"}
         </p>
       </div>
     </form>
