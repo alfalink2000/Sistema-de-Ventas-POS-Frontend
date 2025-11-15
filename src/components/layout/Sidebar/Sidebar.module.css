@@ -333,3 +333,61 @@
 .navItem.active:active {
   transform: scale(0.98) translateX(2px);
 }
+/* ✅ ESTILOS PARA INDICADOR DE CAJA ABIERTA */
+.cajaAbiertaWarning {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  animation: pulseWarning 2s infinite;
+}
+
+.warningIcon {
+  font-size: 1.2rem;
+  margin-right: 8px;
+}
+
+.warningText {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.warningText strong {
+  font-size: 0.8rem;
+  color: #ffc107;
+}
+
+.warningText small {
+  font-size: 0.7rem;
+  color: #ffc107;
+  opacity: 0.8;
+}
+
+/* ✅ ESTILO PARA BOTÓN DESHABILITADO */
+.logoutDisabled {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+  background: rgba(220, 53, 69, 0.5) !important;
+}
+
+.logoutDisabled:hover {
+  transform: none !important;
+  background: rgba(220, 53, 69, 0.5) !important;
+}
+
+/* ✅ ANIMACIÓN DE ADVERTENCIA */
+@keyframes pulseWarning {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 193, 7, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+  }
+}
