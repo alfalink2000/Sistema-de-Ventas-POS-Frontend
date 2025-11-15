@@ -421,7 +421,7 @@ async function handleResponse(response, context) {
   }
 }
 
-// ✅ FETCH SIN TOKEN - CON MANEJO OFFLINE INTELIGENTE
+// ✅ FETCH SIN TOKEN - CON MANEJO MEJORADO DE TIMEOUTS
 export const fetchSinToken = async (endpoint, data, method = "GET") => {
   const url = `${baseURL}/${endpoint}`;
 
@@ -444,9 +444,13 @@ export const fetchSinToken = async (endpoint, data, method = "GET") => {
   try {
     console.log(`🌐 fetchSinToken: ${method} ${url}`);
 
-    // ✅ AGREGAR TIMEOUT PARA RENDER
+    // ✅ TIMEOUT ESPECÍFICO PARA LOGIN
+    const timeout = endpoint === "auth/login" ? 10000 : 15000;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => {
+      console.log(`⏰ Timeout en ${endpoint} después de ${timeout}ms`);
+      controller.abort();
+    }, timeout);
     config.signal = controller.signal;
 
     const response = await fetch(url, config);
@@ -456,8 +460,13 @@ export const fetchSinToken = async (endpoint, data, method = "GET") => {
   } catch (error) {
     console.error(`❌ Error en fetchSinToken (${method} ${endpoint}):`, error);
 
+    if (error.name === "AbortError") {
+      console.log(`⏰ Timeout en ${endpoint}`);
+      throw new Error(`La solicitud tardó demasiado tiempo (${timeout}ms)`);
+    }
+
     // ✅ SI FALLÓ PERO ESTAMOS OFFLINE, USAR MODO OFFLINE
-    if (!navigator.onLine || error.name === "AbortError") {
+    if (!navigator.onLine) {
       console.log(`📴 Fallback a modo offline por error:`, error.message);
       return await handleOfflineOperation(endpoint, method, data);
     }
@@ -466,7 +475,7 @@ export const fetchSinToken = async (endpoint, data, method = "GET") => {
   }
 };
 
-// ✅ FETCH CON TOKEN - CON TOKEN OFFLINE QUE NUNCA VENCE
+// ✅ FETCH CON TOKEN - CON MANEJO MEJORADO DE TIMEOUTS
 export const fetchConToken = async (endpoint, data, method = "GET") => {
   const url = `${baseURL}/${endpoint}`;
 
@@ -487,18 +496,6 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
   }
 
   console.log(`🌐 fetchConToken: ${method} ${url}`);
-  console.log(`🔑 Token:`, token ? "PRESENTE" : "AUSENTE");
-
-  // ✅ SOLO VERIFICAR TOKEN EN MODO ONLINE Y PARA ENDPOINTS CRÍTICOS
-  if (!token && navigator.onLine) {
-    const criticalEndpoints = ["auth/verify-token", "users/profile"];
-
-    if (criticalEndpoints.includes(endpoint)) {
-      console.error("❌ No hay token disponible para endpoint crítico");
-      // NO llamar a mostrarErrorSesionExpirada aquí - dejar que el action maneje silenciosamente
-      throw new Error("Token no disponible");
-    }
-  }
 
   const isFormData = data instanceof FormData;
   const config = {
@@ -520,10 +517,18 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
   try {
     console.log(`🔗 Ejecutando petición con token...`);
 
-    // ✅ TIMEOUT REDUCIDO PARA VERIFICACIÓN
-    const timeout = endpoint === "auth/verify-token" ? 8000 : 15000;
+    // ✅ TIMEOUT REDUCIDO ESPECÍFICAMENTE PARA VERIFICACIÓN
+    const timeout =
+      endpoint === "auth/verify-token"
+        ? 8000
+        : endpoint === "auth/login"
+        ? 10000
+        : 15000;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = setTimeout(() => {
+      console.log(`⏰ Timeout en ${endpoint}`);
+      controller.abort();
+    }, timeout);
     config.signal = controller.signal;
 
     const response = await fetch(url, config);
@@ -533,29 +538,15 @@ export const fetchConToken = async (endpoint, data, method = "GET") => {
   } catch (error) {
     console.error(`❌ Error en fetchConToken (${method} ${endpoint}):`, error);
 
-    // ✅ SI ESTAMOS OFFLINO O HAY ERROR DE RED, USAR MODO OFFLINE
-    if (!navigator.onLine || error.name === "AbortError") {
-      console.log(`📴 Fallback a modo offline por error de red`);
-      return await handleOfflineOperation(endpoint, method, data);
+    if (error.name === "AbortError") {
+      console.log(`⏰ Timeout en ${endpoint}`);
+      throw new Error(`La solicitud tardó demasiado tiempo (${timeout}ms)`);
     }
 
-    // ✅ SOLO MOSTRAR ERROR DE SESIÓN PARA ENDPOINTS CRÍTICOS EN ONLINE
-    if (
-      navigator.onLine &&
-      (error.message.includes("401") ||
-        error.message.includes("Token no válido") ||
-        error.message.includes("jwt expired") ||
-        error.message.includes("No autorizado"))
-    ) {
-      const criticalEndpoints = [
-        "auth/verify-token",
-        "users/profile",
-        "productos",
-      ];
-
-      if (criticalEndpoints.includes(endpoint)) {
-        await mostrarErrorSesionExpirada();
-      }
+    // ✅ SI ESTAMOS OFFLINO O HAY ERROR DE RED, USAR MODO OFFLINE
+    if (!navigator.onLine) {
+      console.log(`📴 Fallback a modo offline por error de red`);
+      return await handleOfflineOperation(endpoint, method, data);
     }
 
     throw error;

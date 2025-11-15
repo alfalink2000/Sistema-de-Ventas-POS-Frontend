@@ -773,7 +773,7 @@ export const startLogin = (username, password) => {
     try {
       console.log("🔐 INICIANDO LOGIN para:", username);
 
-      // 1. PRIMERO VERIFICAR SI HAY USUARIOS OFFLINE DISPONIBLES
+      // ✅ 1. VERIFICAR USUARIOS OFFLINE PRIMERO
       const offlineUsers = await AuthOfflineController.getAllOfflineUsers();
       const hasOfflineUsers = offlineUsers && offlineUsers.length > 0;
 
@@ -782,7 +782,7 @@ export const startLogin = (username, password) => {
         offlineUsers?.length || 0
       );
 
-      // 2. SI ESTÁ ONLINE, INTENTAR LOGIN ONLINE PRIMERO
+      // ✅ 2. SI ESTÁ ONLINE, INTENTAR LOGIN ONLINE
       if (navigator.onLine) {
         try {
           console.log("🔄 Intentando login ONLINE...");
@@ -792,27 +792,43 @@ export const startLogin = (username, password) => {
             "POST"
           );
 
-          console.log("📥 Respuesta del servidor:", response);
+          console.log("📥 Respuesta completa del servidor:", response);
+
+          // ✅ VALIDACIÓN CRÍTICA DE LA RESPUESTA
+          if (!response) {
+            throw new Error("No se recibió respuesta del servidor");
+          }
 
           if (response.ok === true) {
+            // ✅ VALIDAR ESTRUCTURA DE LA RESPUESTA
             const { token, usuario } = response;
 
-            // ✅ GUARDAR TOKEN INMEDIATAMENTE
+            if (!token || !usuario) {
+              console.error("❌ Respuesta incompleta:", response);
+              throw new Error("El servidor no devolvió token o usuario");
+            }
+
+            if (!usuario.id || !usuario.username) {
+              console.error("❌ Usuario incompleto:", usuario);
+              throw new Error("Datos de usuario incompletos");
+            }
+
+            console.log("✅ Login online exitoso - Usuario:", usuario.username);
+
+            // ✅ GUARDAR EN LOCALSTORAGE
             localStorage.setItem("token", token);
             localStorage.setItem("user", JSON.stringify(usuario));
 
-            console.log("✅ Login online exitoso - Credenciales guardadas");
-
-            // ✅ CREAR TOKEN OFFLINE DE RESPALDO
-            const offlineToken = `offline-backup-${Date.now()}`;
-            localStorage.setItem("offline-token-backup", offlineToken);
-
-            // ✅ GUARDAR USUARIO EN INDEXEDDB PARA OFFLINE
+            // ✅ INTENTAR GUARDAR PARA OFFLINE (PERO NO FALLAR SI HAY ERROR)
             try {
               await AuthOfflineController.saveUser(usuario, token);
               console.log("✅ Usuario guardado para uso offline");
             } catch (saveError) {
-              console.error("❌ Error guardando usuario offline:", saveError);
+              console.error(
+                "⚠️ Error guardando usuario offline (no crítico):",
+                saveError
+              );
+              // NO lanzar error - continuar con el flujo
             }
 
             // ✅ DISPATCH INMEDIATO
@@ -821,35 +837,42 @@ export const startLogin = (username, password) => {
               payload: usuario,
             });
 
-            // ✅ CARGAR DATOS DESPUÉS DEL LOGIN
-            try {
-              await dispatch(loadProducts());
-              await dispatch(loadCategories());
-            } catch (loadError) {
-              console.error("Error cargando datos:", loadError);
-            }
+            // ✅ CARGAR DATOS DESPUÉS DEL LOGIN (NO BLOQUEANTE)
+            setTimeout(() => {
+              try {
+                dispatch(loadProducts());
+                dispatch(loadCategories());
+              } catch (loadError) {
+                console.error("Error cargando datos:", loadError);
+              }
+            }, 100);
 
             return { success: true, user: usuario };
           } else {
-            throw new Error(response.error || "Credenciales incorrectas");
+            // ✅ MANEJAR ERRORES DEL SERVIDOR
+            const errorMsg =
+              response.error || response.msg || "Credenciales incorrectas";
+            throw new Error(errorMsg);
           }
         } catch (onlineError) {
           console.error("💥 Error en login online:", onlineError);
 
-          // ✅ SI HAY ERROR DE RED Y HAY USUARIOS OFFLINE, INTENTAR OFFLINE
+          // ✅ SI ES ERROR DE RED Y HAY USUARIOS OFFLINE, INTENTAR OFFLINE
           if (
-            onlineError.message.includes("Failed to fetch") &&
+            (onlineError.message.includes("Failed to fetch") ||
+              onlineError.message.includes("AbortError") ||
+              onlineError.message.includes("Network")) &&
             hasOfflineUsers
           ) {
             console.log("🌐 Error de red - continuando con login offline...");
-            // Continuará al bloque offline más abajo
+            // Continuará al bloque offline
           } else {
             throw onlineError;
           }
         }
       }
 
-      // 3. MODO OFFLINE O FALLBACK OFFLINE
+      // ✅ 3. MODO OFFLINO O FALLBACK OFFLINE
       if (hasOfflineUsers) {
         console.log("📴 Intentando login OFFLINE...");
         const offlineResult = await AuthOfflineController.verifyCredentials(
@@ -860,7 +883,7 @@ export const startLogin = (username, password) => {
         if (offlineResult.success) {
           const { user, token } = offlineResult;
 
-          localStorage.setItem("token", token);
+          localStorage.setItem("token", token || "offline-token");
           localStorage.setItem("user", JSON.stringify(user));
 
           dispatch({

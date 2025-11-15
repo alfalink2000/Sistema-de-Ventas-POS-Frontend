@@ -529,10 +529,22 @@ class AuthOfflineController extends BaseOfflineController {
   // ✅ GUARDAR USUARIO PARA OFFLINE - COMPLETO
   async saveUser(userData, token) {
     try {
-      console.log(
-        "💾 Intentando guardar usuario para offline:",
-        userData.username
-      );
+      console.log("💾 Intentando guardar usuario para offline:", userData);
+
+      // ✅ VALIDACIÓN CRÍTICA - VERIFICAR QUE userData EXISTA
+      if (!userData) {
+        console.error("❌ userData es undefined o null");
+        throw new Error("Datos de usuario no proporcionados");
+      }
+
+      // ✅ VALIDACIÓN DETALLADA DE CAMPOS REQUERIDOS
+      if (!userData.id || !userData.username) {
+        console.error("❌ Campos requeridos faltantes:", {
+          id: userData.id,
+          username: userData.username,
+        });
+        throw new Error("Datos de usuario incompletos - faltan id o username");
+      }
 
       // ✅ VERIFICAR QUE INDEXEDDB ESTÉ INICIALIZADO
       if (!IndexedDBService.initialized) {
@@ -544,12 +556,6 @@ class AuthOfflineController extends BaseOfflineController {
       if (!storeExists) {
         console.error(`❌ Object store "${this.storeName}" no existe`);
         throw new Error(`Object store "${this.storeName}" no está disponible`);
-      }
-
-      // ✅ VALIDACIONES BÁSICAS
-      if (!userData || !userData.id || !userData.username) {
-        console.error("❌ Datos de usuario incompletos:", userData);
-        throw new Error("Datos de usuario incompletos");
       }
 
       // ✅ PREPARAR DATOS PARA OFFLINE

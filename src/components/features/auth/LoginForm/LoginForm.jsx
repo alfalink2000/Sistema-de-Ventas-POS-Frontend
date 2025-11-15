@@ -347,77 +347,102 @@ const LoginForm = () => {
     setLocalLoading(loading);
   }, [loading]);
 
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   if (!formData.username.trim() || !formData.password.trim()) return;
+
+  //   console.log("🔄 Iniciando proceso de login...", {
+  //     offline: offlineMode,
+  //     username: formData.username,
+  //   });
+  //   setLocalLoading(true);
+
+  //   try {
+  //     let result;
+
+  //     if (offlineMode) {
+  //       // ✅ MODO OFFLINE: Usar verificación offline pura
+  //       console.log("📱 Intentando login offline puro...");
+  //       result = await AuthOfflineController.verifyOfflineAccess(
+  //         formData.username.trim()
+  //       );
+
+  //       if (result.success) {
+  //         console.log("✅ Login offline puro exitoso");
+
+  //         // ✅ GUARDAR EN LOCALSTORAGE SIN DEPENDER DEL TOKEN
+  //         localStorage.setItem("user", JSON.stringify(result.user));
+  //         localStorage.setItem("token", "offline-token"); // Token placeholder
+
+  //         // ✅ DISPATCH PARA ACTUALIZAR ESTADO
+  //         dispatch({
+  //           type: types.authLogin,
+  //           payload: result.user,
+  //         });
+
+  //         await Swal.fire({
+  //           icon: "success",
+  //           title: "Modo Offline",
+  //           text: `Bienvenido ${result.user.nombre}. Trabajando sin conexión.`,
+  //           timer: 3000,
+  //           showConfirmButton: false,
+  //         });
+
+  //         // ✅ NO USAR useNavigate - EL ROUTER DETECTARÁ EL CAMBIO DE ESTADO AUTOMÁTICAMENTE
+  //         console.log(
+  //           "✅ Login exitoso - Estado actualizado, AppRouter redirigirá automáticamente"
+  //         );
+  //       } else {
+  //         throw new Error(result.error || "Error en autenticación offline");
+  //       }
+  //     } else {
+  //       // ✅ MODO ONLINE: Usar acción normal
+  //       console.log("🌐 Intentando login online...");
+  //       result = await dispatch(
+  //         startLogin(formData.username.trim(), formData.password)
+  //       );
+
+  //       if (!result?.success) {
+  //         throw new Error(result?.error || "Error en autenticación online");
+  //       }
+
+  //       // ✅ NO USAR useNavigate - startLogin YA ACTUALIZA EL ESTADO Y EL ROUTER REDIRIGE
+  //       console.log(
+  //         "✅ Login online exitoso - AppRouter redirigirá automáticamente"
+  //       );
+  //     }
+  //   } catch (err) {
+  //     console.error("❌ Error en handleSubmit:", err);
+  //   } finally {
+  //     setLocalLoading(false);
+  //   }
+  // };
+  // LoginForm.jsx - handleSubmit COMPLETAMENTE CORREGIDO
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.username.trim() || !formData.password.trim()) return;
 
-    console.log("🔄 Iniciando proceso de login...", {
-      offline: offlineMode,
-      username: formData.username,
-    });
+    console.log("🔄 Iniciando proceso de login...");
     setLocalLoading(true);
 
     try {
-      let result;
+      const result = await dispatch(
+        startLogin(formData.username.trim(), formData.password)
+      );
 
-      if (offlineMode) {
-        // ✅ MODO OFFLINE: Usar verificación offline pura
-        console.log("📱 Intentando login offline puro...");
-        result = await AuthOfflineController.verifyOfflineAccess(
-          formData.username.trim()
-        );
-
-        if (result.success) {
-          console.log("✅ Login offline puro exitoso");
-
-          // ✅ GUARDAR EN LOCALSTORAGE SIN DEPENDER DEL TOKEN
-          localStorage.setItem("user", JSON.stringify(result.user));
-          localStorage.setItem("token", "offline-token"); // Token placeholder
-
-          // ✅ DISPATCH PARA ACTUALIZAR ESTADO
-          dispatch({
-            type: types.authLogin,
-            payload: result.user,
-          });
-
-          await Swal.fire({
-            icon: "success",
-            title: "Modo Offline",
-            text: `Bienvenido ${result.user.nombre}. Trabajando sin conexión.`,
-            timer: 3000,
-            showConfirmButton: false,
-          });
-
-          // ✅ NO USAR useNavigate - EL ROUTER DETECTARÁ EL CAMBIO DE ESTADO AUTOMÁTICAMENTE
-          console.log(
-            "✅ Login exitoso - Estado actualizado, AppRouter redirigirá automáticamente"
-          );
-        } else {
-          throw new Error(result.error || "Error en autenticación offline");
-        }
-      } else {
-        // ✅ MODO ONLINE: Usar acción normal
-        console.log("🌐 Intentando login online...");
-        result = await dispatch(
-          startLogin(formData.username.trim(), formData.password)
-        );
-
-        if (!result?.success) {
-          throw new Error(result?.error || "Error en autenticación online");
-        }
-
-        // ✅ NO USAR useNavigate - startLogin YA ACTUALIZA EL ESTADO Y EL ROUTER REDIRIGE
-        console.log(
-          "✅ Login online exitoso - AppRouter redirigirá automáticamente"
-        );
+      if (!result?.success) {
+        throw new Error(result?.error || "Error en autenticación");
       }
+
+      console.log("✅ Login exitoso - Redirigiendo automáticamente...");
+      // ✅ EL AUTHGUARD Y REDUX SE ENCARGARÁN DE LA REDIRECCIÓN
     } catch (err) {
       console.error("❌ Error en handleSubmit:", err);
+      // El error ya está manejado en la acción
     } finally {
       setLocalLoading(false);
     }
   };
-
   const handleChange = (e) => {
     setFormData((prev) => ({
       ...prev,
