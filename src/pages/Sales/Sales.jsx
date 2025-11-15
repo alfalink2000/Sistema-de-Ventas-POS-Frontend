@@ -299,7 +299,7 @@ const Sales = () => {
           <Button
             className={styles.pendienteButton}
             onClick={() => setShowPendienteModal(true)}
-            disabled={!sesionAbierta || items.length === 0}
+            disabled={!sesionAbierta}
           >
             <FiClock className={styles.buttonIcon} />
             Registrar Pendiente/Intervención
