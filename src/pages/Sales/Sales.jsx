@@ -311,15 +311,6 @@ const Sales = () => {
         </div>
       </div>
 
-      {/* <Button
-        className={styles.pendienteButton}
-        onClick={() => setShowPendienteModal(true)}
-        disabled={!sesionAbierta || items.length === 0}
-      >
-        <FiClock className={styles.buttonIcon} />
-        Registrar Pendiente
-      </Button> */}
-
       <PendienteModal
         isOpen={showPendienteModal}
         onClose={() => setShowPendienteModal(false)}
