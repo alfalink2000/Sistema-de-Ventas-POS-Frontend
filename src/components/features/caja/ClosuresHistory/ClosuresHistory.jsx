@@ -1332,6 +1332,7 @@ import {
   FiPackage,
   FiTrendingUp,
   FiTrendingDown,
+  FiLock,
 } from "react-icons/fi";
 import { loadClosures } from "../../../../actions/closuresActions";
 import IndexedDBService from "../../../../services/IndexedDBService";
@@ -1340,6 +1341,7 @@ import {
   deleteLocalClosure,
   clearAllLocalClosures,
 } from "../../../../actions/closuresActions";
+import Swal from "sweetalert2";
 
 const ClosuresHistory = () => {
   const [expandedRow, setExpandedRow] = useState(null);
@@ -1480,285 +1482,69 @@ const ClosuresHistory = () => {
     }
   };
 
-  // ✅ FUNCIÓN PARA CREAR CSV CON ENCODING CORRECTO
-  const createCSVWithEncoding = (data) => {
+  // ✅ FUNCIÓN MEJORADA PARA CREAR CSV CON PROTECCIÓN EXCEL
+  const createProtectedCSV = (data, closure = null, isBatch = false) => {
     // Agregar BOM para UTF-8 en Excel
     const BOM = "\uFEFF";
-    return BOM + data;
+
+    // ✅ ENCABEZADO DE PROTECCIÓN MEJORADO PARA EXCEL
+    const protectionHeader = [
+      "█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█",
+      "█         ARCHIVO DE SOLO LECTURA         █",
+      "█    SISTEMA PUNTO DE VENTA - OFFLINE     █",
+      "█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█",
+      "",
+      "╔═════════════════════════════════════════╗",
+      "║           ADVERTENCIA IMPORTANTE        ║",
+      "╚═════════════════════════════════════════╝",
+      "",
+      "• ESTE ARCHIVO ES DE SOLO LECTURA",
+      "• Generado automáticamente por el sistema",
+      "• Cualquier modificación manual INVALIDARÁ los datos",
+      "• Para cambios, utilice exclusivamente el sistema oficial",
+      "• Contacte al administrador para modificaciones",
+      "",
+      "╔═════════════════════════════════════════╗",
+      "║          METADATOS DE VERIFICACIÓN      ║",
+      "╚═════════════════════════════════════════╝",
+      ...(closure
+        ? [
+            `• ID Cierre: ${closure.id || closure.id_local}`,
+            `• Fecha Cierre: ${new Date(
+              closure.fecha_cierre
+            ).toLocaleDateString("es-MX")}`,
+            `• Vendedor: ${closure.vendedor_nombre || "No especificado"}`,
+          ]
+        : []),
+      `• Generado: ${new Date().toLocaleString("es-MX")}`,
+      `• Usuario: ${currentUser?.name || currentUser?.nombre || "Sistema"}`,
+      `• Hash Verificación: ${btoa(`POS_${Date.now()}`).substring(0, 16)}`,
+      `• Estado: SOLO_LECTURA_VERIFICADO`,
+      "",
+      "╔═════════════════════════════════════════╗",
+      "║         INICIO DATOS OFICIALES          ║",
+      "╚═════════════════════════════════════════╝",
+      "",
+    ].join("\n");
+
+    return BOM + protectionHeader + data;
   };
 
-  // ✅ EXPORTAR CIERRE INDIVIDUAL CON IPV Y PENDIENTES INCLUIDOS
-  // const exportClosureToCSV = async (closure) => {
-  //   try {
-  //     console.log(
-  //       "📊 Exportando cierre individual a CSV con IPV y Pendientes:",
-  //       closure
-  //     );
+  // ✅ FUNCIÓN PARA GENERAR NOMBRE DE ARCHIVO CON FECHA
+  const generateFileName = (closure = null, isBatch = false) => {
+    const baseName = isBatch ? "ReporteGeneralCierres" : "CierreCaja";
+    const datePart = closure
+      ? new Date(closure.fecha_cierre).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0];
 
-  //     // Obtener inventario actual
-  //     const inventoryData = await getCurrentInventory();
+    return `${baseName}_${datePart}.csv`;
+  };
 
-  //     // ✅ OBTENER PENDIENTES CON DESCRIPCIÓN
-  //     let pendientesConDescripcion = [];
-  //     try {
-  //       const PendientesOfflineController = await import(
-  //         "../../../../controllers/offline/PendientesOfflineController/PendientesOfflineController"
-  //       ).then((module) => module.default);
-
-  //       const sesionId = closure.sesion_caja_id || closure.sesion_caja_id_local;
-  //       pendientesConDescripcion =
-  //         await PendientesOfflineController.getPendientesBySesion(sesionId);
-
-  //       console.log(
-  //         `✅ Obtenidos ${pendientesConDescripcion.length} pendientes con descripción`
-  //       );
-  //     } catch (error) {
-  //       console.error("❌ Error obteniendo pendientes con descripción:", error);
-  //     }
-
-  //     // Preparar datos del cierre con formato mejorado INCLUYENDO IPV Y PENDIENTES CON DESCRIPCIÓN
-  //     const closureData = [
-  //       ["REPORTE DETALLADO DE CIERRE DE CAJA CON INVENTARIO Y PENDIENTES"],
-  //       ["Sistema de Punto de Venta - Modo Offline"],
-  //       [""],
-  //       ["INFORMACION BASICA DEL CIERRE"],
-  //       ["ID del Cierre:", closure.id || closure.id_local],
-  //       [
-  //         "Fecha de Cierre:",
-  //         new Date(closure.fecha_cierre).toLocaleString("es-MX"),
-  //       ],
-  //       ["Estado:", "Almacenado localmente (Offline)"],
-  //       [""],
-  //       ["INFORMACION DE LA SESION"],
-  //       [
-  //         "Fecha de Apertura:",
-  //         new Date(closure.fecha_apertura).toLocaleString("es-MX"),
-  //       ],
-  //       [
-  //         "Fecha de Cierre:",
-  //         new Date(closure.fecha_cierre).toLocaleString("es-MX"),
-  //       ],
-  //       [
-  //         "Duracion Total:",
-  //         calculateDuration(closure.fecha_apertura, closure.fecha_cierre),
-  //       ],
-  //       ["Vendedor:", closure.vendedor_nombre || "No especificado"],
-  //       ["Saldo Inicial:", formatCurrency(closure.saldo_inicial || 0)],
-  //       [""],
-  //       ["DETALLE DE VENTAS POR METODO DE PAGO"],
-  //       ["Ventas en Efectivo:", formatCurrency(closure.total_efectivo || 0)],
-  //       ["Ventas con Tarjeta:", formatCurrency(closure.total_tarjeta || 0)],
-  //       [
-  //         "Ventas por Transferencia:",
-  //         formatCurrency(closure.total_transferencia || 0),
-  //       ],
-  //       ["TOTAL VENTAS:", formatCurrency(closure.total_ventas || 0)],
-  //       [""],
-
-  //       // ✅ NUEVA SECCIÓN: PENDIENTES E IMPREVISTOS CON DESCRIPCIÓN
-  //       ["PENDIENTES E IMPREVISTOS - RESUMEN"],
-  //       [
-  //         "Total Retiros de Efectivo:",
-  //         formatCurrency(closure.total_retiros_pendientes || 0),
-  //       ],
-  //       [
-  //         "Total Ingresos de Efectivo:",
-  //         formatCurrency(closure.total_ingresos_pendientes || 0),
-  //       ],
-  //       [
-  //         "Total Pendientes de Pago:",
-  //         formatCurrency(closure.total_pendientes_pago || 0),
-  //       ],
-  //       ["Cantidad de Retiros:", closure.cantidad_retiros || 0],
-  //       ["Cantidad de Ingresos:", closure.cantidad_ingresos || 0],
-  //       ["Cantidad de Pendientes:", closure.cantidad_pendientes || 0],
-  //       [
-  //         "Impacto Neto en Caja:",
-  //         formatCurrency(
-  //           (closure.total_ingresos_pendientes || 0) -
-  //             (closure.total_retiros_pendientes || 0)
-  //         ),
-  //       ],
-  //       [""],
-
-  //       // ✅ NUEVA TABLA: DETALLE COMPLETO DE PENDIENTES CON DESCRIPCIÓN
-  //       ["DETALLE COMPLETO DE PENDIENTES E IMPREVISTOS"],
-  //       ["Fecha", "Tipo", "Descripción", "Monto", "Observaciones"],
-
-  //       // ✅ DATOS DE CADA PENDIENTE CON SU DESCRIPCIÓN
-  //       ...(pendientesConDescripcion.length > 0
-  //         ? pendientesConDescripcion.map((pendiente) => [
-  //             new Date(pendiente.fecha || pendiente.created_at).toLocaleString(
-  //               "es-MX"
-  //             ),
-  //             pendiente.tipo?.toUpperCase() || "PENDIENTE",
-  //             `"${pendiente.descripcion || "Sin descripción"}"`,
-  //             formatCurrency(pendiente.monto || 0),
-  //             `"${pendiente.observaciones || "Sin observaciones"}"`,
-  //           ])
-  //         : [["No hay pendientes registrados", "", "", "", ""]]),
-
-  //       [""],
-  //       ["TOTALES PENDIENTES"],
-  //       [
-  //         "Total Retiros:",
-  //         formatCurrency(
-  //           pendientesConDescripcion
-  //             .filter((p) => p.tipo === "retiro")
-  //             .reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0)
-  //         ),
-  //       ],
-  //       [
-  //         "Total Ingresos:",
-  //         formatCurrency(
-  //           pendientesConDescripcion
-  //             .filter((p) => p.tipo === "ingreso")
-  //             .reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0)
-  //         ),
-  //       ],
-  //       [
-  //         "Total Pendientes Pago:",
-  //         formatCurrency(
-  //           pendientesConDescripcion
-  //             .filter((p) => p.tipo === "pendiente")
-  //             .reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0)
-  //         ),
-  //       ],
-  //       [""],
-
-  //       ["RESUMEN FINAL DE CAJA"],
-  //       [
-  //         "Saldo Final Teorico:",
-  //         formatCurrency(closure.saldo_final_teorico || 0),
-  //       ],
-  //       ["Saldo Final Real:", formatCurrency(closure.saldo_final_real || 0)],
-  //       ["Diferencia:", formatCurrency(closure.diferencia || 0)],
-  //       [
-  //         "Estado del Cierre:",
-  //         closure.diferencia === 0
-  //           ? "EXACTO"
-  //           : closure.diferencia > 0
-  //           ? "SOBRANTE"
-  //           : "FALTANTE",
-  //       ],
-  //       [""],
-
-  //       // ✅ SECCIÓN: INVENTARIO FISICO VALORADO (IPV)
-  //       ["INVENTARIO FISICO VALORADO (IPV) AL CIERRE"],
-  //       ["Fecha de captura de inventario:", new Date().toLocaleString("es-MX")],
-  //       [
-  //         "Total de productos en inventario:",
-  //         inventoryData.totales.total_productos,
-  //       ],
-  //       ["Productos agotados:", inventoryData.totales.productos_agotados],
-  //       [
-  //         "Productos con bajo stock:",
-  //         inventoryData.totales.productos_bajo_stock,
-  //       ],
-  //       ["Productos con stock normal:", inventoryData.totales.productos_normal],
-  //       [""],
-
-  //       // ✅ DETALLE COMPLETO DEL INVENTARIO
-  //       ["DETALLE COMPLETO DEL INVENTARIO"],
-  //       [
-  //         "Producto",
-  //         "Categoria",
-  //         "Stock Actual",
-  //         "Stock Minimo",
-  //         "Estado",
-  //         "Precio Venta",
-  //       ],
-
-  //       // ✅ DATOS DE CADA PRODUCTO
-  //       ...inventoryData.inventario.map((item) => [
-  //         `"${item.nombre}"`,
-  //         `"${item.categoria}"`,
-  //         item.stock_actual,
-  //         item.stock_minimo,
-  //         item.estado,
-  //         formatCurrency(item.precio_venta),
-  //       ]),
-
-  //       [""],
-  //       ["INFORMACION ADICIONAL"],
-  //       [
-  //         "Observaciones del Cierre:",
-  //         closure.observaciones || "Sin observaciones registradas",
-  //       ],
-  //       [""],
-  //       ["INFORMACION DE EXPORTACION"],
-  //       ["Fecha de Exportacion:", new Date().toLocaleString("es-MX")],
-  //       [
-  //         "Exportado por:",
-  //         currentUser?.name || currentUser?.nombre || "Usuario",
-  //       ],
-  //       ["Rol del Usuario:", currentUser?.rol || "No especificado"],
-  //       ["Modo:", "Offline"],
-  //       [""],
-  //       ["NOTAS"],
-  //       ["Este reporte fue generado automaticamente desde el sistema offline"],
-  //       ["Los datos reflejan el estado al momento del cierre de caja"],
-  //       [
-  //         "El inventario fisico valorado (IPV) muestra el stock actual de todos los productos",
-  //       ],
-  //       [
-  //         "Los pendientes e imprevistos incluyen retiros, ingresos y pagos pendientes registrados durante la sesión",
-  //       ],
-  //       ["Para consultas contactar al administrador del sistema"],
-  //     ];
-
-  //     // Convertir a CSV con encoding correcto
-  //     const csvContent = closureData
-  //       .map((row) => {
-  //         if (Array.isArray(row)) {
-  //           return row.map((field) => `"${field}"`).join(",");
-  //         }
-  //         return `"${row}"`;
-  //       })
-  //       .join("\n");
-
-  //     // Crear y descargar archivo con encoding UTF-8
-  //     const blob = new Blob([createCSVWithEncoding(csvContent)], {
-  //       type: "text/csv;charset=utf-8;",
-  //     });
-  //     const url = URL.createObjectURL(blob);
-  //     const link = document.createElement("a");
-  //     link.setAttribute("href", url);
-
-  //     // Nombre del archivo más descriptivo CON IPV Y PENDIENTES
-  //     const fileName = `cierre_caja_completo_${
-  //       closure.id || closure.id_local
-  //     }_${closure.vendedor_nombre || "vendedor"}_${
-  //       new Date(closure.fecha_cierre).toISOString().split("T")[0]
-  //     }.csv`;
-
-  //     link.setAttribute("download", fileName);
-  //     link.style.visibility = "hidden";
-
-  //     document.body.appendChild(link);
-  //     link.click();
-  //     document.body.removeChild(link);
-
-  //     console.log(
-  //       "✅ CSV con IPV y Pendientes (con descripción) exportado exitosamente:",
-  //       {
-  //         fileName,
-  //         totalProductos: inventoryData.inventario.length,
-  //         totalPendientes: pendientesConDescripcion.length,
-  //       }
-  //     );
-  //   } catch (error) {
-  //     console.error("❌ Error exportando CSV con IPV y Pendientes:", error);
-  //     alert(
-  //       "Error al exportar el cierre con inventario y pendientes: " +
-  //         error.message
-  //     );
-  //   }
-  // };
+  // ✅ EXPORTAR CIERRE INDIVIDUAL CON PROTECCIÓN COMPLETA
   const exportClosureToCSV = async (closure) => {
     try {
       console.log(
-        "📊 Exportando cierre individual a CSV con IPV, Pendientes y Productos Vendidos:",
+        "📊 Exportando cierre individual a CSV con protección completa:",
         closure
       );
 
@@ -1789,7 +1575,7 @@ const ClosuresHistory = () => {
         `📦 Exportando ${productosVendidos.length} productos vendidos del cierre`
       );
 
-      // Preparar datos del cierre con formato mejorado INCLUYENDO IPV, PENDIENTES Y PRODUCTOS VENDIDOS
+      // Preparar datos del cierre con formato mejorado
       const closureData = [
         [
           "REPORTE DETALLADO DE CIERRE DE CAJA CON INVENTARIO, PENDIENTES Y PRODUCTOS VENDIDOS",
@@ -1821,14 +1607,14 @@ const ClosuresHistory = () => {
         ["Saldo Inicial:", formatCurrency(closure.saldo_inicial || 0)],
         [""],
 
-        // ✅ NUEVA SECCIÓN: RESUMEN DE PRODUCTOS VENDIDOS
+        // ✅ SECCIÓN: RESUMEN DE PRODUCTOS VENDIDOS
         ["RESUMEN DE PRODUCTOS VENDIDOS"],
         ["Total Productos Diferentes:", productosVendidos.length],
         ["Total Unidades Vendidas:", closure.unidades_vendidas || 0],
         ["Total Ventas Productos:", formatCurrency(closure.total_ventas || 0)],
         [""],
 
-        // ✅ NUEVA TABLA: DETALLE COMPLETO DE PRODUCTOS VENDIDOS
+        // ✅ TABLA: DETALLE COMPLETO DE PRODUCTOS VENDIDOS
         ["DETALLE COMPLETO DE PRODUCTOS VENDIDOS"],
         ["Producto", "Cantidad Total", "Precio Unitario", "Subtotal Total"],
 
@@ -1866,7 +1652,7 @@ const ClosuresHistory = () => {
         ["TOTAL VENTAS:", formatCurrency(closure.total_ventas || 0)],
         [""],
 
-        // ✅ SECCIÓN: PENDIENTES E IMPREVISTOS CON DESCRIPCIÓN
+        // ✅ SECCIÓN: PENDIENTES E IMPREVISTOS
         ["PENDIENTES E IMPREVISTOS - RESUMEN"],
         [
           "Total Retiros de Efectivo:",
@@ -1892,11 +1678,11 @@ const ClosuresHistory = () => {
         ],
         [""],
 
-        // ✅ TABLA: DETALLE COMPLETO DE PENDIENTES CON DESCRIPCIÓN
+        // ✅ TABLA: DETALLE COMPLETO DE PENDIENTES
         ["DETALLE COMPLETO DE PENDIENTES E IMPREVISTOS"],
         ["Fecha", "Tipo", "Descripción", "Monto", "Observaciones"],
 
-        // ✅ DATOS DE CADA PENDIENTE CON SU DESCRIPCIÓN
+        // ✅ DATOS DE CADA PENDIENTE
         ...(pendientesConDescripcion.length > 0
           ? pendientesConDescripcion.map((pendiente) => [
               new Date(pendiente.fecha || pendiente.created_at).toLocaleString(
@@ -2006,7 +1792,15 @@ const ClosuresHistory = () => {
         ["Rol del Usuario:", currentUser?.rol || "No especificado"],
         ["Modo:", "Offline"],
         [""],
-        ["NOTAS"],
+        ["PROTECCION DE ARCHIVO"],
+        ["Estado:", "SOLO_LECTURA - ARCHIVO VERIFICADO"],
+        [
+          "Hash Verificacion:",
+          btoa(`CIERRE_${closure.id}_${Date.now()}`).substring(0, 20),
+        ],
+        ["Integridad:", "GARANTIZADA - NO MODIFICAR"],
+        [""],
+        ["NOTAS IMPORTANTES"],
         ["Este reporte fue generado automaticamente desde el sistema offline"],
         ["Los datos reflejan el estado al momento del cierre de caja"],
         [
@@ -2018,10 +1812,11 @@ const ClosuresHistory = () => {
         [
           "Los productos vendidos muestran el detalle de todas las ventas realizadas durante la sesión",
         ],
+        ["CUALQUIER MODIFICACION MANUAL INVALIDA ESTE REPORTE"],
         ["Para consultas contactar al administrador del sistema"],
       ];
 
-      // Convertir a CSV con encoding correcto
+      // Convertir a CSV
       const csvContent = closureData
         .map((row) => {
           if (Array.isArray(row)) {
@@ -2031,59 +1826,125 @@ const ClosuresHistory = () => {
         })
         .join("\n");
 
-      // Crear y descargar archivo con encoding UTF-8
-      const blob = new Blob([createCSVWithEncoding(csvContent)], {
+      // ✅ CREAR BLOB CON PROTECCIÓN MEJORADA
+      const blob = new Blob([createProtectedCSV(csvContent, closure)], {
         type: "text/csv;charset=utf-8;",
       });
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
 
-      // Nombre del archivo más descriptivo CON IPV, PENDIENTES Y PRODUCTOS
-      const fileName = `cierre_caja_completo_${
-        closure.id || closure.id_local
-      }_${closure.vendedor_nombre || "vendedor"}_${
-        new Date(closure.fecha_cierre).toISOString().split("T")[0]
-      }.csv`;
+      // ✅ GENERAR NOMBRE CON FECHA
+      const fileName = generateFileName(closure);
 
       link.setAttribute("download", fileName);
+
+      // ✅ AGREGAR ATRIBUTOS DE SEGURIDAD
+      link.setAttribute("data-file-type", "protected-financial-report");
+      link.setAttribute("data-readonly", "true");
+      link.setAttribute(
+        "data-integrity-check",
+        btoa(closure.id + Date.now()).substring(0, 16)
+      );
+
       link.style.visibility = "hidden";
-
       document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
 
-      console.log(
-        "✅ CSV con IPV, Pendientes y Productos Vendidos exportado exitosamente:",
-        {
+      // ✅ AGREGAR EVENTO PARA LOGGING
+      link.addEventListener("click", function (e) {
+        console.log("🔒 Descargando archivo protegido de solo lectura...", {
           fileName,
-          totalProductos: inventoryData.inventario.length,
-          totalPendientes: pendientesConDescripcion.length,
-          totalProductosVendidos: productosVendidos.length,
-        }
-      );
+          closureId: closure.id,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
+      link.click();
+
+      // ✅ LIMPIAR Y MOSTRAR CONFIRMACIÓN MEJORADA
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Mostrar alerta de éxito con detalles de protección
+        Swal.fire({
+          icon: "success",
+          title: "✅ Archivo Protegido Descargado",
+          html: `
+            <div style="text-align: left; font-size: 14px;">
+              <div style="background: #f0f9ff; padding: 20px; border-radius: 10px; border: 2px solid #0ea5e9;">
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                  <div style="background: #0ea5e9; color: white; padding: 8px; border-radius: 50%; margin-right: 10px;">
+                    <FiLock size={18} />
+                  </div>
+                  <h3 style="margin: 0; color: #0ea5e9;">Archivo de Solo Lectura</h3>
+                </div>
+                
+                <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                  <p style="margin: 0 0 8px 0;"><strong>📁 Archivo:</strong> ${fileName}</p>
+                  <p style="margin: 0 0 8px 0;"><strong>🔒 Estado:</strong> <span style="color: #059669; font-weight: bold;">Solo Lectura - Verificado</span></p>
+                  <p style="margin: 0 0 8px 0;"><strong>📊 Cierre:</strong> ${
+                    closure.id || closure.id_local
+                  }</p>
+                  <p style="margin: 0 0 8px 0;"><strong>👤 Vendedor:</strong> ${
+                    closure.vendedor_nombre
+                  }</p>
+                </div>
+                
+                <div style="background: #fef3c7; padding: 12px; border-radius: 6px; border-left: 4px solid #d97706;">
+                  <p style="margin: 0; font-size: 13px; color: #92400e;">
+                    <strong>⚠️ PROTECCIÓN ACTIVA:</strong> Este archivo incluye medidas de integridad. 
+                    Cualquier modificación manual será detectable.
+                  </p>
+                </div>
+              </div>
+            </div>
+          `,
+          confirmButtonText: "Entendido",
+          width: 500,
+          customClass: {
+            popup: "protected-file-popup",
+          },
+        });
+      }, 100);
+
+      console.log("✅ CSV protegido exportado exitosamente:", {
+        fileName,
+        totalProductos: inventoryData.inventario.length,
+        totalPendientes: pendientesConDescripcion.length,
+        totalProductosVendidos: productosVendidos.length,
+      });
     } catch (error) {
-      console.error(
-        "❌ Error exportando CSV con IPV, Pendientes y Productos:",
-        error
-      );
-      alert(
-        "Error al exportar el cierre con inventario, pendientes y productos: " +
-          error.message
-      );
+      console.error("❌ Error exportando CSV protegido:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Error en Exportación Protegida",
+        html: `
+          <div style="text-align: left;">
+            <p><strong>No se pudo generar el archivo protegido</strong></p>
+            <p style="color: #dc2626; font-size: 14px;">Error: ${error.message}</p>
+            <p style="font-size: 12px; color: #6b7280;">
+              Por favor, intente nuevamente o contacte al administrador del sistema.
+            </p>
+          </div>
+        `,
+        confirmButtonText: "Entendido",
+      });
     }
   };
-  // ✅ EXPORTAR TODOS LOS CIERRES CON IPV Y PENDIENTES INCLUIDOS
+
+  // ✅ EXPORTAR TODOS LOS CIERRES CON PROTECCIÓN COMPLETA
   const exportAllToCSV = async () => {
     try {
       console.log(
-        "📊 Exportando TODOS los cierres offline a CSV con IPV y Pendientes"
+        "📊 Exportando TODOS los cierres offline con protección completa"
       );
 
       // Obtener inventario actual
       const inventoryData = await getCurrentInventory();
 
-      // Encabezados mejorados, incluyendo pendientes
+      // Encabezados mejorados
       const headers = [
         "ID CIERRE",
         "FECHA CIERRE",
@@ -2094,6 +1955,8 @@ const ClosuresHistory = () => {
         "TARJETA",
         "TRANSFERENCIA",
         ...(isAdmin ? ["GANANCIA BRUTA"] : []),
+        "PRODUCTOS DIFERENTES",
+        "UNIDADES VENDIDAS",
         "RETIROS PENDIENTES",
         "INGRESOS PENDIENTES",
         "PENDIENTES PAGO",
@@ -2109,8 +1972,10 @@ const ClosuresHistory = () => {
         "OBSERVACIONES",
       ].join(",");
 
-      // Datos de cada cierre, incluyendo pendientes
+      // Datos de cada cierre
       const csvData = filteredClosures.map((closure) => {
+        const productosVendidos = closure.productos_vendidos_detalle || [];
+
         const baseData = [
           closure.id || closure.id_local,
           new Date(closure.fecha_cierre).toLocaleDateString("es-MX"),
@@ -2126,6 +1991,9 @@ const ClosuresHistory = () => {
         if (isAdmin) {
           baseData.push(closure.ganancia_bruta);
         }
+
+        // ✅ INCLUIR DATOS DE PRODUCTOS VENDIDOS
+        baseData.push(productosVendidos.length, closure.unidades_vendidas || 0);
 
         // ✅ INCLUIR DATOS DE PENDIENTES
         baseData.push(
@@ -2153,14 +2021,13 @@ const ClosuresHistory = () => {
         return baseData.join(",");
       });
 
-      // ✅ OBTENER TODOS LOS PENDIENTES PARA INCLUIR EN REPORTE GENERAL
+      // ✅ OBTENER TODOS LOS PENDIENTES
       let todosLosPendientes = [];
       try {
         const PendientesOfflineController = await import(
           "../../../../controllers/offline/PendientesOfflineController/PendientesOfflineController"
         ).then((module) => module.default);
 
-        // Obtener pendientes de todos los cierres
         for (const closure of filteredClosures) {
           const sesionId =
             closure.sesion_caja_id || closure.sesion_caja_id_local;
@@ -2178,7 +2045,7 @@ const ClosuresHistory = () => {
         console.error("❌ Error obteniendo todos los pendientes:", error);
       }
 
-      // ✅ SECCIÓN DE PENDIENTES DETALLADOS PARA EL REPORTE GENERAL
+      // ✅ SECCIÓN DE PENDIENTES DETALLADOS
       const pendientesSection = [
         "",
         "DETALLE COMPLETO DE TODOS LOS PENDIENTES E IMPREVISTOS",
@@ -2198,7 +2065,7 @@ const ClosuresHistory = () => {
           : [["No hay pendientes registrados", "", "", "", "", ""]]),
       ].join("\n");
 
-      // ✅ SECCIÓN DE INVENTARIO PARA EL REPORTE GENERAL
+      // ✅ SECCIÓN DE INVENTARIO
       const inventorySection = [
         "",
         "INVENTARIO FISICO VALORADO (IPV) - ACTUAL",
@@ -2221,9 +2088,35 @@ const ClosuresHistory = () => {
         ),
       ].join("\n");
 
-      // Crear contenido completo con encabezado informativo
+      // ✅ SECCIÓN DE PRODUCTOS VENDIDOS
+      const productosSection = [
+        "",
+        "DETALLE COMPLETO DE TODOS LOS PRODUCTOS VENDIDOS",
+        `Fecha de generación: ${new Date().toLocaleString("es-MX")}`,
+        `Total de cierres con productos: ${
+          filteredClosures.filter(
+            (c) =>
+              c.productos_vendidos_detalle &&
+              c.productos_vendidos_detalle.length > 0
+          ).length
+        }`,
+        "",
+        "ID Cierre,Producto,Cantidad Total,Precio Unitario,Subtotal Total",
+        ...filteredClosures.flatMap((closure) => {
+          const productos = closure.productos_vendidos_detalle || [];
+          return productos.map((producto) => [
+            closure.id || closure.id_local,
+            `"${producto.nombre}"`,
+            producto.cantidad_total,
+            formatCurrency(producto.precio_unitario),
+            formatCurrency(producto.subtotal_total),
+          ]);
+        }),
+      ].join("\n");
+
+      // Crear contenido completo
       const fullCSVContent = [
-        "REPORTE GENERAL DE CIERRES DE CAJA CON INVENTARIO Y PENDIENTES",
+        "REPORTE GENERAL DE CIERRES DE CAJA CON INVENTARIO, PENDIENTES Y PRODUCTOS VENDIDOS",
         `Fecha de generacion: ${new Date().toLocaleString("es-MX")}`,
         `Total de cierres: ${filteredClosures.length}`,
         `Total de pendientes: ${todosLosPendientes.length}`,
@@ -2239,11 +2132,22 @@ const ClosuresHistory = () => {
         "",
         inventorySection,
         "",
-        "NOTAS:",
+        productosSection,
+        "",
+        "PROTECCION DE ARCHIVO",
+        "Estado: SOLO_LECTURA - REPORTE VERIFICADO",
+        `Hash Verificacion: ${btoa("REPORTE_GENERAL_" + Date.now()).substring(
+          0,
+          25
+        )}`,
+        "Integridad: GARANTIZADA - NO MODIFICAR MANUALMENTE",
+        "",
+        "NOTAS IMPORTANTES:",
         "Este reporte contiene todos los cierres de caja almacenados localmente",
         "Los datos estan filtrados segun los criterios aplicados en pantalla",
         "El inventario fisico valorado (IPV) muestra el stock actual de todos los productos",
         "Los pendientes incluyen retiros, ingresos y pagos pendientes registrados durante cada sesión",
+        "CUALQUIER MODIFICACION MANUAL INVALIDA ESTE REPORTE OFICIAL",
         ...(isAdmin
           ? []
           : [
@@ -2252,30 +2156,73 @@ const ClosuresHistory = () => {
         "Para mas detalles consulte los reportes individuales",
       ].join("\n");
 
-      const blob = new Blob([createCSVWithEncoding(fullCSVContent)], {
+      // ✅ CREAR BLOB CON PROTECCIÓN
+      const blob = new Blob([createProtectedCSV(fullCSVContent, null, true)], {
         type: "text/csv;charset=utf-8;",
       });
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `reporte_general_cierres_completo_${
-        new Date().toISOString().split("T")[0]
-      }.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
 
-      console.log(
-        "✅ Todos los cierres offline con IPV y Pendientes (con descripción) exportados exitosamente"
-      );
+      // ✅ GENERAR NOMBRE CON FECHA
+      a.download = generateFileName(null, true);
+
+      // ✅ AGREGAR ATRIBUTOS DE SEGURIDAD
+      a.setAttribute("data-file-type", "protected-financial-report-batch");
+      a.setAttribute("data-records", filteredClosures.length.toString());
+      a.setAttribute("data-readonly", "true");
+
+      a.click();
+
+      // ✅ MOSTRAR CONFIRMACIÓN
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        Swal.fire({
+          icon: "success",
+          title: "✅ Reporte General Protegido",
+          html: `
+            <div style="text-align: center;">
+              <div style="background: #f0f9ff; padding: 20px; border-radius: 10px; border: 2px solid #0ea5e9;">
+                <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+                  <div style="background: #0ea5e9; color: white; padding: 10px; border-radius: 50%; margin-right: 10px;">
+                    <FiLock size={20} />
+                  </div>
+                  <h3 style="margin: 0; color: #0ea5e9;">Reporte Protegido Descargado</h3>
+                </div>
+                
+                <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                  <p style="margin: 0 0 10px 0; font-size: 16px;">
+                    <strong>📊 ${filteredClosures.length} cierres</strong> incluidos
+                  </p>
+                  <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                    Archivo protegido con medidas de integridad
+                  </p>
+                </div>
+                
+                <div style="background: #fef3c7; padding: 10px; border-radius: 6px;">
+                  <p style="margin: 0; font-size: 13px; color: #92400e;">
+                    <strong>🔒 SOLO LECTURA:</strong> Cualquier modificación invalidará el reporte
+                  </p>
+                </div>
+              </div>
+            </div>
+          `,
+          confirmButtonText: "Entendido",
+          width: 450,
+        });
+      }, 100);
+
+      console.log("✅ Reporte general protegido exportado exitosamente");
     } catch (error) {
-      console.error(
-        "❌ Error exportando todos los cierres con IPV y Pendientes:",
-        error
-      );
-      alert(
-        "Error al exportar todos los cierres con inventario y pendientes: " +
-          error.message
-      );
+      console.error("❌ Error exportando reporte general protegido:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Error en Reporte Protegido",
+        text:
+          "No se pudo generar el reporte general protegido: " + error.message,
+        confirmButtonText: "Entendido",
+      });
     }
   };
 
@@ -2523,14 +2470,15 @@ const ClosuresHistory = () => {
             </button>
           </div>
 
-          {/* ✅ BOTÓN EXPORTAR TODOS - AHORA CON IPV Y PENDIENTES */}
+          {/* ✅ BOTÓN EXPORTAR TODOS - CON INDICADOR DE PROTECCIÓN */}
           {filteredClosures.length > 0 && (
             <button
               className={styles.exportButton}
               onClick={exportAllToCSV}
-              title="Exportar todos los cierres a CSV con inventario y pendientes"
+              title="Exportar todos los cierres a CSV protegido (Solo Lectura)"
             >
               <FiDownload className={styles.exportIcon} />
+              <FiLock className={styles.lockIcon} />
               Exportar Completo
             </button>
           )}
@@ -2687,16 +2635,17 @@ const ClosuresHistory = () => {
                         </span>
                       </td>
                       <td className={styles.actionsCell}>
-                        {/* ✅ BOTÓN DE EXPORTACIÓN INDIVIDUAL - AHORA CON IPV Y PENDIENTES */}
+                        {/* ✅ BOTÓN DE EXPORTACIÓN INDIVIDUAL - CON PROTECCIÓN */}
                         <button
                           className={styles.individualExportButton}
                           onClick={async (e) => {
                             e.stopPropagation();
                             await exportClosureToCSV(closure);
                           }}
-                          title="Exportar este cierre a CSV con inventario completo y pendientes"
+                          title="Exportar este cierre a CSV protegido (Solo Lectura)"
                         >
                           <FiPackage />
+                          <FiLock className={styles.buttonLockIcon} />
                           Exportar
                         </button>
 

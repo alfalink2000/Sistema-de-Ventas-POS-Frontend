@@ -1003,3 +1003,84 @@
     min-width: auto;
   }
 }
+/* Agregar al ClosuresHistory.module.css */
+
+/* ✅ INDICADORES DE PROTECCIÓN EN BOTONES */
+.individualExportButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  position: relative;
+}
+
+.individualExportButton:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.buttonLockIcon {
+  font-size: 0.6rem;
+  margin-left: 2px;
+}
+
+.exportButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  position: relative;
+}
+
+.exportButton:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.lockIcon {
+  font-size: 0.7rem;
+  margin-left: 4px;
+}
+
+/* ✅ ESTILOS PARA POPUPS DE PROTECCIÓN */
+.protected-file-popup {
+  border: 2px solid #0ea5e9;
+  border-radius: 12px;
+}
+
+.protected-file-popup .swal2-title {
+  color: #0ea5e9;
+}
+
+/* ✅ BADGE DE PROTECCIÓN */
+.protectionBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 8px;
+}
