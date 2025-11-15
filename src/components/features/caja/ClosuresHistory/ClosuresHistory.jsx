@@ -1488,10 +1488,277 @@ const ClosuresHistory = () => {
   };
 
   // ✅ EXPORTAR CIERRE INDIVIDUAL CON IPV Y PENDIENTES INCLUIDOS
+  // const exportClosureToCSV = async (closure) => {
+  //   try {
+  //     console.log(
+  //       "📊 Exportando cierre individual a CSV con IPV y Pendientes:",
+  //       closure
+  //     );
+
+  //     // Obtener inventario actual
+  //     const inventoryData = await getCurrentInventory();
+
+  //     // ✅ OBTENER PENDIENTES CON DESCRIPCIÓN
+  //     let pendientesConDescripcion = [];
+  //     try {
+  //       const PendientesOfflineController = await import(
+  //         "../../../../controllers/offline/PendientesOfflineController/PendientesOfflineController"
+  //       ).then((module) => module.default);
+
+  //       const sesionId = closure.sesion_caja_id || closure.sesion_caja_id_local;
+  //       pendientesConDescripcion =
+  //         await PendientesOfflineController.getPendientesBySesion(sesionId);
+
+  //       console.log(
+  //         `✅ Obtenidos ${pendientesConDescripcion.length} pendientes con descripción`
+  //       );
+  //     } catch (error) {
+  //       console.error("❌ Error obteniendo pendientes con descripción:", error);
+  //     }
+
+  //     // Preparar datos del cierre con formato mejorado INCLUYENDO IPV Y PENDIENTES CON DESCRIPCIÓN
+  //     const closureData = [
+  //       ["REPORTE DETALLADO DE CIERRE DE CAJA CON INVENTARIO Y PENDIENTES"],
+  //       ["Sistema de Punto de Venta - Modo Offline"],
+  //       [""],
+  //       ["INFORMACION BASICA DEL CIERRE"],
+  //       ["ID del Cierre:", closure.id || closure.id_local],
+  //       [
+  //         "Fecha de Cierre:",
+  //         new Date(closure.fecha_cierre).toLocaleString("es-MX"),
+  //       ],
+  //       ["Estado:", "Almacenado localmente (Offline)"],
+  //       [""],
+  //       ["INFORMACION DE LA SESION"],
+  //       [
+  //         "Fecha de Apertura:",
+  //         new Date(closure.fecha_apertura).toLocaleString("es-MX"),
+  //       ],
+  //       [
+  //         "Fecha de Cierre:",
+  //         new Date(closure.fecha_cierre).toLocaleString("es-MX"),
+  //       ],
+  //       [
+  //         "Duracion Total:",
+  //         calculateDuration(closure.fecha_apertura, closure.fecha_cierre),
+  //       ],
+  //       ["Vendedor:", closure.vendedor_nombre || "No especificado"],
+  //       ["Saldo Inicial:", formatCurrency(closure.saldo_inicial || 0)],
+  //       [""],
+  //       ["DETALLE DE VENTAS POR METODO DE PAGO"],
+  //       ["Ventas en Efectivo:", formatCurrency(closure.total_efectivo || 0)],
+  //       ["Ventas con Tarjeta:", formatCurrency(closure.total_tarjeta || 0)],
+  //       [
+  //         "Ventas por Transferencia:",
+  //         formatCurrency(closure.total_transferencia || 0),
+  //       ],
+  //       ["TOTAL VENTAS:", formatCurrency(closure.total_ventas || 0)],
+  //       [""],
+
+  //       // ✅ NUEVA SECCIÓN: PENDIENTES E IMPREVISTOS CON DESCRIPCIÓN
+  //       ["PENDIENTES E IMPREVISTOS - RESUMEN"],
+  //       [
+  //         "Total Retiros de Efectivo:",
+  //         formatCurrency(closure.total_retiros_pendientes || 0),
+  //       ],
+  //       [
+  //         "Total Ingresos de Efectivo:",
+  //         formatCurrency(closure.total_ingresos_pendientes || 0),
+  //       ],
+  //       [
+  //         "Total Pendientes de Pago:",
+  //         formatCurrency(closure.total_pendientes_pago || 0),
+  //       ],
+  //       ["Cantidad de Retiros:", closure.cantidad_retiros || 0],
+  //       ["Cantidad de Ingresos:", closure.cantidad_ingresos || 0],
+  //       ["Cantidad de Pendientes:", closure.cantidad_pendientes || 0],
+  //       [
+  //         "Impacto Neto en Caja:",
+  //         formatCurrency(
+  //           (closure.total_ingresos_pendientes || 0) -
+  //             (closure.total_retiros_pendientes || 0)
+  //         ),
+  //       ],
+  //       [""],
+
+  //       // ✅ NUEVA TABLA: DETALLE COMPLETO DE PENDIENTES CON DESCRIPCIÓN
+  //       ["DETALLE COMPLETO DE PENDIENTES E IMPREVISTOS"],
+  //       ["Fecha", "Tipo", "Descripción", "Monto", "Observaciones"],
+
+  //       // ✅ DATOS DE CADA PENDIENTE CON SU DESCRIPCIÓN
+  //       ...(pendientesConDescripcion.length > 0
+  //         ? pendientesConDescripcion.map((pendiente) => [
+  //             new Date(pendiente.fecha || pendiente.created_at).toLocaleString(
+  //               "es-MX"
+  //             ),
+  //             pendiente.tipo?.toUpperCase() || "PENDIENTE",
+  //             `"${pendiente.descripcion || "Sin descripción"}"`,
+  //             formatCurrency(pendiente.monto || 0),
+  //             `"${pendiente.observaciones || "Sin observaciones"}"`,
+  //           ])
+  //         : [["No hay pendientes registrados", "", "", "", ""]]),
+
+  //       [""],
+  //       ["TOTALES PENDIENTES"],
+  //       [
+  //         "Total Retiros:",
+  //         formatCurrency(
+  //           pendientesConDescripcion
+  //             .filter((p) => p.tipo === "retiro")
+  //             .reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0)
+  //         ),
+  //       ],
+  //       [
+  //         "Total Ingresos:",
+  //         formatCurrency(
+  //           pendientesConDescripcion
+  //             .filter((p) => p.tipo === "ingreso")
+  //             .reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0)
+  //         ),
+  //       ],
+  //       [
+  //         "Total Pendientes Pago:",
+  //         formatCurrency(
+  //           pendientesConDescripcion
+  //             .filter((p) => p.tipo === "pendiente")
+  //             .reduce((sum, p) => sum + (parseFloat(p.monto) || 0), 0)
+  //         ),
+  //       ],
+  //       [""],
+
+  //       ["RESUMEN FINAL DE CAJA"],
+  //       [
+  //         "Saldo Final Teorico:",
+  //         formatCurrency(closure.saldo_final_teorico || 0),
+  //       ],
+  //       ["Saldo Final Real:", formatCurrency(closure.saldo_final_real || 0)],
+  //       ["Diferencia:", formatCurrency(closure.diferencia || 0)],
+  //       [
+  //         "Estado del Cierre:",
+  //         closure.diferencia === 0
+  //           ? "EXACTO"
+  //           : closure.diferencia > 0
+  //           ? "SOBRANTE"
+  //           : "FALTANTE",
+  //       ],
+  //       [""],
+
+  //       // ✅ SECCIÓN: INVENTARIO FISICO VALORADO (IPV)
+  //       ["INVENTARIO FISICO VALORADO (IPV) AL CIERRE"],
+  //       ["Fecha de captura de inventario:", new Date().toLocaleString("es-MX")],
+  //       [
+  //         "Total de productos en inventario:",
+  //         inventoryData.totales.total_productos,
+  //       ],
+  //       ["Productos agotados:", inventoryData.totales.productos_agotados],
+  //       [
+  //         "Productos con bajo stock:",
+  //         inventoryData.totales.productos_bajo_stock,
+  //       ],
+  //       ["Productos con stock normal:", inventoryData.totales.productos_normal],
+  //       [""],
+
+  //       // ✅ DETALLE COMPLETO DEL INVENTARIO
+  //       ["DETALLE COMPLETO DEL INVENTARIO"],
+  //       [
+  //         "Producto",
+  //         "Categoria",
+  //         "Stock Actual",
+  //         "Stock Minimo",
+  //         "Estado",
+  //         "Precio Venta",
+  //       ],
+
+  //       // ✅ DATOS DE CADA PRODUCTO
+  //       ...inventoryData.inventario.map((item) => [
+  //         `"${item.nombre}"`,
+  //         `"${item.categoria}"`,
+  //         item.stock_actual,
+  //         item.stock_minimo,
+  //         item.estado,
+  //         formatCurrency(item.precio_venta),
+  //       ]),
+
+  //       [""],
+  //       ["INFORMACION ADICIONAL"],
+  //       [
+  //         "Observaciones del Cierre:",
+  //         closure.observaciones || "Sin observaciones registradas",
+  //       ],
+  //       [""],
+  //       ["INFORMACION DE EXPORTACION"],
+  //       ["Fecha de Exportacion:", new Date().toLocaleString("es-MX")],
+  //       [
+  //         "Exportado por:",
+  //         currentUser?.name || currentUser?.nombre || "Usuario",
+  //       ],
+  //       ["Rol del Usuario:", currentUser?.rol || "No especificado"],
+  //       ["Modo:", "Offline"],
+  //       [""],
+  //       ["NOTAS"],
+  //       ["Este reporte fue generado automaticamente desde el sistema offline"],
+  //       ["Los datos reflejan el estado al momento del cierre de caja"],
+  //       [
+  //         "El inventario fisico valorado (IPV) muestra el stock actual de todos los productos",
+  //       ],
+  //       [
+  //         "Los pendientes e imprevistos incluyen retiros, ingresos y pagos pendientes registrados durante la sesión",
+  //       ],
+  //       ["Para consultas contactar al administrador del sistema"],
+  //     ];
+
+  //     // Convertir a CSV con encoding correcto
+  //     const csvContent = closureData
+  //       .map((row) => {
+  //         if (Array.isArray(row)) {
+  //           return row.map((field) => `"${field}"`).join(",");
+  //         }
+  //         return `"${row}"`;
+  //       })
+  //       .join("\n");
+
+  //     // Crear y descargar archivo con encoding UTF-8
+  //     const blob = new Blob([createCSVWithEncoding(csvContent)], {
+  //       type: "text/csv;charset=utf-8;",
+  //     });
+  //     const url = URL.createObjectURL(blob);
+  //     const link = document.createElement("a");
+  //     link.setAttribute("href", url);
+
+  //     // Nombre del archivo más descriptivo CON IPV Y PENDIENTES
+  //     const fileName = `cierre_caja_completo_${
+  //       closure.id || closure.id_local
+  //     }_${closure.vendedor_nombre || "vendedor"}_${
+  //       new Date(closure.fecha_cierre).toISOString().split("T")[0]
+  //     }.csv`;
+
+  //     link.setAttribute("download", fileName);
+  //     link.style.visibility = "hidden";
+
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
+
+  //     console.log(
+  //       "✅ CSV con IPV y Pendientes (con descripción) exportado exitosamente:",
+  //       {
+  //         fileName,
+  //         totalProductos: inventoryData.inventario.length,
+  //         totalPendientes: pendientesConDescripcion.length,
+  //       }
+  //     );
+  //   } catch (error) {
+  //     console.error("❌ Error exportando CSV con IPV y Pendientes:", error);
+  //     alert(
+  //       "Error al exportar el cierre con inventario y pendientes: " +
+  //         error.message
+  //     );
+  //   }
+  // };
   const exportClosureToCSV = async (closure) => {
     try {
       console.log(
-        "📊 Exportando cierre individual a CSV con IPV y Pendientes:",
+        "📊 Exportando cierre individual a CSV con IPV, Pendientes y Productos Vendidos:",
         closure
       );
 
@@ -1516,9 +1783,17 @@ const ClosuresHistory = () => {
         console.error("❌ Error obteniendo pendientes con descripción:", error);
       }
 
-      // Preparar datos del cierre con formato mejorado INCLUYENDO IPV Y PENDIENTES CON DESCRIPCIÓN
+      // ✅ OBTENER PRODUCTOS VENDIDOS DEL CIERRE
+      const productosVendidos = closure.productos_vendidos_detalle || [];
+      console.log(
+        `📦 Exportando ${productosVendidos.length} productos vendidos del cierre`
+      );
+
+      // Preparar datos del cierre con formato mejorado INCLUYENDO IPV, PENDIENTES Y PRODUCTOS VENDIDOS
       const closureData = [
-        ["REPORTE DETALLADO DE CIERRE DE CAJA CON INVENTARIO Y PENDIENTES"],
+        [
+          "REPORTE DETALLADO DE CIERRE DE CAJA CON INVENTARIO, PENDIENTES Y PRODUCTOS VENDIDOS",
+        ],
         ["Sistema de Punto de Venta - Modo Offline"],
         [""],
         ["INFORMACION BASICA DEL CIERRE"],
@@ -1545,6 +1820,42 @@ const ClosuresHistory = () => {
         ["Vendedor:", closure.vendedor_nombre || "No especificado"],
         ["Saldo Inicial:", formatCurrency(closure.saldo_inicial || 0)],
         [""],
+
+        // ✅ NUEVA SECCIÓN: RESUMEN DE PRODUCTOS VENDIDOS
+        ["RESUMEN DE PRODUCTOS VENDIDOS"],
+        ["Total Productos Diferentes:", productosVendidos.length],
+        ["Total Unidades Vendidas:", closure.unidades_vendidas || 0],
+        ["Total Ventas Productos:", formatCurrency(closure.total_ventas || 0)],
+        [""],
+
+        // ✅ NUEVA TABLA: DETALLE COMPLETO DE PRODUCTOS VENDIDOS
+        ["DETALLE COMPLETO DE PRODUCTOS VENDIDOS"],
+        ["Producto", "Cantidad Total", "Precio Unitario", "Subtotal Total"],
+
+        // ✅ DATOS DE CADA PRODUCTO VENDIDO
+        ...(productosVendidos.length > 0
+          ? productosVendidos.map((producto) => [
+              `"${producto.nombre}"`,
+              producto.cantidad_total,
+              formatCurrency(producto.precio_unitario),
+              formatCurrency(producto.subtotal_total),
+            ])
+          : [["No hay productos vendidos", "", "", ""]]),
+
+        [""],
+        ["TOTALES PRODUCTOS VENDIDOS"],
+        [
+          "Total Unidades:",
+          productosVendidos.reduce((sum, p) => sum + p.cantidad_total, 0),
+        ],
+        [
+          "Total Valor:",
+          formatCurrency(
+            productosVendidos.reduce((sum, p) => sum + p.subtotal_total, 0)
+          ),
+        ],
+        [""],
+
         ["DETALLE DE VENTAS POR METODO DE PAGO"],
         ["Ventas en Efectivo:", formatCurrency(closure.total_efectivo || 0)],
         ["Ventas con Tarjeta:", formatCurrency(closure.total_tarjeta || 0)],
@@ -1555,7 +1866,7 @@ const ClosuresHistory = () => {
         ["TOTAL VENTAS:", formatCurrency(closure.total_ventas || 0)],
         [""],
 
-        // ✅ NUEVA SECCIÓN: PENDIENTES E IMPREVISTOS CON DESCRIPCIÓN
+        // ✅ SECCIÓN: PENDIENTES E IMPREVISTOS CON DESCRIPCIÓN
         ["PENDIENTES E IMPREVISTOS - RESUMEN"],
         [
           "Total Retiros de Efectivo:",
@@ -1581,7 +1892,7 @@ const ClosuresHistory = () => {
         ],
         [""],
 
-        // ✅ NUEVA TABLA: DETALLE COMPLETO DE PENDIENTES CON DESCRIPCIÓN
+        // ✅ TABLA: DETALLE COMPLETO DE PENDIENTES CON DESCRIPCIÓN
         ["DETALLE COMPLETO DE PENDIENTES E IMPREVISTOS"],
         ["Fecha", "Tipo", "Descripción", "Monto", "Observaciones"],
 
@@ -1704,6 +2015,9 @@ const ClosuresHistory = () => {
         [
           "Los pendientes e imprevistos incluyen retiros, ingresos y pagos pendientes registrados durante la sesión",
         ],
+        [
+          "Los productos vendidos muestran el detalle de todas las ventas realizadas durante la sesión",
+        ],
         ["Para consultas contactar al administrador del sistema"],
       ];
 
@@ -1725,7 +2039,7 @@ const ClosuresHistory = () => {
       const link = document.createElement("a");
       link.setAttribute("href", url);
 
-      // Nombre del archivo más descriptivo CON IPV Y PENDIENTES
+      // Nombre del archivo más descriptivo CON IPV, PENDIENTES Y PRODUCTOS
       const fileName = `cierre_caja_completo_${
         closure.id || closure.id_local
       }_${closure.vendedor_nombre || "vendedor"}_${
@@ -1740,22 +2054,25 @@ const ClosuresHistory = () => {
       document.body.removeChild(link);
 
       console.log(
-        "✅ CSV con IPV y Pendientes (con descripción) exportado exitosamente:",
+        "✅ CSV con IPV, Pendientes y Productos Vendidos exportado exitosamente:",
         {
           fileName,
           totalProductos: inventoryData.inventario.length,
           totalPendientes: pendientesConDescripcion.length,
+          totalProductosVendidos: productosVendidos.length,
         }
       );
     } catch (error) {
-      console.error("❌ Error exportando CSV con IPV y Pendientes:", error);
+      console.error(
+        "❌ Error exportando CSV con IPV, Pendientes y Productos:",
+        error
+      );
       alert(
-        "Error al exportar el cierre con inventario y pendientes: " +
+        "Error al exportar el cierre con inventario, pendientes y productos: " +
           error.message
       );
     }
   };
-
   // ✅ EXPORTAR TODOS LOS CIERRES CON IPV Y PENDIENTES INCLUIDOS
   const exportAllToCSV = async () => {
     try {
