@@ -714,10 +714,11 @@
 
 // export default Inventory;
 // pages/Inventory/Inventory.jsx - VERSIÓN MODIFICADA CON ENTRADA Y SALIDA DE STOCK
+// pages/Inventory/Inventory.jsx - VERSIÓN CORREGIDA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loadProductsFromIndexedDB } from "../../actions/salesActions";
-import { actualizarStock, disminuirStock } from "../../actions/productsActions";
+import { actualizarStock } from "../../actions/productsActions";
 import {
   FiPackage,
   FiAlertTriangle,
@@ -733,8 +734,6 @@ import {
   FiX,
   FiPlus,
   FiMinus,
-  FiTrendingUp,
-  FiTrendingDown,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import styles from "./Inventory.module.css";
@@ -745,7 +744,7 @@ const Inventory = () => {
   const { user: currentUser } = useSelector((state) => state.auth);
   const [editingStock, setEditingStock] = useState(null);
   const [newStockValue, setNewStockValue] = useState("");
-  const [stockEntry, setStockEntry] = useState({}); // Para entrada de nuevos productos
+  const [stockEntry, setStockEntry] = useState({}); // Para entrada de productos
   const [stockDecrease, setStockDecrease] = useState({}); // Para disminución de stock
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -873,6 +872,8 @@ const Inventory = () => {
   // ✅ FUNCIÓN PARA AUMENTAR STOCK (ENTRADA DE PRODUCTOS)
   const handleStockEntry = async (productoId) => {
     const entryQuantity = stockEntry[productoId];
+    const product = safeProducts.find((p) => p.id === productoId);
+    const currentStock = product?.stock || 0;
 
     if (
       !entryQuantity ||
@@ -888,6 +889,9 @@ const Inventory = () => {
       return;
     }
 
+    // ✅ CALCULAR NUEVO STOCK (SUMA)
+    const nuevoStock = currentStock + parseInt(entryQuantity);
+
     let adminPassword;
     if (currentUser?.rol !== "admin") {
       adminPassword = await requestAdminPassword("agregar stock");
@@ -895,8 +899,7 @@ const Inventory = () => {
     }
 
     const stockData = {
-      stock: parseInt(entryQuantity),
-      operation: "increase",
+      stock: nuevoStock,
       ...(currentUser?.rol !== "admin" && { adminPassword }),
     };
 
@@ -925,7 +928,7 @@ const Inventory = () => {
         await Swal.fire({
           icon: "success",
           title: "¡Éxito!",
-          text: `Se agregaron ${entryQuantity} unidades al stock`,
+          text: `Se agregaron ${entryQuantity} unidades al stock. Nuevo stock: ${nuevoStock}`,
           timer: 2000,
           showConfirmButton: false,
           position: "top-end",
@@ -950,7 +953,7 @@ const Inventory = () => {
     }
   };
 
-  // ✅ FUNCIÓN PARA DISMINUIR STOCK
+  // ✅ FUNCIÓN PARA DISMINUIR STOCK (USANDO LA MISMA ACCIÓN actualizarStock)
   const handleStockDecrease = async (productoId) => {
     const decreaseQuantity = stockDecrease[productoId];
     const product = safeProducts.find((p) => p.id === productoId);
@@ -980,6 +983,9 @@ const Inventory = () => {
       return;
     }
 
+    // ✅ CALCULAR NUEVO STOCK (RESTA)
+    const nuevoStock = currentStock - parseInt(decreaseQuantity);
+
     let adminPassword;
     if (currentUser?.rol !== "admin") {
       adminPassword = await requestAdminPassword("disminuir stock");
@@ -987,8 +993,7 @@ const Inventory = () => {
     }
 
     const stockData = {
-      stock: parseInt(decreaseQuantity),
-      operation: "decrease",
+      stock: nuevoStock,
       ...(currentUser?.rol !== "admin" && { adminPassword }),
     };
 
@@ -1002,7 +1007,7 @@ const Inventory = () => {
         },
       });
 
-      const result = await dispatch(disminuirStock(productoId, stockData));
+      const result = await dispatch(actualizarStock(productoId, stockData));
 
       Swal.close();
 
@@ -1017,7 +1022,7 @@ const Inventory = () => {
         await Swal.fire({
           icon: "success",
           title: "¡Éxito!",
-          text: `Se disminuyeron ${decreaseQuantity} unidades del stock`,
+          text: `Se disminuyeron ${decreaseQuantity} unidades del stock. Nuevo stock: ${nuevoStock}`,
           timer: 2000,
           showConfirmButton: false,
           position: "top-end",
