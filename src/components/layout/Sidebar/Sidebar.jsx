@@ -202,17 +202,6 @@ const Sidebar = ({ isOpen, onToggle, onNavigation, currentView }) => {
         </nav>
 
         <div className={styles.sidebarFooter}>
-          {/* ✅ MOSTRAR INDICADOR DE CAJA ABIERTA */}
-          {sesionAbierta && (
-            <div className={styles.cajaAbiertaWarning}>
-              <div className={styles.warningIcon}>⚠️</div>
-              <div className={styles.warningText}>
-                <strong>Caja Abierta</strong>
-                <small>ID: {sesionAbierta.id || sesionAbierta.id_local}</small>
-              </div>
-            </div>
-          )}
-
           <button
             className={`${styles.logoutButton} ${
               sesionAbierta ? styles.logoutDisabled : ""
