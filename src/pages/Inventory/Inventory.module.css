@@ -969,3 +969,259 @@
     justify-content: space-between;
   }
 }
+/* ✅ ESTILOS PARA NUEVAS COLUMNAS DE ENTRADA Y DISMINUCIÓN */
+
+/* Contenedor de entrada de stock */
+.stockEntry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.entryContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 120px;
+}
+
+.entryInput {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.entryInput:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+}
+
+.entryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.entryButton:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.entryButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.entryIcon {
+  font-size: 14px;
+}
+
+/* Contenedor de acciones con grupo de botones */
+.actionGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Contenedor para disminución de stock */
+.decreaseContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 120px;
+}
+
+.decreaseInput {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.decreaseInput:focus {
+  outline: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
+}
+
+.decreaseButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.decreaseButton:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.decreaseButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.decreaseIcon {
+  font-size: 14px;
+}
+
+/* ✅ ACTUALIZAR GRID DE LA TABLA PARA LA NUEVA COLUMNA */
+.tableHeader {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1.5fr;
+  gap: 16px;
+  padding: 16px 24px;
+  background: #f7fafc;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.productRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1.5fr;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+/* ✅ RESPONSIVE PARA LAS NUEVAS COLUMNAS */
+@media (max-width: 1024px) {
+  .tableHeader,
+  .productRow {
+    grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 1.2fr;
+    gap: 12px;
+    padding: 16px 20px;
+  }
+
+  .entryContainer,
+  .decreaseContainer {
+    max-width: 100px;
+  }
+
+  .entryInput,
+  .decreaseInput {
+    width: 50px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tableHeader {
+    display: none;
+  }
+
+  .productRow {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+
+  /* Estilos para vista móvil - mostrar labels */
+  .stockEntry::before {
+    content: "Entrada de Stock: ";
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.875rem;
+  }
+
+  .entryContainer {
+    max-width: 100%;
+    justify-content: flex-start;
+  }
+
+  .decreaseContainer {
+    max-width: 100%;
+    justify-content: flex-start;
+  }
+
+  .actionGroup {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .decreaseContainer::before {
+    content: "Disminuir Stock: ";
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.875rem;
+    margin-right: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .entryContainer,
+  .decreaseContainer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .entryInput,
+  .decreaseInput {
+    width: 100%;
+  }
+
+  .entryButton,
+  .decreaseButton {
+    width: 100%;
+  }
+}
+
+/* ✅ ESTILOS ADICIONALES PARA MEJORAR LA VISUALIZACIÓN */
+.entryButton:not(:disabled) {
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+}
+
+.decreaseButton:not(:disabled) {
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.2);
+}
+
+/* Indicadores visuales para los nuevos controles */
+.entryContainer:focus-within {
+  border-radius: 8px;
+  padding: 4px;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.decreaseContainer:focus-within {
+  border-radius: 8px;
+  padding: 4px;
+  background: rgba(239, 68, 68, 0.05);
+}

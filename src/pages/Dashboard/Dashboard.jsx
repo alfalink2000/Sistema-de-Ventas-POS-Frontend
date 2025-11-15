@@ -1,4 +1,4 @@
-// pages/Dashboard/Dashboard.jsx - VERSIÓN CORREGIDA
+// pages/Dashboard/Dashboard.jsx - VERSIÓN CORREGIDA Y SIMPLIFICADA
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -10,6 +10,8 @@ import {
   FiPlus,
   FiBarChart2,
   FiCreditCard,
+  FiUsers,
+  FiArchive,
 } from "react-icons/fi";
 import { loadProductsIfNeeded } from "../../actions/productsActions";
 import { loadOpenSesion } from "../../actions/sesionesCajaActions";
@@ -22,7 +24,6 @@ const Dashboard = ({ onViewChange }) => {
   const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    // ✅ Usar loadProductsIfNeeded para evitar recargas innecesarias
     dispatch(loadProductsIfNeeded());
     if (user?.id) {
       dispatch(loadOpenSesion(user.id));
@@ -34,45 +35,47 @@ const Dashboard = ({ onViewChange }) => {
 
   const totalProducts = safeProducts.length;
   const lowStockProducts = safeProducts.filter(
-    (p) => p.stock <= (p.stock_minimo || 5)
+    (p) => p.stock <= (p.stock_minimo || 5) && p.stock > 0
   ).length;
   const outOfStockProducts = safeProducts.filter((p) => p.stock === 0).length;
 
-  // ✅ CORREGIDO: Función para manejar acciones rápidas
-  const handleQuickAction = (view) => {
-    console.log(`🔄 Dashboard: Navegando a: ${view}`);
+  // ✅ FUNCIÓN CORREGIDA - MÁS SIMPLE Y DIRECTA
+  const handleQuickAction = (action) => {
+    console.log(`🎯 Dashboard: Acción rápida - ${action}`);
 
-    // ✅ CONVERTIR EL VIEW AL FORMATO QUE USA EL SIDEBAR
-    let path = "";
-    switch (view) {
-      case "sales":
-        path = "/sales";
-        break;
-      case "products":
-        path = "/products";
-        break;
-      case "inventory":
-        path = "/inventory";
-        break;
-      case "caja":
-        path = "/caja";
-        break;
-      case "reports":
-        path = "/reports";
-        break;
-      default:
-        path = "/dashboard";
+    // ✅ VERIFICAR SI onViewChange ESTÁ DISPONIBLE
+    if (!onViewChange || typeof onViewChange !== "function") {
+      console.error("❌ Dashboard: onViewChange no está disponible");
+      return;
     }
 
-    console.log(`📍 Dashboard: Redirigiendo a: ${path}`);
+    // ✅ MAPEO DIRECTO DE ACCIONES A RUTAS
+    const viewMap = {
+      sales: "sales",
+      products: "products",
+      inventory: "inventory",
+      caja: "caja",
+      reports: "reports",
+      users: "users",
+    };
 
-    if (onViewChange) {
-      // ✅ EL SIDEBAR ESPERA EL PATH COMPLETO (ej: "/sales")
-      onViewChange(path);
+    const targetView = viewMap[action];
+
+    if (targetView) {
+      console.log(`🔄 Dashboard: Navegando a ${targetView}`);
+      onViewChange(`/${targetView}`);
     } else {
-      console.error("❌ Dashboard: onViewChange no está definido");
+      console.error(`❌ Dashboard: Vista no encontrada para acción: ${action}`);
     }
   };
+
+  // ✅ MANEJADORES DIRECTOS PARA CADA ACCIÓN
+  const handleNuevaVenta = () => handleQuickAction("sales");
+  const handleProductos = () => handleQuickAction("products");
+  const handleInventario = () => handleQuickAction("inventory");
+  const handleCaja = () => handleQuickAction("caja");
+  const handleReportes = () => handleQuickAction("reports");
+  const handleUsuarios = () => handleQuickAction("users");
 
   if (loading) {
     return (
@@ -90,6 +93,15 @@ const Dashboard = ({ onViewChange }) => {
         <div className={styles.headerContent}>
           <h1>Panel de Control</h1>
           <p>Resumen general del sistema POS</p>
+          {/* ✅ DEBUG INFO - SOLO EN DESARROLLO */}
+          {process.env.NODE_ENV === "development" && (
+            <div className={styles.debugInfo}>
+              <small>
+                onViewChange:{" "}
+                {onViewChange ? "✅ Disponible" : "❌ No disponible"}
+              </small>
+            </div>
+          )}
         </div>
         <div className={styles.headerStats}>
           <div className={styles.miniStat}>
@@ -181,7 +193,7 @@ const Dashboard = ({ onViewChange }) => {
         </div>
       </div>
 
-      {/* ✅ ACCIONES RÁPIDAS MEJORADAS */}
+      {/* ✅ ACCIONES RÁPIDAS MEJORADAS - CON MANEJADORES DIRECTOS */}
       <div className={styles.quickActions}>
         <div className={styles.actionsHeader}>
           <h2>Acciones Rápidas</h2>
@@ -189,9 +201,10 @@ const Dashboard = ({ onViewChange }) => {
         </div>
 
         <div className={styles.actionGrid}>
+          {/* ✅ NUEVA VENTA */}
           <button
             className={`${styles.actionCard} ${styles.primary}`}
-            onClick={() => handleQuickAction("sales")}
+            onClick={handleNuevaVenta}
           >
             <div className={styles.actionIcon}>
               <FiShoppingCart />
@@ -205,10 +218,8 @@ const Dashboard = ({ onViewChange }) => {
             </div>
           </button>
 
-          <button
-            className={styles.actionCard}
-            onClick={() => handleQuickAction("products")}
-          >
+          {/* ✅ PRODUCTOS */}
+          <button className={styles.actionCard} onClick={handleProductos}>
             <div className={styles.actionIcon}>
               <FiPackage />
             </div>
@@ -218,12 +229,10 @@ const Dashboard = ({ onViewChange }) => {
             </div>
           </button>
 
-          <button
-            className={styles.actionCard}
-            onClick={() => handleQuickAction("inventory")}
-          >
+          {/* ✅ INVENTARIO */}
+          <button className={styles.actionCard} onClick={handleInventario}>
             <div className={styles.actionIcon}>
-              <FiTrendingDown />
+              <FiArchive />
             </div>
             <div className={styles.actionContent}>
               <span className={styles.actionTitle}>Inventario</span>
@@ -231,10 +240,8 @@ const Dashboard = ({ onViewChange }) => {
             </div>
           </button>
 
-          <button
-            className={styles.actionCard}
-            onClick={() => handleQuickAction("caja")}
-          >
+          {/* ✅ CAJA */}
+          <button className={styles.actionCard} onClick={handleCaja}>
             <div className={styles.actionIcon}>
               <FiCreditCard />
             </div>
@@ -246,10 +253,8 @@ const Dashboard = ({ onViewChange }) => {
             </div>
           </button>
 
-          <button
-            className={styles.actionCard}
-            onClick={() => handleQuickAction("reports")}
-          >
+          {/* ✅ REPORTES */}
+          <button className={styles.actionCard} onClick={handleReportes}>
             <div className={styles.actionIcon}>
               <FiBarChart2 />
             </div>
@@ -258,10 +263,49 @@ const Dashboard = ({ onViewChange }) => {
               <span className={styles.actionDesc}>Estadísticas y ventas</span>
             </div>
           </button>
+
+          {/* ✅ USUARIOS (Solo para administradores) */}
+          {user?.rol === "admin" && (
+            <button className={styles.actionCard} onClick={handleUsuarios}>
+              <div className={styles.actionIcon}>
+                <FiUsers />
+              </div>
+              <div className={styles.actionContent}>
+                <span className={styles.actionTitle}>Usuarios</span>
+                <span className={styles.actionDesc}>Gestionar usuarios</span>
+              </div>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* ✅ INFORMACIÓN DE DEBUG (SOLO EN DESARROLLO) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className={styles.debugPanel}>
+          <h4>Información de Debug</h4>
+          <div className={styles.debugInfo}>
+            <p>
+              <strong>Usuario:</strong> {user?.nombre} ({user?.rol})
+            </p>
+            <p>
+              <strong>Sesión de Caja:</strong>{" "}
+              {sesionAbierta ? "Abierta" : "Cerrada"}
+            </p>
+            <p>
+              <strong>Productos cargados:</strong> {totalProducts}
+            </p>
+            <p>
+              <strong>onViewChange disponible:</strong>{" "}
+              {onViewChange ? "Sí" : "No"}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// ✅ AGREGAR DISPLAY NAME PARA MEJOR IDENTIFICACIÓN
+Dashboard.displayName = "Dashboard";
 
 export default Dashboard;

@@ -389,3 +389,68 @@
     font-size: 24px;
   }
 }
+/* ✅ ESTILOS PARA DEBUG (SOLO DESARROLLO) */
+.debugInfo {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  border-left: 4px solid #6b7280;
+}
+
+.debugInfo small {
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.debugPanel {
+  margin-top: 24px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.debugPanel h4 {
+  margin: 0 0 12px 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.debugInfo p {
+  margin: 4px 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.debugInfo strong {
+  color: #374151;
+}
+
+/* ✅ MEJORAS PARA BOTONES DE ACCIONES RÁPIDAS */
+.actionCard {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.actionCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.actionCard:active {
+  transform: translateY(0);
+}
+
+/* ✅ RESPONSIVE MEJORADO */
+@media (max-width: 768px) {
+  .debugPanel {
+    display: none; /* Ocultar debug en móvil */
+  }
+
+  .actionGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
