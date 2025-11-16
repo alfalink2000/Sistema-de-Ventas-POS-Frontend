@@ -283,7 +283,7 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { createPendiente } from "../../../../actions/pendientesActions";
-import { updateProductStock } from "../../../../actions/productActions"; // Asumiendo que tienes esta acción
+import { updateProductStock } from "../../../../actions/productActions";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
 import {
@@ -298,6 +298,7 @@ import {
   FiTrash2,
   FiSearch,
 } from "react-icons/fi";
+import Swal from "sweetalert2"; // ✅ AÑADIR ESTA IMPORTACIÓN
 import styles from "./PendienteModal.module.css";
 
 const PendienteModal = ({ isOpen, onClose }) => {
@@ -314,7 +315,7 @@ const PendienteModal = ({ isOpen, onClose }) => {
 
   const dispatch = useDispatch();
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
-  const { productos } = useSelector((state) => state.productos); // Asumiendo que tienes productos en el estado
+  const { productos } = useSelector((state) => state.productos);
 
   // Filtrar productos disponibles (con stock)
   const productosDisponibles =
