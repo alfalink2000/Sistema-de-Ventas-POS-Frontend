@@ -412,7 +412,6 @@ const PendienteModal = ({ isOpen, onClose }) => {
     e.preventDefault();
 
     if (tipo === "pendiente") {
-      // Validaciones específicas para pendientes de pago
       if (productosSeleccionados.length === 0) {
         Swal.fire({
           icon: "error",
@@ -423,7 +422,6 @@ const PendienteModal = ({ isOpen, onClose }) => {
         return;
       }
     } else {
-      // Validaciones originales para otros tipos
       if (!descripcion.trim() || !monto || parseFloat(monto) <= 0) {
         Swal.fire({
           icon: "error",
@@ -461,20 +459,19 @@ const PendienteModal = ({ isOpen, onClose }) => {
       const result = await dispatch(createPendiente(pendienteData));
 
       if (result.success) {
-        // ✅ CORREGIDO: Para pendientes de pago, actualizar el stock localmente
+        // ✅ CORREGIDO: Eliminar la dependencia del usuario para actualizar stock
         if (tipo === "pendiente") {
           productosSeleccionados.forEach((producto) => {
-            // ✅ USAR LA ESTRUCTURA CORRECTA que espera updateProductStock
             dispatch(
               updateProductStock(producto.id, {
                 nuevo_stock: producto.stock - producto.cantidad,
                 motivo: "Venta pendiente",
-                usuario: user?.nombre || "Sistema",
+                // ✅ ELIMINAR la referencia a usuario que causa el error
+                usuario: "Sistema", // Usar valor fijo en lugar de user?.nombre
               })
             );
           });
 
-          // Disparar evento para actualizar header/stock
           window.dispatchEvent(new CustomEvent("stock_changes_updated"));
         }
 
@@ -485,7 +482,6 @@ const PendienteModal = ({ isOpen, onClose }) => {
         setProductosSeleccionados([]);
         onClose();
 
-        // Mostrar mensaje de éxito
         await Swal.fire({
           icon: "success",
           title: "¡Éxito!",
