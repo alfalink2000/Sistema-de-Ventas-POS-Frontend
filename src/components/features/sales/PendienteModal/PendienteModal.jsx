@@ -461,14 +461,16 @@ const PendienteModal = ({ isOpen, onClose }) => {
       const result = await dispatch(createPendiente(pendienteData));
 
       if (result.success) {
-        // Para pendientes de pago, actualizar el stock localmente
+        // ✅ CORREGIDO: Para pendientes de pago, actualizar el stock localmente
         if (tipo === "pendiente") {
           productosSeleccionados.forEach((producto) => {
+            // ✅ USAR LA ESTRUCTURA CORRECTA que espera updateProductStock
             dispatch(
-              updateProductStock(
-                producto.id,
-                producto.stock - producto.cantidad
-              )
+              updateProductStock(producto.id, {
+                nuevo_stock: producto.stock - producto.cantidad,
+                motivo: "Venta pendiente",
+                usuario: user?.nombre || "Sistema",
+              })
             );
           });
 
@@ -482,9 +484,30 @@ const PendienteModal = ({ isOpen, onClose }) => {
         setTipo("retiro");
         setProductosSeleccionados([]);
         onClose();
+
+        // Mostrar mensaje de éxito
+        await Swal.fire({
+          icon: "success",
+          title: "¡Éxito!",
+          text:
+            tipo === "pendiente"
+              ? `Pendiente de pago registrado por $${parseFloat(monto).toFixed(
+                  2
+                )}`
+              : `${tipoConfig.label} registrado correctamente`,
+          confirmButtonText: "Aceptar",
+        });
+      } else {
+        throw new Error(result.error || "Error al crear pendiente");
       }
     } catch (error) {
       console.error("Error al crear pendiente:", error);
+      await Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "No se pudo registrar el pendiente",
+        confirmButtonText: "Entendido",
+      });
     } finally {
       setProcesando(false);
     }
