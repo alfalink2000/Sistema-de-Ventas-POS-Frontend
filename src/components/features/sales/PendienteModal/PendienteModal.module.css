@@ -1,40 +1,4 @@
 /* components/features/sales/PendienteModal/PendienteModal.module.css - VERSIÓN CORREGIDA */
-/* .modalOverlay {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  background: rgba(0, 0, 0, 0.7) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 9999 !important; 
-  padding: 20px;
-}
-
-
-.modalContent {
-  background: white !important;
-  border-radius: 16px !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
-  max-width: 500px !important;
-  width: 100% !important;
-  max-height: 90vh !important;
-  overflow-y: auto !important;
-  z-index: 10000 !important; 
-  position: relative !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-
-.pendienteModal {
-  position: relative;
-  z-index: 10001;
-  background: white;
-  border-radius: 16px;
-  overflow: hidden;
-} */
 
 /* ✅ AUMENTAR LOS z-index DEL MODAL DE PENDIENTES */
 .modalOverlay {
@@ -438,5 +402,186 @@ body.modal-open .outOfStock {
 
   .actions {
     flex-direction: column;
+  }
+}
+/* Nuevos estilos para la funcionalidad de productos pendientes */
+
+.productosSection {
+  margin-bottom: 20px;
+}
+
+.agregarProductoBtn {
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.btnIcon {
+  margin-right: 8px;
+}
+
+.listaProductos {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.listaProductos h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.productoItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.productoInfo {
+  flex: 1;
+}
+
+.productoNombre {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.productoPrecio {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.productoControles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+}
+
+.cantidadControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cantidad {
+  font-weight: 600;
+  min-width: 30px;
+  text-align: center;
+}
+
+.productoSubtotal {
+  font-weight: 600;
+  color: #16a34a;
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Selector de productos */
+.selectorProductos {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.busquedaProducto {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+}
+
+.busquedaInput {
+  width: 100%;
+  padding: 12px 12px 12px 40px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.busquedaInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.listaDisponibles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.productoDisponible {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.productoDisponible:hover {
+  background: #f8fafc;
+  border-color: #3b82f6;
+}
+
+.productoInfoDisponible {
+  flex: 1;
+}
+
+.productoNombreDisponible {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.productoStock {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.productoPrecioDisponible {
+  font-weight: 600;
+  margin: 0 12px;
+  color: #16a34a;
+}
+
+.sinProductos {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .productoItem {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .productoControles {
+    margin: 0;
+    justify-content: space-between;
+  }
+
+  .productoSubtotal {
+    text-align: left;
   }
 }
