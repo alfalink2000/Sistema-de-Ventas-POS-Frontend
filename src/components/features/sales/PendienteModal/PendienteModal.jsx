@@ -315,7 +315,7 @@ const PendienteModal = ({ isOpen, onClose }) => {
 
   const dispatch = useDispatch();
   const { sesionAbierta } = useSelector((state) => state.sesionesCaja);
-  const { productos } = useSelector((state) => state.productos);
+  const { products: productos } = useSelector((state) => state.products);
 
   // Filtrar productos disponibles (con stock)
   const productosDisponibles =
