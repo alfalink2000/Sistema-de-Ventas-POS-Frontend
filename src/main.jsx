@@ -71,49 +71,35 @@
 
 // // Iniciar la aplicación
 // initializeApp();
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
 
-// ✅ 1. CARGAR CSS PRIMERO - ANTES DE REACT
+import React, { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { Provider } from "react-redux";
+import { store } from "./store/store";
+import App from "./App.jsx";
 import "./index.css";
 
-// ✅ 2. CONFIGURACIÓN PWA MEJORADA
+// ✅ FUNCIÓN SIMPLIFICADA SIN IMPORTS DINÁMICOS
 const initializeApp = async () => {
   try {
     console.log("🚀 Iniciando aplicación KioskoFlow...");
 
-    // ✅ 3. VERIFICAR COMPATIBILIDAD DEL NAVEGADOR
-    if (typeof Promise.allSettled === "undefined") {
-      throw new Error(
-        "Navegador no compatible. Actualice a una versión más reciente."
-      );
+    // ✅ VERIFICAR COMPATIBILIDAD BÁSICA
+    if (typeof Promise === "undefined") {
+      throw new Error("Este navegador no es compatible con la aplicación");
     }
 
-    // ✅ 4. REGISTRAR SERVICE WORKER
+    // ✅ REGISTRO DE SERVICE WORKER (OPCIONAL)
     if ("serviceWorker" in navigator) {
       try {
-        const registration = await navigator.serviceWorker.ready;
-        console.log("✅ Service Worker registrado:", registration);
+        // Vite PWA se encarga del registro automático
+        console.log("✅ Service Worker gestionado por Vite PWA");
       } catch (swError) {
         console.warn("⚠️ Service Worker no disponible:", swError);
       }
     }
 
-    // ✅ 5. IMPORTAR Y RENDERIZAR APP CON FALLBACK SEGURO
-    let App, store, Provider;
-
-    try {
-      App = (await import("./App.jsx")).default;
-      store = (await import("./store/store")).store;
-      Provider = (await import("react-redux")).Provider;
-    } catch (importError) {
-      console.error("❌ Error importando módulos:", importError);
-      throw new Error(
-        "Error crítico: No se pudieron cargar los componentes de la aplicación"
-      );
-    }
-
-    // ✅ 6. RENDERIZAR APLICACIÓN
+    // ✅ RENDERIZAR APLICACIÓN DIRECTAMENTE
     const root = createRoot(document.getElementById("root"));
 
     root.render(
@@ -124,46 +110,38 @@ const initializeApp = async () => {
       </StrictMode>
     );
 
-    // ✅ 7. MARCAR COMO CARGADO PARA OCULTAR LOADING INICIAL
+    // ✅ MARCAR COMO CARGADO
     if (window.markReactLoaded) {
       window.markReactLoaded();
     } else {
-      // Fallback si la función no está disponible
+      // Fallback seguro
       setTimeout(() => {
         document.body.classList.add("react-loaded");
-      }, 1000);
+      }, 500);
     }
 
     console.log("✅ Aplicación iniciada correctamente");
   } catch (error) {
     console.error("❌ Error crítico iniciando aplicación:", error);
 
-    // ✅ FALLBACK ELEGANTE: Mostrar error al usuario
+    // ✅ FALLBACK URGENTE
     const initialLoading = document.getElementById("initial-loading");
     if (initialLoading) {
       initialLoading.innerHTML = `
-        <div style="text-align: center; color: white; padding: 20px; max-width: 400px;">
-          <h2 style="margin-bottom: 15px;">Error al cargar la aplicación</h2>
+        <div style="text-align: center; color: white; padding: 20px;">
+          <h2 style="margin-bottom: 15px;">⚠️ Error de Carga</h2>
           <p style="margin-bottom: 20px; opacity: 0.9;">${error.message}</p>
-          <div style="display: flex; gap: 10px; justify-content: center;">
-            <button onclick="window.location.reload()" 
-                    style="padding: 10px 20px; background: white; color: #667eea; 
-                           border: none; border-radius: 5px; cursor: pointer; font-weight: 500;">
-              🔄 Reintentar
-            </button>
-            <button onclick="localStorage.clear(); sessionStorage.clear(); window.location.reload()" 
-                    style="padding: 10px 20px; background: transparent; color: white; 
-                           border: 1px solid white; border-radius: 5px; cursor: pointer;">
-              🧹 Limpiar Cache
-            </button>
-          </div>
+          <button onclick="window.location.reload()" 
+                  style="padding: 12px 24px; background: white; color: #667eea; 
+                         border: none; border-radius: 8px; cursor: pointer; 
+                         font-weight: 600; font-size: 16px;">
+            🔄 Reintentar
+          </button>
         </div>
       `;
     }
   }
 };
 
-// ✅ INICIAR APLICACIÓN CON MANEJO DE ERRORES GLOBAL
-initializeApp().catch((finalError) => {
-  console.error("💥 Error fatal en initializeApp:", finalError);
-});
+// ✅ INICIAR INMEDIATAMENTE
+initializeApp();

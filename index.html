@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- Preload critical resources -->
+    <link rel="preload" as="style" href="/src/index.css" />
+
     <!-- Favicon -->
     <link
       rel="icon"
@@ -25,9 +28,9 @@
     <meta name="apple-mobile-web-app-title" content="KioskoPOS" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
 
-    <!-- ✅ ESTILOS CRÍTICOS INLINE - EVITA FOUC -->
+    <!-- ✅ ESTILOS CRÍTICOS MEJORADOS -->
     <style>
-      /* Reset y configuración base */
+      /* RESET CRÍTICO */
       * {
         margin: 0;
         padding: 0;
@@ -37,14 +40,14 @@
       body {
         margin: 0;
         padding: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-          "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         min-height: 100vh;
         overflow-x: hidden;
       }
 
-      /* Loading inicial - visible inmediatamente */
+      /* LOADING INICIAL - MÁS ROBUSTO */
       #initial-loading {
         position: fixed;
         top: 0;
@@ -59,27 +62,27 @@
         color: white;
         text-align: center;
         z-index: 9999;
-        transition: opacity 0.5s ease-out;
+        transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
       }
 
       .loading-spinner {
-        border: 4px solid rgba(255, 255, 255, 0.3);
+        border: 3px solid rgba(255, 255, 255, 0.3);
         border-radius: 50%;
-        border-top: 4px solid white;
-        width: 50px;
-        height: 50px;
+        border-top: 3px solid white;
+        width: 40px;
+        height: 40px;
         animation: spin 1s linear infinite;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
       }
 
       .loading-content h2 {
-        font-size: 2rem;
-        margin-bottom: 10px;
+        font-size: 1.5rem;
+        margin-bottom: 8px;
         font-weight: 600;
       }
 
       .loading-content p {
-        font-size: 1rem;
+        font-size: 0.9rem;
         opacity: 0.8;
       }
 
@@ -92,40 +95,20 @@
         }
       }
 
-      /* Contenedor principal */
+      /* CONTENEDOR PRINCIPAL */
       #root {
         min-height: 100vh;
         width: 100%;
       }
 
-      /* Ocultar loading cuando React cargue */
+      /* ESTADO CARGADO */
       .react-loaded #initial-loading {
         opacity: 0;
+        visibility: hidden;
         pointer-events: none;
       }
 
-      /* Estilos para pantallas muy pequeñas */
-      @media (max-width: 480px) {
-        .loading-content h2 {
-          font-size: 1.5rem;
-        }
-
-        .loading-content p {
-          font-size: 0.9rem;
-        }
-
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-        }
-      }
-
-      /* Mejora de rendimiento */
-      .loading-spinner {
-        will-change: transform;
-      }
-
-      /* Prevenir scroll durante loading */
+      /* PREVENIR SCROLL DURANTE LOADING */
       body:not(.react-loaded) {
         overflow: hidden;
       }
@@ -135,68 +118,51 @@
   </head>
   <body>
     <div id="root">
-      <!-- ✅ LOADING INICIAL MIENTRAS CARGA REACT -->
+      <!-- ✅ LOADING INICIAL MEJORADO -->
       <div id="initial-loading">
         <div class="loading-spinner"></div>
         <div class="loading-content">
           <h2>KioskoFlow</h2>
-          <p>Iniciando sistema de ventas...</p>
+          <p>Cargando aplicación...</p>
         </div>
       </div>
     </div>
 
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- ✅ SCRIPT PARA DETECTAR CARGA DE REACT Y MANEJAR ERRORES -->
+    <!-- ✅ SCRIPT MEJORADO - MÁS SIMPLE Y CONFIABLE -->
     <script>
-      // Configuración inicial para evitar FOUC
       (function () {
-        // Marcar como cargado cuando React esté listo
-        let reactLoaded = false;
+        "use strict";
 
-        // Timeout de seguridad (10 segundos máximo)
+        let reactLoaded = false;
+        const MAX_WAIT_TIME = 8000; // 8 segundos máximo
+
         const safetyTimeout = setTimeout(() => {
           if (!reactLoaded) {
-            console.warn("Safety timeout: Forcing React loaded state");
+            console.log("⏱️ Timeout de seguridad activado");
             document.body.classList.add("react-loaded");
           }
-        }, 10000);
+        }, MAX_WAIT_TIME);
 
-        // Evento cuando el DOM esté listo
-        document.addEventListener("DOMContentLoaded", () => {
-          console.log("🚀 DOM cargado - Iniciando aplicación...");
-
-          // Pequeño delay para asegurar que el loading se muestre
-          setTimeout(() => {
-            // Verificar si hay errores de carga
-            window.addEventListener("error", (e) => {
-              console.error("Error global detectado:", e.error);
-              document.getElementById("initial-loading").innerHTML = `
-                <div style="text-align: center; color: white; padding: 20px;">
-                  <h2>Error de carga</h2>
-                  <p>No se pudo cargar la aplicación</p>
-                  <button onclick="window.location.reload()" 
-                          style="margin-top: 15px; padding: 10px 20px; 
-                                 background: white; color: #667eea; 
-                                 border: none; border-radius: 5px; 
-                                 cursor: pointer;">
-                    Reintentar
-                  </button>
-                </div>
-              `;
-            });
-          }, 100);
-        });
-
-        // Exponer función para que main.jsx la llame
+        // Función global para marcar como cargado
         window.markReactLoaded = function () {
           if (!reactLoaded) {
             reactLoaded = true;
             clearTimeout(safetyTimeout);
             document.body.classList.add("react-loaded");
-            console.log("✅ React marcado como cargado");
+            console.log("✅ Aplicación React cargada");
           }
         };
+
+        // Iniciar timeout de seguridad cuando el DOM esté listo
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", () => {
+            console.log("🚀 DOM listo - Iniciando aplicación React");
+          });
+        } else {
+          console.log("🚀 DOM ya listo - Iniciando aplicación React");
+        }
       })();
     </script>
   </body>

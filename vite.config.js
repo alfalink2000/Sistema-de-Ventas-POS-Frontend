@@ -207,8 +207,8 @@ export default defineConfig({
   base: "/",
   plugins: [
     react({
-      // ✅ CONFIGURACIÓN CRÍTICA PARA EVITAR FOUC
-      jsxRuntime: "classic",
+      // ✅ QUITAR jsxRuntime: "classic" - Puede causar problemas
+      // Vite React plugin funciona mejor con el runtime automático
     }),
     VitePWA({
       registerType: "autoUpdate",
@@ -272,98 +272,56 @@ export default defineConfig({
         ],
       },
 
-      // ✅ WORKBOX CONFIGURACIÓN MEJORADA - EVITAR FOUC
+      // ✅ WORKBOX CONFIGURACIÓN SIMPLIFICADA
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2,json}"],
         globIgnores: ["**/sw*.js", "**/dev-sw.js"],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-
-        // ✅ ESTRATEGIA CRÍTICA PARA CSS
         navigateFallback: "/index.html",
         navigateFallbackAllowlist: [/^(?!\/__).*/],
 
-        // ✅ CACHE PRIORITARIO PARA CSS
         runtimeCaching: [
-          // 1. CSS PRIMERO - Cache más agresivo
+          // CSS con máxima prioridad
           {
             urlPattern: /\.css$/,
             handler: "CacheFirst",
             options: {
-              cacheName: "css-cache-v3",
+              cacheName: "css-cache-v4",
               expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
             },
           },
-
-          // 2. JavaScript - StaleWhileRevalidate para actualizaciones
+          // JavaScript
           {
             urlPattern: /\.js$/,
             handler: "StaleWhileRevalidate",
             options: {
-              cacheName: "js-cache-v3",
+              cacheName: "js-cache-v4",
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
+                maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },
           },
-
-          // 3. IMÁGENES EXTERNAS DE IMGBB
-          {
-            urlPattern: /^https:\/\/i\.ibb\.co\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "imgbb-images-v3",
-              expiration: {
-                maxEntries: 2000,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-
-          // 4. IMÁGENES LOCALES
+          // Imágenes
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
             handler: "CacheFirst",
             options: {
-              cacheName: "static-images-v3",
+              cacheName: "images-cache-v4",
               expiration: {
-                maxEntries: 1000,
+                maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-            },
-          },
-
-          // 5. API - Network first con fallback rápido
-          {
-            urlPattern: /\/api\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache-v3",
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-              cacheableResponse: {
-                statuses: [0, 200, 404],
               },
             },
           },
         ],
       },
 
-      // ✅ CONFIGURACIÓN DESARROLLO
       devOptions: {
         enabled: true,
         type: "module",
@@ -377,41 +335,37 @@ export default defineConfig({
     host: true,
   },
 
-  // ✅ CONFIGURACIÓN BUILD CRÍTICA
+  // ✅ BUILD OPTIMIZADO PARA FIREFOX
   build: {
-    target: "es2015", // ✅ Compatibilidad con navegadores más antiguos
+    target: "es2015",
     minify: "terser",
-    cssCodeSplit: false, // ✅ EVITA FOUC - CSS en un solo archivo
+    cssCodeSplit: true, // ✅ CAMBIAR A true - Mejor para caching
     sourcemap: false,
 
-    // ✅ OPTIMIZACIÓN DE CHUNKS
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ["react", "react-dom", "react-redux"],
-          styles: ["./src/index.css"], // ✅ CSS como chunk separado
+          vendor: ["react", "react-dom"],
+          redux: ["react-redux", "@reduxjs/toolkit"],
         },
-        // ✅ ORDEN CRÍTICO DE CARGA
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith(".css")) {
-            return "assets/[name]-[hash].css"; // ✅ CSS con hash
+            return "assets/[name]-[hash].css";
           }
           return "assets/[name]-[hash][extname]";
         },
       },
     },
 
-    // ✅ OPTIMIZACIÓN ADICIONAL
     terserOptions: {
       compress: {
-        drop_console: true, // Eliminar consoles en producción
+        drop_console: true,
       },
     },
   },
 
-  // ✅ OPTIMIZACIÓN DE DEPENDENCIAS
   optimizeDeps: {
     include: ["react", "react-dom", "react-redux"],
     esbuildOptions: {

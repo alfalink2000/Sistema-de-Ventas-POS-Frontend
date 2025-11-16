@@ -213,6 +213,9 @@
 
 // export default App;
 // App.jsx - VERSIÓN SIMPLIFICADA SIN CONTROLADORES DE SINCRONIZACIÓN
+
+import React from "react";
+
 import { useEffect } from "react";
 import { Provider, useDispatch, useSelector } from "react-redux";
 import { store } from "./store/store";
