@@ -283,7 +283,7 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { createPendiente } from "../../../../actions/pendientesActions";
-import { updateProductStock } from "../../../../actions/productActions";
+import { updateProductStock } from "../../../../actions/productsActions";
 import Modal from "../../../ui/Modal/Modal";
 import Button from "../../../ui/Button/Button";
 import {
